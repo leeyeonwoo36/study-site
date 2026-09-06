@@ -1768,5 +1768,40 @@ window.__state = {
 };
 
 </script>
+  <script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getAuth, signInWithEmailAndPassword, sendPasswordResetEmail, onAuthStateChanged }
+  from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+import { getFirestore, collection, doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, onSnapshot }
+  from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+import { initializeApp } from "firebase/app";
+import { getAnalytics } from "firebase/analytics";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyB92BspySLg5UkVq4q6gmZ6j87VFa-75hI",
+  authDomain: "mdfh-study-lms.firebaseapp.com",
+  projectId: "mdfh-study-lms",
+  storageBucket: "mdfh-study-lms.firebasestorage.app",
+  messagingSenderId: "457329848476",
+  appId: "1:457329848476:web:8937db888eed8a1af4bd59",
+  measurementId: "G-9D0XRQJCVF"
+};
+
+const app = initializeApp(firebaseConfig);
+const analytics = getAnalytics(app);
+const auth = getAuth(app);
+const db   = getFirestore(app);
+
+window.fb = { auth, db, signInWithEmailAndPassword, sendPasswordResetEmail,
+              collection, doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, onSnapshot };
+
+// 새로고침해도 로그인 유지
+onAuthStateChanged(auth, user => {
+  if (user) console.log("로그인 유지 중:", user.uid);
+});
+
+console.log("✅ Firebase 연결됨");
+</script>
 </body>
 </html>
