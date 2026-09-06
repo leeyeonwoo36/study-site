@@ -788,18 +788,9 @@ function subscribeScores(){
   });
 }
   
-let students = [
-  {uid:'st_hong', name:'홍길동', grade:'고2', school:'명덕외고', phone:'010-1234-5678',
-   email:'honggd@example.com', loginId:'honggd', pw:'temp1234', memos:[]},
-  {uid:'st_seo', name:'이서연', grade:'고1', school:'명덕외고', phone:'010-2222-3333',
-   email:'', loginId:'seoyeon', pw:'temp5678', memos:[]},
-];
+let students = [];
 
-let schedules = [
-  {sid:'sc1', date:'2026-09-08', time:'18:30–20:00', room:'본관 401호', topic:'국제정치 이론 개관'},
-  {sid:'sc2', date:'2026-09-10', time:'18:30–20:00', room:'본관 401호', topic:'현실주의 vs 자유주의'},
-  {sid:'sc3', date:'2026-09-12', time:'10:00–12:00', room:'별관 세미나실', topic:'1차 모의고사'},
-];
+let schedules = [];
 let attendance = {}; // attendance[sid][studentUid] = {status:'p'|'l'|'a', reason:''}
 
 let questionSets = ['문제 세트 1', '문제 세트 2'];
@@ -845,12 +836,7 @@ let memoEditIndex = null;
 let currentSolve = null;        // {kind, tid}
 
 /* 데모 성적 초기값 */
-function seedScores(){
-  scores.hw['hw1'] = {st_hong:{score:'4/5', status:'완료'}, st_seo:{score:'3/5', status:'일부완료'}};
-  scores.exam['ex1'] = {st_hong:{score:'76'}, st_seo:{score:'60'}};
-  scores.exam['ex2'] = {st_hong:{score:'82'}, st_seo:{score:'68'}};
-  scores.exam['ex3'] = {st_hong:{score:'88'}, st_seo:{score:'65'}};
-}
+function seedScores(){}
 function ensureScoreSlots(){
   ['hw','exam'].forEach(kind=>{
     tasks[kind].forEach(t=>{
@@ -1938,8 +1924,6 @@ service cloud.firestore {
 function init(){
   seedScores();
   ensureScoreSlots();
-  // 데모 출석 기록
-  attendance['sc1'] = {st_hong:{status:'p',reason:''}, st_seo:{status:'a',reason:'학교 교내 대회 참가'}};
   renderStudents();
   renderSchedules();
   renderQSetOptions();
