@@ -717,6 +717,23 @@ function setStudentTab(id){
     renderStudentSite();
   });
 }
+  function subscribeSchedules(){
+  if(!window.fb){ setTimeout(subscribeSchedules, 100); return; }
+  const { db, collection, onSnapshot } = window.fb;
+  onSnapshot(collection(db, "schedules"), snap => {
+    schedules = snap.docs.map(d => ({ sid:d.id, ...d.data() }));
+    renderSchedules();
+  });
+}
+  function subscribeAttendance(){
+  if(!window.fb){ setTimeout(subscribeAttendance, 100); return; }
+  const { db, collection, onSnapshot } = window.fb;
+  onSnapshot(collection(db, "attendance"), snap => {
+    attendance = {};
+    snap.docs.forEach(d => { attendance[d.id] = d.data(); });
+    renderAttendance();
+  });
+}
   
 let students = [
   {uid:'st_hong', name:'홍길동', grade:'고2', school:'명덕외고', phone:'010-1234-5678',
@@ -1790,6 +1807,8 @@ function init(){
   renderFirebaseGuide();
   currentStudent = students[0].uid;
   renderStudentSite();
+  subscribeAttendance();
+  subscribeSchedules();
   subscribeStudents();
   switchSite('login');
 }
