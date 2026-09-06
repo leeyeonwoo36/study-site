@@ -204,8 +204,8 @@
         <a href="#" onclick="openModal('findpw-modal'); return false;" style="font-size:12.5px;">비밀번호를 잊으셨나요?</a>
       </div>
       <p class="note" style="margin-top:14px; margin-bottom:0;">
-        데모 계정: <b>honggd / temp1234</b>, <b>seoyeon / temp5678</b><br>
-        실제 서비스에서는 Firebase Authentication으로 인증합니다. (하단 관리자 &gt; Firebase 탭 참고)
+        Firebase Authentication으로 인증합니다.<br>
+        계정은 관리자가 발급합니다. (Authentication → Users)
       </p>
     </div>
   </div>
@@ -786,14 +786,39 @@ function ensureScoreSlots(){
 /* =========================================================
    로그인 · 계정
    ========================================================= */
-function doLogin(){
-  const id = $('login-id').value.trim(), pw = $('login-pw').value;
-  const s = students.find(x=>x.loginId===id && x.pw===pw);
-  if(!s){ alert('아이디 또는 비밀번호가 올바르지 않습니다.'); return; }
-  currentStudent = s.uid;
-  $('login-pw').value='';
-  if(!s.email){ openModal('email-modal'); $('first-email').value=''; $('first-email').focus(); return; }
-  switchSite('student');
+const VDOMAIN = "@mdfh-study-lms.local";   // Authentication에 만든 계정의 @뒤 부분과 반드시 동일해야 함
+
+async function doLogin(){
+  const id = $('login-id').value.trim();
+  const pw = $('login-pw').value;
+  if(!id || !pw){ alert('아이디와 비밀번호를 입력하세요.'); return; }
+  if(!window.fb){ alert('Firebase가 아직 로드되지 않았습니다. 잠시 후 다시 시도해주세요.'); return; }
+
+  try {
+    const cred = await window.fb.signInWithEmailAndPassword(window.fb.auth, id + VDOMAIN, pw);
+    console.log('로그인 성공, uid =', cred.user.uid);
+    $('login-pw').value = '';
+
+    // Firestore 연동 전이므로 데모 학생에 uid를 연결해 둡니다 (다음 단계에서 교체)
+    students[0].uid = cred.user.uid;
+    students[0].loginId = id;
+    currentStudent = cred.user.uid;
+    ensureScoreSlots();
+    switchSite('student');
+
+  } catch(e) {
+    console.log('로그인 실패:', e.code);
+    if(e.code === 'auth/invalid-credential' || e.code === 'auth/wrong-password'
+       || e.code === 'auth/user-not-found' || e.code === 'auth/invalid-email'){
+      alert('아이디 또는 비밀번호가 올바르지 않습니다.');
+    } else if(e.code === 'auth/unauthorized-domain'){
+      alert('승인되지 않은 도메인입니다.\nFirebase 콘솔 → Authentication → Settings → 승인된 도메인에\n현재 사이트 주소를 추가해주세요.');
+    } else if(e.code === 'auth/too-many-requests'){
+      alert('시도 횟수가 많습니다. 잠시 후 다시 시도해주세요.');
+    } else {
+      alert('로그인 중 오류가 발생했습니다: ' + e.code);
+    }
+  }
 }
 function saveFirstEmail(){
   const v = $('first-email').value.trim();
@@ -1768,15 +1793,13 @@ window.__state = {
 };
 
 </script>
-  <script type="module">
+
+<script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import { getAuth, signInWithEmailAndPassword, sendPasswordResetEmail, onAuthStateChanged }
   from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 import { getFirestore, collection, doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, onSnapshot }
   from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
-
-import { initializeApp } from "firebase/app";
-import { getAnalytics } from "firebase/analytics";
 
 const firebaseConfig = {
   apiKey: "AIzaSyB92BspySLg5UkVq4q6gmZ6j87VFa-75hI",
@@ -1784,12 +1807,10 @@ const firebaseConfig = {
   projectId: "mdfh-study-lms",
   storageBucket: "mdfh-study-lms.firebasestorage.app",
   messagingSenderId: "457329848476",
-  appId: "1:457329848476:web:8937db888eed8a1af4bd59",
-  measurementId: "G-9D0XRQJCVF"
+  appId: "1:457329848476:web:8937db888eed8a1af4bd59"
 };
 
-const app = initializeApp(firebaseConfig);
-const analytics = getAnalytics(app);
+const app  = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db   = getFirestore(app);
 
@@ -1803,5 +1824,6 @@ onAuthStateChanged(auth, user => {
 
 console.log("✅ Firebase 연결됨");
 </script>
+
 </body>
 </html>
