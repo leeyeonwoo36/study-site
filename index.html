@@ -1988,7 +1988,9 @@ onSnapshot(collection(db, "attendance"), snap => { /* 로컬 state 갱신 후 re
 rules_version = '2';
 service cloud.firestore {
   match /databases/{db}/documents {
-    function isAdmin(){ return request.auth.token.admin == true; }
+   function isAdmin() {
+  return isSignedIn() && request.auth.uid in ['MdFLPZCpGib4AsdOwoaTptQqk7k2'];
+}
     match /students/{uid} {
       allow read: if isAdmin() || request.auth.uid == uid;
       allow update: if isAdmin() || (request.auth.uid == uid &amp;&amp;
