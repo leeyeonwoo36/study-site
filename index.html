@@ -898,7 +898,9 @@ async function doSignup(){
     else alert('회원가입 중 오류가 발생했습니다: ' + e.code);
   }
 }
-  
+  const ADMIN_UIDS = [
+  MdFLPZCpGib4AsdOwoaTptQqk7k2
+];
 async function doLogin(){
   const id = $('login-id').value.trim();
   const pw = $('login-pw').value;
@@ -907,11 +909,13 @@ async function doLogin(){
   try {
     const cred = await window.fb.signInWithEmailAndPassword(window.fb.auth, id, pw);
     $('login-pw').value = '';
+
+    if(ADMIN_UIDS.includes(cred.user.uid)){
+      switchSite('admin');
+      return;
+    }
+
     const { db, doc, getDoc, signOut } = window.fb;
-
-    const adminSnap = await getDoc(doc(db, "admins", cred.user.uid));
-    if(adminSnap.exists()){ switchSite('admin'); return; }
-
     const studentSnap = await getDoc(doc(db, "students", cred.user.uid));
     if(studentSnap.exists()){
       const data = studentSnap.data();
