@@ -734,6 +734,22 @@ function setStudentTab(id){
     renderAttendance();
   });
 }
+  function subscribeQuestionSets(){
+  if(!window.fb){ setTimeout(subscribeQuestionSets, 100); return; }
+  const { db, collection, onSnapshot } = window.fb;
+  onSnapshot(collection(db, "questionSets"), snap => {
+    questionSets = snap.docs.map(d => d.data().name);
+    renderQSetOptions();
+  });
+}
+function subscribeQuestions(){
+  if(!window.fb){ setTimeout(subscribeQuestions, 100); return; }
+  const { db, collection, onSnapshot } = window.fb;
+  onSnapshot(collection(db, "questions"), snap => {
+    questions = snap.docs.map(d => ({ qid:d.id, ...d.data() }));
+    renderQuestions(); renderBank();
+  });
+}
   
 let students = [
   {uid:'st_hong', name:'홍길동', grade:'고2', school:'명덕외고', phone:'010-1234-5678',
@@ -1808,6 +1824,8 @@ function init(){
   currentStudent = students[0].uid;
   renderStudentSite();
   subscribeAttendance();
+  subscribeQuestionSets();
+  subscribeQuestions();
   subscribeSchedules();
   subscribeStudents();
   switchSite('login');
