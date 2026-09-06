@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>명덕외고 국제정치 스터디 · 학습관리 시스템 (v5)</title>
+<title>명덕외고 국제정치 스터디 · 학습관리 시스템</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&display=swap" rel="stylesheet">
 <style>
@@ -708,14 +708,18 @@ function setStudentTab(id){
 /* =========================================================
    데이터 (실서비스에서는 Firestore 컬렉션으로 대체)
    ========================================================= */
-  function subscribeStudents(){
+ function subscribeStudents(){
   if(!window.fb){ setTimeout(subscribeStudents, 100); return; }
   const { db, collection, onSnapshot } = window.fb;
-  onSnapshot(collection(db, "students"), snap => {
-    students = snap.docs.map(d => ({ uid:d.id, ...d.data() }));
-    renderStudents();
-    renderStudentSite();
-  });
+  onSnapshot(collection(db, "students"),
+    snap => {
+      students = snap.docs.map(d => ({ uid:d.id, ...d.data() }));
+      console.log("students 수신:", students.length, "명");
+      renderStudents();
+      renderStudentSite();
+    },
+    err => console.error("students 구독 에러:", err.code, err.message)
+  );
 }
   function subscribeSchedules(){
   if(!window.fb){ setTimeout(subscribeSchedules, 100); return; }
