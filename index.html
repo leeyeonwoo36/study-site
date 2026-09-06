@@ -191,22 +191,18 @@
 <!-- ============ 로그인 ============ -->
 <div class="app-shell" id="shell-login">
   <div class="login-wrap">
-    <h1 style="font-size:22px;">명덕외고 국제정치 스터디</h1>
-    <p style="color:var(--muted); margin-bottom:24px; font-size:13.5px;">학생 계정으로 로그인하세요. (아이디·초기 비밀번호는 관리자가 발급)</p>
-    <div class="card">
-      <label>아이디</label>
-      <input type="text" id="login-id" placeholder="예: honggd" style="margin-bottom:12px;">
-      <label>비밀번호</label>
-      <input type="password" id="login-pw" placeholder="초기 비밀번호" style="margin-bottom:16px;"
-             onkeydown="if(event.key==='Enter')doLogin()">
-      <button class="btn" style="width:100%;" onclick="doLogin()">로그인</button>
-      <div style="text-align:right; margin-top:10px;">
-        <a href="#" onclick="openModal('findpw-modal'); return false;" style="font-size:12.5px;">비밀번호를 잊으셨나요?</a>
-      </div>
-      <p class="note" style="margin-top:14px; margin-bottom:0;">
-        Firebase Authentication으로 인증합니다.<br>
-        계정은 관리자가 발급합니다. (Authentication → Users)
-      </p>
+  <h1 style="font-size:22px;">명덕외고 국제정치 스터디</h1>
+  <p style="color:var(--muted); margin-bottom:24px; font-size:13.5px;">이메일로 로그인하세요.</p>
+  <div class="card">
+    <label>이메일</label>
+    <input type="email" id="login-id" placeholder="예: student@gmail.com" style="margin-bottom:12px;">
+    <label>비밀번호</label>
+    <input type="password" id="login-pw" placeholder="비밀번호" style="margin-bottom:16px;"
+      onkeydown="if(event.key==='Enter')doLogin()">
+    <button class="btn" style="width:100%;" onclick="doLogin()">로그인</button>
+    <div style="display:flex; justify-content:space-between; margin-top:10px;">
+      <a href="#" onclick="openModal('signup-modal'); return false;" style="font-size:12.5px;">회원가입</a>
+      <a href="#" onclick="openModal('findpw-modal'); return false;" style="font-size:12.5px;">비밀번호를 잊으셨나요?</a>
     </div>
   </div>
 </div>
@@ -259,19 +255,24 @@
 
       <!-- 학생 관리 -->
       <div class="tabpanel" id="tab-a-students">
-        <div class="page-head"><div><h1>학생 관리</h1><p>학생 추가·수정·삭제, 인적사항, 계정 정보를 관리합니다. 이름을 클릭하면 상세정보·성적추이·메모를 볼 수 있습니다.</p></div></div>
-        <div class="card">
-          <h3>학생 추가</h3>
-          <div class="form-grid three">
-            <div><label>이름</label><input type="text" id="s-name" placeholder="홍길동"></div>
-            <div><label>학년</label><input type="text" id="s-grade" placeholder="고2"></div>
-            <div><label>학교</label><input type="text" id="s-school" placeholder="명덕외고"></div>
-            <div><label>전화번호</label><input type="tel" id="s-phone" placeholder="010-0000-0000"></div>
-            <div><label>이메일 (비워두면 학생이 첫 로그인 때 입력)</label><input type="email" id="s-email" placeholder="student@example.com"></div>
-            <div><label>아이디</label><input type="text" id="s-id" placeholder="로그인 아이디"></div>
-            <div><label>초기 비밀번호</label><input type="text" id="s-pw" placeholder="초기 비밀번호"></div>
-          </div>
-          <button class="btn" onclick="addStudent()">학생 등록</button>
+        <div class="page-head"><div><h1>학생 관리</h1><p>학생 가입 승인·수정·삭제, 인적사항, 계정 정보를 관리합니다. 이름을 클릭하면 상세정보·성적추이·메모를 볼 수 있습니다.</p></div></div>
+        <!-- 기존 "학생 추가" 카드는 통째로 삭제 -->
+
+<div class="card">
+  <h3>가입 승인 대기</h3>
+  <table>
+    <tr><th>이름</th><th>학년</th><th>학교</th><th>전화번호</th><th>이메일</th><th></th></tr>
+    <tbody id="pending-table"></tbody>
+  </table>
+</div>
+
+<div class="card">
+  <h3>학생 목록</h3>
+  <table>
+    <tr><th>이름</th><th>학년</th><th>학교</th><th>전화번호</th><th>이메일</th><th></th></tr>
+    <tbody id="student-table"></tbody>
+  </table>
+</div>
         </div>
         <div class="card">
           <h3>학생 목록</h3>
@@ -516,15 +517,22 @@
 
 <!-- ============ 모달 ============ -->
 
-<!-- 첫 로그인 이메일 등록 -->
-<div class="modal-bg" id="email-modal">
+<div class="modal-bg" id="signup-modal">
   <div class="modal">
-    <h3>이메일 등록</h3>
-    <p class="note">첫 로그인입니다. 비밀번호 찾기와 공지 수신에 사용할 이메일을 등록해주세요. 입력한 이메일은 관리자 화면 학생 목록에 바로 반영됩니다.</p>
-    <label>이메일</label>
-    <input type="email" id="first-email" placeholder="student@example.com" style="margin-bottom:14px;"
-           onkeydown="if(event.key==='Enter')saveFirstEmail()">
-    <button class="btn" style="width:100%;" onclick="saveFirstEmail()">등록하고 시작하기</button>
+    <button class="modal-close" onclick="closeModal('signup-modal')">✕</button>
+    <h3>학생 회원가입</h3>
+    <div class="form-grid">
+      <div><label>이름</label><input type="text" id="su-name" placeholder="홍길동"></div>
+      <div><label>학년</label><input type="text" id="su-grade" placeholder="고2"></div>
+      <div><label>학교</label><input type="text" id="su-school" placeholder="명덕외고"></div>
+      <div><label>전화번호</label><input type="tel" id="su-phone" placeholder="010-0000-0000"></div>
+    </div>
+    <div class="form-grid full">
+      <div><label>이메일</label><input type="email" id="su-email" placeholder="student@gmail.com"></div>
+      <div><label>비밀번호 (6자리 이상)</label><input type="password" id="su-pw" placeholder="비밀번호 설정"></div>
+    </div>
+    <p class="note">가입 신청 후 관리자 승인이 완료되어야 로그인할 수 있습니다.</p>
+    <button class="btn" style="width:100%;" onclick="doSignup()">가입 신청하기</button>
   </div>
 </div>
 
@@ -552,8 +560,8 @@
       <div><label>학교</label><input type="text" id="e-school"></div>
       <div><label>전화번호</label><input type="tel" id="e-phone"></div>
       <div><label>이메일</label><input type="email" id="e-email"></div>
-      <div><label>아이디</label><input type="text" id="e-id"></div>
     </div>
+    <p class="note">여기서 이메일을 바꿔도 로그인용 Firebase 계정 이메일은 바뀌지 않습니다. 로그인 이메일 자체를 바꾸려면 Firebase 콘솔에서 별도로 변경해야 합니다.</p>
     <button class="btn" onclick="saveStudentEdit()">저장</button>
     <button class="btn ghost" onclick="closeModal('student-edit-modal')">취소</button>
   </div>
@@ -854,32 +862,66 @@ function ensureScoreSlots(){
 /* =========================================================
    로그인 · 계정
    ========================================================= */
-const VDOMAIN = "@mdfh-study-lms.local";   // Authentication에 만든 계정의 @뒤 부분과 반드시 동일해야 함
 function logout(){
   if(window.fb) window.fb.signOut(window.fb.auth);
   currentStudent = null;
   switchSite('login');
 }
+
+async function doSignup(){
+  const name = $('su-name').value.trim();
+  const email = $('su-email').value.trim();
+  const pw = $('su-pw').value;
+  if(!name || !email || !pw){ alert('이름, 이메일, 비밀번호를 모두 입력하세요.'); return; }
+  if(pw.length < 6){ alert('비밀번호는 6자리 이상이어야 합니다.'); return; }
+  if(!window.fb){ alert('Firebase가 아직 로드되지 않았습니다. 잠시 후 다시 시도해주세요.'); return; }
+  try {
+    const { auth, createUserWithEmailAndPassword, signOut, db, doc, setDoc } = window.fb;
+    const cred = await createUserWithEmailAndPassword(auth, email, pw);
+    await setDoc(doc(db, "students", cred.user.uid), {
+      name,
+      grade: $('su-grade').value.trim(),
+      school: $('su-school').value.trim(),
+      phone: $('su-phone').value.trim(),
+      email,
+      memos: [],
+      approved: false
+    });
+    await signOut(auth); // 가입 즉시 로그인되는 걸 막고 로그인 화면으로 되돌림
+    closeModal('signup-modal');
+    ['su-name','su-grade','su-school','su-phone','su-email','su-pw'].forEach(i=>$(i).value='');
+    alert('가입 신청이 완료되었습니다. 관리자 승인 후 로그인할 수 있습니다.');
+  } catch(e){
+    if(e.code === 'auth/email-already-in-use') alert('이미 가입된 이메일입니다.');
+    else if(e.code === 'auth/weak-password') alert('비밀번호가 너무 약합니다. 6자리 이상 입력하세요.');
+    else if(e.code === 'auth/invalid-email') alert('올바른 이메일 형식이 아닙니다.');
+    else alert('회원가입 중 오류가 발생했습니다: ' + e.code);
+  }
+}
+  
 async function doLogin(){
   const id = $('login-id').value.trim();
   const pw = $('login-pw').value;
-  if(!id || !pw){ alert('아이디와 비밀번호를 입력하세요.'); return; }
+  if(!id || !pw){ alert('이메일과 비밀번호를 입력하세요.'); return; }
   if(!window.fb){ alert('Firebase가 아직 로드되지 않았습니다. 잠시 후 다시 시도해주세요.'); return; }
   try {
     const cred = await window.fb.signInWithEmailAndPassword(window.fb.auth, id, pw);
     $('login-pw').value = '';
-    const { db, doc, getDoc } = window.fb;
+    const { db, doc, getDoc, signOut } = window.fb;
+
     const adminSnap = await getDoc(doc(db, "admins", cred.user.uid));
-    if(adminSnap.exists()){
-      switchSite('admin');
-      return;
-    }
+    if(adminSnap.exists()){ switchSite('admin'); return; }
+
     const studentSnap = await getDoc(doc(db, "students", cred.user.uid));
     if(studentSnap.exists()){
-      currentStudent = cred.user.uid;
       const data = studentSnap.data();
+      if(!data.approved){
+        await signOut(window.fb.auth);
+        alert('아직 관리자 승인이 완료되지 않았습니다. 승인 후 다시 로그인해주세요.');
+        return;
+      }
+      currentStudent = cred.user.uid;
       if(!students.some(x=>x.uid===cred.user.uid)) students.push({uid:cred.user.uid, ...data});
-      if(!data.email){ openModal('email-modal'); $('first-email').value=''; $('first-email').focus(); return; }
       switchSite('student');
     } else {
       console.log('계정 uid (등록 필요):', cred.user.uid);
@@ -888,8 +930,8 @@ async function doLogin(){
   } catch(e) {
     console.log('로그인 실패:', e.code);
     if(e.code === 'auth/invalid-credential' || e.code === 'auth/wrong-password'
-       || e.code === 'auth/user-not-found' || e.code === 'auth/invalid-email'){
-      alert('아이디 또는 비밀번호가 올바르지 않습니다.');
+      || e.code === 'auth/user-not-found' || e.code === 'auth/invalid-email'){
+      alert('이메일 또는 비밀번호가 올바르지 않습니다.');
     } else if(e.code === 'auth/unauthorized-domain'){
       alert('승인되지 않은 도메인입니다.');
     } else if(e.code === 'auth/too-many-requests'){
@@ -924,45 +966,68 @@ function sendResetLink(){
    학생 관리
    ========================================================= */
 function renderStudents(){
-  $('student-table').innerHTML = students.map(s=>`
+  const approved = students.filter(s=>s.approved);
+  const pending = students.filter(s=>!s.approved);
+
+  $('pending-table').innerHTML = pending.map(s=>`
+    <tr>
+      <td>${esc(s.name)}</td><td>${esc(s.grade)}</td><td>${esc(s.school)}</td>
+      <td>${esc(s.phone)}</td><td>${esc(s.email)}</td>
+      <td class="row-actions">
+        <button class="btn small" onclick="approveStudent('${s.uid}')">승인</button>
+        <button class="btn small danger" onclick="rejectStudent('${s.uid}')">거절</button>
+      </td>
+    </tr>`).join('') || '<tr><td colspan="6" class="empty-hint">대기 중인 가입 신청이 없습니다.</td></tr>';
+
+  $('student-table').innerHTML = approved.map(s=>`
     <tr>
       <td><a href="#" onclick="openStudentDetail('${s.uid}'); return false;">${esc(s.name)}</a></td>
       <td>${esc(s.grade)}</td><td>${esc(s.school)}</td><td>${esc(s.phone)}</td>
-      <td>${s.email? esc(s.email) : '<span class="badge warn">미등록</span>'}</td>
-      <td>${esc(s.loginId)}</td>
-      <td><span class="pw-mask">●●●●●●●●</span>
-        <button class="btn small secondary" onclick="resetPw('${s.uid}')">재설정</button></td>
+      <td>${esc(s.email)}</td>
       <td class="row-actions">
         <button class="btn small secondary" onclick="openStudentEdit('${s.uid}')">수정</button>
         <button class="btn small secondary" onclick="openStudentDetail('${s.uid}')">상세</button>
         <button class="btn small danger" onclick="removeStudent('${s.uid}')">삭제</button>
       </td>
-    </tr>`).join('') || '<tr><td colspan="8" class="empty-hint">등록된 학생이 없습니다.</td></tr>';
+    </tr>`).join('') || '<tr><td colspan="6" class="empty-hint">등록된 학생이 없습니다.</td></tr>';
 }
-function addStudent(){
-  const name = $('s-name').value.trim();
-  if(!name){ alert('이름을 입력하세요.'); return; }
-  const loginId = $('s-id').value.trim();
-  if(!loginId){ alert('로그인 아이디를 입력하세요.'); return; }
-  if(students.some(s=>s.loginId===loginId)){ alert('이미 사용 중인 아이디입니다.'); return; }
-  students.push({
-    uid: uid('st'), name, grade:$('s-grade').value.trim(), school:$('s-school').value.trim(),
-    phone:$('s-phone').value.trim(), email:$('s-email').value.trim(),
-    loginId, pw:$('s-pw').value.trim() || 'temp0000', memos:[]
-  });
-  ['s-name','s-grade','s-school','s-phone','s-email','s-id','s-pw'].forEach(i=>$(i).value='');
-  ensureScoreSlots();
-  renderStudents(); renderAttendance(); renderScoreTable('hw'); renderScoreTable('exam'); renderGradingTable();
+function approveStudent(u){
+  if(window.fb){
+    const { db, doc, updateDoc } = window.fb;
+    updateDoc(doc(db,"students", u), { approved: true });
+  } else {
+    const s = students.find(x=>x.uid===u);
+    if(s) s.approved = true;
+    renderStudents();
+  }
 }
+
+function rejectStudent(u){
+  const s = students.find(x=>x.uid===u); if(!s) return;
+  if(!confirm(s.name+' 학생의 가입 신청을 거절할까요?\n(Firebase Authentication 계정 자체는 콘솔에서 따로 삭제해야 합니다)')) return;
+  if(window.fb){
+    const { db, doc, deleteDoc } = window.fb;
+    deleteDoc(doc(db,"students", u));
+  } else {
+    students = students.filter(x=>x.uid!==u);
+    renderStudents();
+  }
+}
+
 function removeStudent(u){
   const s = students.find(x=>x.uid===u); if(!s) return;
-  if(!confirm(s.name+' 학생을 삭제할까요? 성적·출석·제출 기록도 함께 삭제됩니다.')) return;
-  students = students.filter(x=>x.uid!==u);
+  if(!confirm(s.name+' 학생을 삭제할까요? 성적·출석·제출 기록도 함께 삭제됩니다.\n(Firebase Authentication 계정은 콘솔에서 별도로 삭제해야 합니다)')) return;
+  if(window.fb){
+    const { db, doc, deleteDoc } = window.fb;
+    deleteDoc(doc(db,"students", u));
+  } else {
+    students = students.filter(x=>x.uid!==u);
+  }
   Object.keys(attendance).forEach(sid=>{ delete attendance[sid][u]; });
   ['hw','exam'].forEach(k=>Object.keys(scores[k]).forEach(t=>{ delete scores[k][t][u]; }));
   Object.keys(submissions).forEach(k=>{ if(k.endsWith('|'+u)) delete submissions[k]; });
   if(currentStudent===u) currentStudent = students.length? students[0].uid : null;
-  renderStudents(); renderAttendance(); renderScoreTable('hw'); renderScoreTable('exam'); renderGradingTable();
+  renderAttendance(); renderScoreTable('hw'); renderScoreTable('exam'); renderGradingTable();
 }
 function resetPw(u){
   const s = students.find(x=>x.uid===u);
@@ -981,25 +1046,23 @@ function openStudentEdit(u){
   editStudentUid = u;
   const s = students.find(x=>x.uid===u);
   $('e-name').value=s.name; $('e-grade').value=s.grade; $('e-school').value=s.school;
-  $('e-phone').value=s.phone; $('e-email').value=s.email; $('e-id').value=s.loginId;
+  $('e-phone').value=s.phone; $('e-email').value=s.email;
   openModal('student-edit-modal');
 }
 function openStudentEditFromDetail(){ openStudentEdit(currentDetailUid); }
 function saveStudentEdit(){
   const s = students.find(x=>x.uid===editStudentUid); if(!s) return;
-  const name = $('e-name').value.trim(), loginId = $('e-id').value.trim();
-  if(!name || !loginId){ alert('이름과 아이디는 비워둘 수 없습니다.'); return; }
-  if(students.some(x=>x.loginId===loginId && x.uid!==s.uid)){ alert('이미 사용 중인 아이디입니다.'); return; }
+  const name = $('e-name').value.trim();
+  if(!name){ alert('이름은 비워둘 수 없습니다.'); return; }
   const data = { name, grade:$('e-grade').value.trim(), school:$('e-school').value.trim(),
-    phone:$('e-phone').value.trim(), email:$('e-email').value.trim(), loginId };
+    phone:$('e-phone').value.trim(), email:$('e-email').value.trim() };
   closeModal('student-edit-modal');
   if(window.fb){
     const { db, doc, updateDoc } = window.fb;
     updateDoc(doc(db,"students", s.uid), data);
   } else {
     Object.assign(s, data);
-    renderStudents(); renderAttendance(); renderScoreTable('hw'); renderScoreTable('exam');
-    renderGradingTable(); renderStudentSite();
+    renderStudents();
   }
 }
 
