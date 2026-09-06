@@ -750,6 +750,39 @@ function subscribeQuestions(){
     renderQuestions(); renderBank();
   });
 }
+  function subscribeTasks(){
+  if(!window.fb){ setTimeout(subscribeTasks, 100); return; }
+  const { db, collection, onSnapshot } = window.fb;
+  onSnapshot(collection(db, "tasks"), snap => {
+    const all = snap.docs.map(d => ({ tid:d.id, ...d.data() }));
+    tasks.hw = all.filter(t=>t.kind==='hw');
+    tasks.exam = all.filter(t=>t.kind==='exam');
+    ensureScoreSlots();
+    renderTasks(); renderScoreSelects(); renderStudentSite(); renderGradingTable();
+  });
+}
+function subscribeSubmissions(){
+  if(!window.fb){ setTimeout(subscribeSubmissions, 100); return; }
+  const { db, collection, onSnapshot } = window.fb;
+  onSnapshot(collection(db, "submissions"), snap => {
+    submissions = {};
+    snap.docs.forEach(d => { submissions[d.id] = d.data(); });
+    renderStudentSite(); renderTasks(); renderGradingTable();
+  });
+}
+function subscribeScores(){
+  if(!window.fb){ setTimeout(subscribeScores, 100); return; }
+  const { db, collection, onSnapshot } = window.fb;
+  onSnapshot(collection(db, "scores"), snap => {
+    scores.hw = {}; scores.exam = {};
+    snap.docs.forEach(d => {
+      const [kind, tid] = d.id.split('__');
+      if(scores[kind]) scores[kind][tid] = d.data();
+    });
+    ensureScoreSlots();
+    renderScoreTable('hw'); renderScoreTable('exam'); renderGradingTable(); renderStudentSite();
+  });
+}
   
 let students = [
   {uid:'st_hong', name:'홍길동', grade:'고2', school:'명덕외고', phone:'010-1234-5678',
@@ -930,8 +963,16 @@ function removeStudent(u){
 }
 function resetPw(u){
   const s = students.find(x=>x.uid===u);
-  const pw = prompt(s.name+' 학생의 새 비밀번호를 입력하세요.', '');
-  if(pw && pw.trim()){ s.pw = pw.trim(); renderStudents(); alert('비밀번호가 재설정되었습니다.'); }
+  if(!s.email){ alert('등록된 이메일이 없어 비밀번호 재설정 메일을 보낼 수 없습니다.'); return; }
+  if(window.fb){
+    const { auth, sendPasswordResetEmail } = window.fb;
+    sendPasswordResetEmail(auth, s.email)
+      .then(()=>alert(s.name+' 학생의 이메일로 비밀번호 재설정 링크를 보냈습니다.'))
+      .catch(err=>alert('전송 실패: '+err.message));
+  } else {
+    const pw = prompt(s.name+' 학생의 새 비밀번호를 입력하세요.', '');
+    if(pw && pw.trim()){ s.pw = pw.trim(); renderStudents(); alert('비밀번호가 재설정되었습니다.'); }
+  }
 }
 function openStudentEdit(u){
   editStudentUid = u;
@@ -946,12 +987,17 @@ function saveStudentEdit(){
   const name = $('e-name').value.trim(), loginId = $('e-id').value.trim();
   if(!name || !loginId){ alert('이름과 아이디는 비워둘 수 없습니다.'); return; }
   if(students.some(x=>x.loginId===loginId && x.uid!==s.uid)){ alert('이미 사용 중인 아이디입니다.'); return; }
-  s.name=name; s.grade=$('e-grade').value.trim(); s.school=$('e-school').value.trim();
-  s.phone=$('e-phone').value.trim(); s.email=$('e-email').value.trim(); s.loginId=loginId;
+  const data = { name, grade:$('e-grade').value.trim(), school:$('e-school').value.trim(),
+    phone:$('e-phone').value.trim(), email:$('e-email').value.trim(), loginId };
   closeModal('student-edit-modal');
-  renderStudents(); renderAttendance(); renderScoreTable('hw'); renderScoreTable('exam');
-  renderGradingTable(); renderStudentSite();
-  if(currentDetailUid===s.uid && $('student-detail-modal').classList.contains('show')) openStudentDetail(s.uid);
+  if(window.fb){
+    const { db, doc, updateDoc } = window.fb;
+    updateDoc(doc(db,"students", s.uid), data);
+  } else {
+    Object.assign(s, data);
+    renderStudents(); renderAttendance(); renderScoreTable('hw'); renderScoreTable('exam');
+    renderGradingTable(); renderStudentSite();
+  }
 }
 
 /* ---------- 학생 상세 · 메모 ---------- */
@@ -973,9 +1019,12 @@ function addStudentMemo(){
   const box = $('new-memo-text'), t = box.value.replace(/\s+$/,'');
   if(!t.trim()){ alert('메모 내용을 입력해주세요.'); return; }
   const s = students.find(x=>x.uid===currentDetailUid);
-  s.memos = s.memos || [];
-  s.memos.push({text:t, date:new Date().toLocaleDateString('ko-KR')});
-  box.value=''; renderMemos();
+  const memos = (s.memos || []).concat([{text:t, date:new Date().toLocaleDateString('ko-KR')}]);
+  box.value='';
+  if(window.fb){
+    const { db, doc, updateDoc } = window.fb;
+    updateDoc(doc(db,"students", currentDetailUid), {memos});
+  } else { s.memos = memos; renderMemos(); }
 }
 function editStudentMemo(i){
   memoEditIndex = i;
@@ -987,13 +1036,22 @@ function saveMemoEdit(){
   const s = students.find(x=>x.uid===currentDetailUid);
   const v = $('memo-edit-text').value;
   if(!v.trim()){ alert('내용을 입력해주세요.'); return; }
-  s.memos[memoEditIndex].text = v;
-  closeModal('memo-edit-modal'); renderMemos();
+  const memos = s.memos.slice();
+  memos[memoEditIndex] = {...memos[memoEditIndex], text:v};
+  closeModal('memo-edit-modal');
+  if(window.fb){
+    const { db, doc, updateDoc } = window.fb;
+    updateDoc(doc(db,"students", currentDetailUid), {memos});
+  } else { s.memos = memos; renderMemos(); }
 }
 function deleteStudentMemo(i){
   if(!confirm('이 메모를 삭제할까요?')) return;
-  students.find(x=>x.uid===currentDetailUid).memos.splice(i,1);
-  renderMemos();
+  const s = students.find(x=>x.uid===currentDetailUid);
+  const memos = s.memos.filter((_,idx)=>idx!==i);
+  if(window.fb){
+    const { db, doc, updateDoc } = window.fb;
+    updateDoc(doc(db,"students", currentDetailUid), {memos});
+  } else { s.memos = memos; renderMemos(); }
 }
 function renderMemos(){
   const s = students.find(x=>x.uid===currentDetailUid) || {};
@@ -1055,16 +1113,28 @@ function fmtDate(d){
 function addSchedule(){
   const v = id => $(id).value.trim();
   if(!v('sch-date')||!v('sch-time')||!v('sch-room')){ alert('날짜·시간·교실을 입력해주세요.'); return; }
-  schedules.push({sid:uid('sc'), date:v('sch-date'), time:v('sch-time'), room:v('sch-room'), topic:v('sch-topic')});
-  schedules.sort((a,b)=>a.date<b.date?-1:1);
+  const data = {date:v('sch-date'), time:v('sch-time'), room:v('sch-room'), topic:v('sch-topic')};
   ['sch-date','sch-time','sch-room','sch-topic'].forEach(i=>$(i).value='');
-  renderSchedules();
+  if(window.fb){
+    const { db, collection, doc, setDoc } = window.fb;
+    setDoc(doc(collection(db,"schedules")), data);
+  } else {
+    schedules.push({sid:uid('sc'), ...data});
+    schedules.sort((a,b)=>a.date<b.date?-1:1);
+    renderSchedules();
+  }
 }
 function deleteSchedule(sid){
   if(!confirm('이 일정을 삭제할까요? 해당 회차 출석 기록도 함께 삭제됩니다.')) return;
-  schedules = schedules.filter(s=>s.sid!==sid);
-  delete attendance[sid];
-  renderSchedules();
+  if(window.fb){
+    const { db, doc, deleteDoc } = window.fb;
+    deleteDoc(doc(db,"schedules",sid));
+    deleteDoc(doc(db,"attendance",sid)).catch(()=>{});
+  } else {
+    schedules = schedules.filter(s=>s.sid!==sid);
+    delete attendance[sid];
+    renderSchedules();
+  }
 }
 function renderSchedules(){
   $('schedule-table').innerHTML = schedules.map(s=>{
@@ -1086,9 +1156,14 @@ function toggleAttendance(sid, u){
   attendance[sid] = attendance[sid] || {};
   const cur = attendance[sid][u] ? attendance[sid][u].status : null;
   const next = cur==='p' ? 'l' : cur==='l' ? 'a' : cur==='a' ? null : 'p';
-  if(next===null) delete attendance[sid][u];
-  else attendance[sid][u] = {status:next, reason:(attendance[sid][u]||{}).reason||''};
-  renderAttendance(); renderStudentSchedule();
+  const rec = next===null ? null : {status:next, reason:(attendance[sid][u]||{}).reason||''};
+  if(window.fb){
+    const { db, doc, setDoc } = window.fb;
+    setDoc(doc(db,"attendance",sid), {[u]: rec}, {merge:true});
+  } else {
+    if(rec) attendance[sid][u]=rec; else delete attendance[sid][u];
+    renderAttendance(); renderStudentSchedule();
+  }
   if(next==='a' || next==='l') openReason(sid,u);
 }
 function openReason(sid,u){
@@ -1101,8 +1176,17 @@ function openReason(sid,u){
 }
 function saveReason(){
   const {sid,u} = reasonTarget;
-  if(attendance[sid] && attendance[sid][u]) attendance[sid][u].reason = $('reason-text').value.trim();
-  closeModal('reason-modal'); renderAttendance(); renderStudentSchedule();
+  const text = $('reason-text').value.trim();
+  closeModal('reason-modal');
+  if(window.fb){
+    const { db, doc, setDoc } = window.fb;
+    if(attendance[sid] && attendance[sid][u]){
+      setDoc(doc(db,"attendance",sid), {[u]: {...attendance[sid][u], reason:text}}, {merge:true});
+    }
+  } else {
+    if(attendance[sid] && attendance[sid][u]) attendance[sid][u].reason = text;
+    renderAttendance(); renderStudentSchedule();
+  }
 }
 function renderAttendance(){
   const sel=$('att-session'); if(!sel) return;
@@ -1159,8 +1243,11 @@ function addQSet(){
   const name=$('new-qset-name').value.trim();
   if(!name){ alert('세트 이름을 입력하세요.'); return; }
   if(questionSets.includes(name)){ alert('이미 존재하는 세트명입니다.'); return; }
-  questionSets.push(name); $('new-qset-name').value='';
-  renderQSetOptions();
+  $('new-qset-name').value='';
+  if(window.fb){
+    const { db, doc, setDoc } = window.fb;
+    setDoc(doc(db,"questionSets", name), {name});
+  } else { questionSets.push(name); renderQSetOptions(); }
 }
 function renameQSet(i){
   const old = questionSets[i];
@@ -1168,16 +1255,29 @@ function renameQSet(i){
   if(!nn || !nn.trim()) return;
   const name = nn.trim();
   if(questionSets.includes(name) && name!==old){ alert('이미 존재하는 세트명입니다.'); return; }
-  questionSets[i]=name;
-  questions.forEach(q=>{ if(q.set===old) q.set=name; });
-  renderQSetOptions(); renderQuestions(); renderBank();
+  if(window.fb){
+    const { db, doc, setDoc, deleteDoc, updateDoc } = window.fb;
+    setDoc(doc(db,"questionSets", name), {name});
+    deleteDoc(doc(db,"questionSets", old));
+    questions.filter(q=>q.set===old).forEach(q=>updateDoc(doc(db,"questions", q.qid), {set:name}));
+  } else {
+    questionSets[i]=name;
+    questions.forEach(q=>{ if(q.set===old) q.set=name; });
+    renderQSetOptions(); renderQuestions(); renderBank();
+  }
 }
 function removeQSet(i){
   if(!confirm('이 세트를 삭제할까요? 세트에 속한 문제는 삭제되지 않고 "미분류"로 이동합니다.')) return;
   const old=questionSets[i];
-  questionSets.splice(i,1);
-  questions.forEach(q=>{ if(q.set===old) q.set=''; });
-  renderQSetOptions(); renderQuestions(); renderBank();
+  if(window.fb){
+    const { db, doc, deleteDoc, updateDoc } = window.fb;
+    deleteDoc(doc(db,"questionSets", old));
+    questions.filter(q=>q.set===old).forEach(q=>updateDoc(doc(db,"questions", q.qid), {set:''}));
+  } else {
+    questionSets.splice(i,1);
+    questions.forEach(q=>{ if(q.set===old) q.set=''; });
+    renderQSetOptions(); renderQuestions(); renderBank();
+  }
 }
 function renderQSetList(){
   const wrap=$('qset-list');
@@ -1235,17 +1335,23 @@ function saveQuestion(){
   }
   const data={set:$('q-set').value, type, body, hasPassage, passage, choices, answer,
               explain:$('q-explain').value.trim()};
-  if(editingQid){
-    Object.assign(questions.find(q=>q.qid===editingQid), data);
+  const editId = editingQid;
+  if(editId){
     editingQid=null;
     $('q-form-title').textContent='새 문제 등록';
     $('q-submit-btn').textContent='문제 등록';
     $('q-cancel-btn').style.display='none';
-  } else {
-    questions.push(Object.assign({qid:uid('q')}, data));
   }
   clearQuestionForm();
-  renderQuestions(); renderQSetList(); renderBank(); renderTasks();
+  if(window.fb){
+    const { db, doc, collection, setDoc, updateDoc } = window.fb;
+    if(editId) updateDoc(doc(db,"questions", editId), data);
+    else setDoc(doc(collection(db,"questions")), data);
+  } else {
+    if(editId) Object.assign(questions.find(q=>q.qid===editId), data);
+    else questions.push(Object.assign({qid:uid('q')}, data));
+    renderQuestions(); renderQSetList(); renderBank(); renderTasks();
+  }
 }
 function clearQuestionForm(){
   $('q-body').value=''; $('q-explain').value=''; $('q-passage').value='';
@@ -1290,11 +1396,20 @@ function renderQuestions(){
 }
 function removeQuestion(qid){
   if(!confirm('이 문제를 삭제할까요? 이미 등록된 과제·시험에서도 제외됩니다.')) return;
-  questions = questions.filter(q=>q.qid!==qid);
-  ['hw','exam'].forEach(k=>tasks[k].forEach(t=>{ t.qids = t.qids.filter(x=>x!==qid); }));
   draftQids.hw = draftQids.hw.filter(x=>x!==qid);
   draftQids.exam = draftQids.exam.filter(x=>x!==qid);
-  renderQuestions(); renderQSetList(); renderBank(); renderTasks(); renderDraft('hw'); renderDraft('exam');
+  renderDraft('hw'); renderDraft('exam');
+  if(window.fb){
+    const { db, doc, deleteDoc, updateDoc } = window.fb;
+    deleteDoc(doc(db,"questions", qid));
+    ['hw','exam'].forEach(k=>tasks[k].forEach(t=>{
+      if(t.qids.includes(qid)) updateDoc(doc(db,"tasks", t.tid), {qids:t.qids.filter(x=>x!==qid)});
+    }));
+  } else {
+    questions = questions.filter(q=>q.qid!==qid);
+    ['hw','exam'].forEach(k=>tasks[k].forEach(t=>{ t.qids = t.qids.filter(x=>x!==qid); }));
+    renderQuestions(); renderQSetList(); renderBank(); renderTasks();
+  }
 }
 
 /* =========================================================
@@ -1404,24 +1519,33 @@ function addTask(kind){
   if(!draftQids[kind].length && !confirm('담긴 문제가 없습니다. 그래도 등록할까요? (PDF만 배포하는 과제)')) return;
   const fileInput = $(prefix+'-pdf');
   const file = fileInput.files && fileInput.files[0];
-  const t = {
-    tid: uid(kind), title, due: $(prefix+'-due').value || '미정',
+  const data = {
+    kind, title, due: $(prefix+'-due').value || '미정',
     qids: draftQids[kind].slice(),
-    pdfName: file ? file.name : '',
-    pdfUrl: file ? URL.createObjectURL(file) : null
+    pdfName: file ? file.name : '', pdfUrl: null
   };
-  tasks[kind].push(t);
   $(prefix+'-title').value=''; $(prefix+'-due').value=''; fileInput.value='';
   draftQids[kind]=[]; renderDraft(kind);
-  ensureScoreSlots();
-  renderTasks(); renderScoreSelects(); renderStudentSite(); renderGradingTable();
+  if(window.fb){
+    const { db, collection, doc, setDoc } = window.fb;
+    setDoc(doc(collection(db,"tasks")), data);
+  } else {
+    tasks[kind].push({tid:uid(kind), ...data});
+    ensureScoreSlots();
+    renderTasks(); renderScoreSelects(); renderStudentSite(); renderGradingTable();
+  }
 }
 function removeTask(kind,tid){
   if(!confirm('삭제할까요? 관련 성적·제출 기록도 함께 삭제됩니다.')) return;
-  tasks[kind] = tasks[kind].filter(t=>t.tid!==tid);
-  delete scores[kind][tid];
-  Object.keys(submissions).forEach(k=>{ if(k.startsWith(tid+'|')) delete submissions[k]; });
-  renderTasks(); renderScoreSelects(); renderScoreTable(kind); renderStudentSite(); renderGradingTable();
+  if(window.fb){
+    const { db, doc, deleteDoc } = window.fb;
+    deleteDoc(doc(db,"tasks",tid));
+    deleteDoc(doc(db,"scores", kind+'__'+tid)).catch(()=>{});
+  } else {
+    tasks[kind] = tasks[kind].filter(t=>t.tid!==tid);
+    delete scores[kind][tid];
+    renderTasks(); renderScoreSelects(); renderScoreTable(kind); renderStudentSite(); renderGradingTable();
+  }
 }
 function submitCount(tid){
   return students.filter(s=>submissions[tid+'|'+s.uid]).length;
@@ -1546,7 +1670,7 @@ function submitSolve(){
     }
     if(answers[q.qid]) answered++;
   });
-  const photos = Array.from(files||[]).map(f=>({name:f.name, url:URL.createObjectURL(f)}));
+  const photos = Array.from(files||[]).map(f=>({name:f.name}));
   if(!answered && !photos.length){ alert('답안을 입력하거나 사진을 첨부해주세요.'); return; }
   const mode = (!answered && photos.length) ? 'photo' : 'omr';
   let correct = 0;
@@ -1555,27 +1679,29 @@ function submitSolve(){
                              : normalize(answers[q.qid])===normalize(q.answer);
     if(ok) correct++;
   });
-  submissions[tid+'|'+currentStudent] = {
-    mode, answers, photos, total:qs.length, correct,
-    date:new Date().toLocaleString('ko-KR')
-  };
-  // 자동채점 결과를 성적표에 반영 (관리자가 나중에 수정 가능)
-  scores[kind][tid] = scores[kind][tid] || {};
-  const rec = scores[kind][tid][currentStudent] || {score:'', status:'미완료'};
+  const subData = { mode, answers, photos, total:qs.length, correct, date:new Date().toLocaleString('ko-KR') };
+  const rec = (scores[kind][tid] && scores[kind][tid][currentStudent]) || {score:'', status:'미완료'};
   if(mode==='omr' && qs.length){
     rec.score = correct+'/'+qs.length;
     rec.status = correct===qs.length ? '완료' : (correct>0 ? '일부완료' : '미완료');
-  } else {
-    rec.status = '일부완료';
-  }
-  scores[kind][tid][currentStudent] = rec;
+  } else { rec.status = '일부완료'; }
 
   closeModal('solve-modal');
   alert(mode==='omr'
     ? `제출되었습니다. 자동 채점 결과 ${correct}/${qs.length}입니다. 제출한 답안은 수정할 수 없습니다.`
     : '사진이 제출되었습니다. 관리자가 확인 후 수동으로 채점합니다.');
   currentSolve=null;
-  renderStudentSite(); renderTasks(); renderGradingTable(); renderScoreTable(kind);
+
+  if(window.fb){
+    const { db, doc, setDoc } = window.fb;
+    setDoc(doc(db,"submissions", tid+'|'+currentStudent), subData);
+    setDoc(doc(db,"scores", kind+'__'+tid), {[currentStudent]: rec}, {merge:true});
+  } else {
+    submissions[tid+'|'+currentStudent] = subData;
+    scores[kind][tid] = scores[kind][tid] || {};
+    scores[kind][tid][currentStudent] = rec;
+    renderStudentSite(); renderTasks(); renderGradingTable(); renderScoreTable(kind);
+  }
 }
 
 /* ---------- 결과 · 해설 (학생/관리자 공용) ---------- */
@@ -1826,6 +1952,9 @@ function init(){
   subscribeAttendance();
   subscribeQuestionSets();
   subscribeQuestions();
+  subscribeTasks();
+  subscribeSubmissions();
+  subscribeScores();
   subscribeSchedules();
   subscribeStudents();
   switchSite('login');
