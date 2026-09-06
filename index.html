@@ -788,11 +788,40 @@ function ensureScoreSlots(){
    ========================================================= */
 const VDOMAIN = "@mdfh-study-lms.local";   // Authentication에 만든 계정의 @뒤 부분과 반드시 동일해야 함
 
+async const VDOMAIN = "@mdfh-study-lms";   // E-1에서 정한 그 도메인
+
 async function doLogin(){
   const id = $('login-id').value.trim();
   const pw = $('login-pw').value;
   if(!id || !pw){ alert('아이디와 비밀번호를 입력하세요.'); return; }
-  if(!window.fb){ alert('Firebase가 아직 로드되지 않았습니다. 잠시 후 다시 시도해주세요.'); return; }
+
+  try {
+    const cred = await window.fb.signInWithEmailAndPassword(
+      window.fb.auth, id + VDOMAIN, pw
+    );
+    console.log('로그인 성공, uid =', cred.user.uid);
+
+    $('login-pw').value = '';
+
+    // 아직 Firestore를 안 붙였으므로 데모 학생에 uid를 연결해 둡니다
+    students[0].uid = cred.user.uid;
+    currentStudent = cred.user.uid;
+    switchSite('student');
+
+  } catch(e) {
+    console.log('로그인 실패:', e.code);
+    if(e.code === 'auth/invalid-credential' || e.code === 'auth/wrong-password'
+       || e.code === 'auth/user-not-found'){
+      alert('아이디 또는 비밀번호가 올바르지 않습니다.');
+    } else if(e.code === 'auth/unauthorized-domain'){
+      alert('승인되지 않은 도메인입니다. Firebase 콘솔에서 도메인을 추가해주세요.');
+    } else if(e.code === 'auth/too-many-requests'){
+      alert('시도 횟수가 많습니다. 잠시 후 다시 시도해주세요.');
+    } else {
+      alert('로그인 중 오류: ' + e.code);
+    }
+  }
+}
 
   try {
     const cred = await window.fb.signInWithEmailAndPassword(window.fb.auth, id + VDOMAIN, pw);
