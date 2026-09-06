@@ -1919,10 +1919,10 @@ function renderFirebaseGuide(){
   <pre style="background:#0f172a; color:#e2e8f0; padding:14px; border-radius:9px; overflow:auto; font-size:12px; line-height:1.6;">
 <span style="color:#94a3b8;">// 1) 초기화 (index.html &lt;head&gt;에 type="module"로)</span>
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword,
-         sendPasswordResetEmail, updatePassword } from ".../firebase-auth.js";
-import { getFirestore, collection, doc, setDoc, getDoc, getDocs,
-         updateDoc, deleteDoc, onSnapshot } from ".../firebase-firestore.js";
+import { getAuth, signInWithEmailAndPassword, signOut, sendPasswordResetEmail, createUserWithEmailAndPassword } 
+  from "https://www.gstatic.com/firebasejs/10.x.x/firebase-auth.js";
+import { getFirestore, collection, onSnapshot, doc, getDoc, updateDoc, setDoc, deleteDoc } 
+  from "https://www.gstatic.com/firebasejs/10.x.x/firebase-firestore.js";
 import { getStorage, ref, uploadBytes, getDownloadURL } from ".../firebase-storage.js";
 
 const app = initializeApp(firebaseConfig);
@@ -2054,9 +2054,11 @@ const app  = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db   = getFirestore(app);
 
-window.fb = { auth, db, signInWithEmailAndPassword, signOut, sendPasswordResetEmail,
-              collection, doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, onSnapshot };
-
+window.fb = {
+  db, auth,
+  collection, onSnapshot, doc, getDoc, updateDoc, setDoc, deleteDoc,
+  signInWithEmailAndPassword, signOut, sendPasswordResetEmail, createUserWithEmailAndPassword
+};
 // 새로고침해도 로그인 유지
 onAuthStateChanged(auth, user => {
   if (user) console.log("로그인 유지 중:", user.uid);
