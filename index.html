@@ -182,7 +182,7 @@
 </head>
 <body>
 
-<div class="site-switch">
+<div class="site-switch" style="display:none;">
   <button id="switch-login" class="active" onclick="switchSite('login')">학생 로그인</button>
   <button id="switch-admin" onclick="switchSite('admin')">관리자 사이트</button>
   <button id="switch-student" onclick="switchSite('student')">학생 사이트</button>
@@ -226,6 +226,7 @@
         <button class="admin-nav" data-tab="a-grading" onclick="setAdminTab('a-grading')">채점 확인</button>
         <button class="admin-nav" data-tab="a-scores" onclick="setAdminTab('a-scores')">성적 관리</button>
         <button class="admin-nav" data-tab="a-firebase" onclick="setAdminTab('a-firebase')">Firebase 연동</button>
+        <button class="admin-nav" onclick="logout()" style="margin-top:14px; border-top:1px solid rgba(255,255,255,.18);">로그아웃</button>
       </nav>
     </div>
     <div class="main">
@@ -462,6 +463,7 @@
         <button class="student-nav" data-tab="t-hw" onclick="setStudentTab('t-hw')">과제</button>
         <button class="student-nav" data-tab="t-exam" onclick="setStudentTab('t-exam')">시험</button>
         <button class="student-nav" data-tab="t-me" onclick="setStudentTab('t-me')">내 정보</button>
+        <button class="student-nav" onclick="logout()" style="margin-top:14px; border-top:1px solid rgba(255,255,255,.18);">로그아웃</button>
       </nav>
     </div>
     <div class="main">
@@ -853,32 +855,43 @@ function ensureScoreSlots(){
    로그인 · 계정
    ========================================================= */
 const VDOMAIN = "@mdfh-study-lms.local";   // Authentication에 만든 계정의 @뒤 부분과 반드시 동일해야 함
-
+function logout(){
+  if(window.fb) window.fb.signOut(window.fb.auth);
+  currentStudent = null;
+  switchSite('login');
+}
 async function doLogin(){
   const id = $('login-id').value.trim();
   const pw = $('login-pw').value;
   if(!id || !pw){ alert('아이디와 비밀번호를 입력하세요.'); return; }
   if(!window.fb){ alert('Firebase가 아직 로드되지 않았습니다. 잠시 후 다시 시도해주세요.'); return; }
-
   try {
-    const cred = await window.fb.signInWithEmailAndPassword(window.fb.auth, id + VDOMAIN, pw);
-    console.log('로그인 성공, uid =', cred.user.uid);
+    const cred = await window.fb.signInWithEmailAndPassword(window.fb.auth, id, pw);
     $('login-pw').value = '';
-
-    // Firestore 연동 전이므로 데모 학생에 uid를 연결해 둡니다 (다음 단계에서 교체)
-    students[0].uid = cred.user.uid;
-    students[0].loginId = id;
-    currentStudent = cred.user.uid;
-    ensureScoreSlots();
-    switchSite('student');
-
+    const { db, doc, getDoc } = window.fb;
+    const adminSnap = await getDoc(doc(db, "admins", cred.user.uid));
+    if(adminSnap.exists()){
+      switchSite('admin');
+      return;
+    }
+    const studentSnap = await getDoc(doc(db, "students", cred.user.uid));
+    if(studentSnap.exists()){
+      currentStudent = cred.user.uid;
+      const data = studentSnap.data();
+      if(!students.some(x=>x.uid===cred.user.uid)) students.push({uid:cred.user.uid, ...data});
+      if(!data.email){ openModal('email-modal'); $('first-email').value=''; $('first-email').focus(); return; }
+      switchSite('student');
+    } else {
+      console.log('계정 uid (등록 필요):', cred.user.uid);
+      alert('계정 정보를 찾을 수 없습니다. 관리자에게 문의해주세요.');
+    }
   } catch(e) {
     console.log('로그인 실패:', e.code);
     if(e.code === 'auth/invalid-credential' || e.code === 'auth/wrong-password'
        || e.code === 'auth/user-not-found' || e.code === 'auth/invalid-email'){
       alert('아이디 또는 비밀번호가 올바르지 않습니다.');
     } else if(e.code === 'auth/unauthorized-domain'){
-      alert('승인되지 않은 도메인입니다.\nFirebase 콘솔 → Authentication → Settings → 승인된 도메인에\n현재 사이트 주소를 추가해주세요.');
+      alert('승인되지 않은 도메인입니다.');
     } else if(e.code === 'auth/too-many-requests'){
       alert('시도 횟수가 많습니다. 잠시 후 다시 시도해주세요.');
     } else {
@@ -1961,7 +1974,7 @@ window.__state = {
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import { getAuth, signInWithEmailAndPassword, sendPasswordResetEmail, onAuthStateChanged }
+import { getAuth, signInWithEmailAndPassword, sendPasswordResetEmail, onAuthStateChanged, signOut }
   from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 import { getFirestore, collection, doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, onSnapshot }
   from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
@@ -1979,7 +1992,7 @@ const app  = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db   = getFirestore(app);
 
-window.fb = { auth, db, signInWithEmailAndPassword, sendPasswordResetEmail,
+window.fb = { auth, db, signInWithEmailAndPassword, signOut, sendPasswordResetEmail,
               collection, doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, onSnapshot };
 
 // 새로고침해도 로그인 유지
