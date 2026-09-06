@@ -686,7 +686,7 @@ function switchSite(site){
   document.querySelectorAll('.site-switch button').forEach(b=>b.classList.remove('active'));
   $('switch-'+site).classList.add('active');
   if(site==='student'){
-    if(!currentStudent && students.length) currentStudent = students[0].uid;
+    if(!currentStudent && students.length) if(students.length) currentStudent = students[0].uid;
     renderStudentSite();
   }
 }
