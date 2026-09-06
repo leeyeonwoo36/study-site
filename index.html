@@ -2078,7 +2078,7 @@ window.fb = {
   collection, onSnapshot, doc, getDoc, updateDoc, setDoc, deleteDoc,
   signInWithEmailAndPassword, signOut, sendPasswordResetEmail, createUserWithEmailAndPassword
 };
-// 새로고침해도 로그인 유지
+// 새로고침해도 로그인 유지.
 onAuthStateChanged(auth, async user => {
   if(!user){
     return; // 로그인 안 된 상태 → 이미 기본 화면은 로그인 화면이라 그대로 둠
