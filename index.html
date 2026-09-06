@@ -254,8 +254,23 @@
       </div>
 
       <!-- 학생 관리 -->
-      <div class="tabpanel" id="tab-a-students">
-        <div class="page-head"><div><h1>학생 관리</h1><p>학생 가입 승인·수정·삭제, 인적사항, 계정 정보를 관리합니다. 이름을 클릭하면 상세정보·성적추이·메모를 볼 수 있습니다.</p></div></div>
+     <div class="tabpanel" id="tab-a-students">
+  <div class="page-head"><div><h1>학생 관리</h1><p>학생 가입 승인·수정·삭제, 인적사항, 계정 정보를 관리합니다. 이름을 클릭하면 상세정보·성적추이·메모를 볼 수 있습니다.</p></div></div>
+  <div class="card">
+    <h3>가입 승인 대기</h3>
+    <table>
+      <tr><th>이름</th><th>학년</th><th>학교</th><th>전화번호</th><th>이메일</th><th></th></tr>
+      <tbody id="pending-table"></tbody>
+    </table>
+  </div>
+  <div class="card">
+    <h3>학생 목록</h3>
+    <table>
+      <tr><th>이름</th><th>학년</th><th>학교</th><th>전화번호</th><th>이메일</th><th></th></tr>
+      <tbody id="student-table"></tbody>
+    </table>
+  </div>
+</div>
         <!-- 기존 "학생 추가" 카드는 통째로 삭제 -->
 
 <div class="card">
@@ -899,7 +914,7 @@ async function doSignup(){
   }
 }
   const ADMIN_UIDS = [
-  MdFLPZCpGib4AsdOwoaTptQqk7k2
+  'MdFLPZCpGib4AsdOwoaTptQqk7k2'
 ];
 async function doLogin(){
   const id = $('login-id').value.trim();
@@ -1923,8 +1938,8 @@ function renderFirebaseGuide(){
   <pre style="background:#0f172a; color:#e2e8f0; padding:14px; border-radius:9px; overflow:auto; font-size:12px; line-height:1.6;">
 <span style="color:#94a3b8;">// 1) 초기화 (index.html &lt;head&gt;에 type="module"로)</span>
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import { getAuth, signInWithEmailAndPassword, signOut, sendPasswordResetEmail, createUserWithEmailAndPassword } 
-  from "https://www.gstatic.com/firebasejs/10.x.x/firebase-auth.js";
+import { getAuth, signInWithEmailAndPassword, sendPasswordResetEmail, onAuthStateChanged, signOut, createUserWithEmailAndPassword }
+  from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 import { getFirestore, collection, onSnapshot, doc, getDoc, updateDoc, setDoc, deleteDoc } 
   from "https://www.gstatic.com/firebasejs/10.x.x/firebase-firestore.js";
 import { getStorage, ref, uploadBytes, getDownloadURL } from ".../firebase-storage.js";
@@ -2064,8 +2079,32 @@ window.fb = {
   signInWithEmailAndPassword, signOut, sendPasswordResetEmail, createUserWithEmailAndPassword
 };
 // 새로고침해도 로그인 유지
-onAuthStateChanged(auth, user => {
-  if (user) console.log("로그인 유지 중:", user.uid);
+onAuthStateChanged(auth, async user => {
+  if(!user){
+    return; // 로그인 안 된 상태 → 이미 기본 화면은 로그인 화면이라 그대로 둠
+  }
+  console.log("로그인 유지 중:", user.uid);
+
+  if(ADMIN_UIDS.includes(user.uid)){
+    switchSite('admin');
+    return;
+  }
+
+  try{
+    const { db, doc, getDoc, signOut } = window.fb;
+    const studentSnap = await getDoc(doc(db, "students", user.uid));
+    if(studentSnap.exists() && studentSnap.data().approved){
+      currentStudent = user.uid;
+      const data = studentSnap.data();
+      if(!students.some(x=>x.uid===user.uid)) students.push({uid:user.uid, ...data});
+      switchSite('student');
+    } else if(studentSnap.exists() && !studentSnap.data().approved){
+      await signOut(auth);
+    }
+    // 학생 문서가 아예 없으면 아무 처리 안 하고 로그인 화면에 머무름
+  }catch(e){
+    console.error('자동 로그인 라우팅 실패:', e);
+  }
 });
 
 console.log("✅ Firebase 연결됨");
