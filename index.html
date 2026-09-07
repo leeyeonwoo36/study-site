@@ -749,7 +749,15 @@
     <div class="memo-board" id="memo-board"></div>
   </div>
 </div>
-
+<!-- 대상 학생 보기 -->
+<div class="modal-bg" id="view-assignees-modal">
+  <div class="modal">
+    <button class="modal-close" onclick="closeModal('view-assignees-modal')">✕</button>
+    <h3 id="view-assignees-title">대상 학생</h3>
+    <p class="note" id="view-assignees-count"></p>
+    <div id="view-assignees-list" style="max-height:50vh; overflow:auto;"></div>
+  </div>
+</div>
 <!-- 메모 수정 -->
 <div class="modal-bg" id="memo-edit-modal">
   <div class="modal">
@@ -1751,13 +1759,24 @@ function showAssignedStudents(kind, tid){
   const list = Array.isArray(t.assignedTo)
     ? students.filter(s=>t.assignedTo.includes(s.uid))
     : students.filter(s=>s.approved);
-  const label = Array.isArray(t.assignedTo) ? `지정된 학생 ${list.length}명` : `전체 학생 ${list.length}명`;
-  const names = list.length
-    ? list.map(s=>'• '+s.name+(s.grade?' ('+s.grade+')':'')).join('\n')
-    : '표시할 학생이 없습니다.';
-  alert(t.title+'\n'+label+'\n\n'+names);
-}
 
+  $('view-assignees-title').textContent = t.title;
+  $('view-assignees-count').textContent = Array.isArray(t.assignedTo)
+    ? `지정된 학생 ${list.length}명`
+    : `전체 학생 ${list.length}명 (전체 대상)`;
+
+    $('view-assignees-list').innerHTML = list.length
+    ? list.map(s => `
+        <div class="bank-item">
+          <div class="bi-body">
+            <a href="#" onclick="openStudentFromAssignees('${s.uid}'); return false;" style="font-weight:700;">${esc(s.name)}</a>
+            <span style="color:#8993AA; font-size:12px;"> ${esc(s.grade||'')} · ${esc(s.school||'')}</span>
+          </div>
+        </div>`).join('')
+    : '<p class="empty-hint">표시할 학생이 없습니다.</p>';
+
+  openModal('view-assignees-modal');
+}
 /* =========================================================
    학생 사이트
    ========================================================= */
