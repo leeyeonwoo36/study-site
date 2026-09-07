@@ -959,7 +959,7 @@ function startSubscriptions(isAdmin, ownerUid){
   if(subsOwner !== null) stopSubscriptions(); // 계정이 바뀌었으면 이전 구독을 먼저 끊는다
   if(!window.fb){ setTimeout(()=>startSubscriptions(isAdmin, ownerUid), 120); return; }
   subsOwner = ownerUid;
-  const { db, collection, doc, onSnapshot } = window.fb;
+  const { db, collection, doc, onSnapshot, query, where } = window.fb;
 
   const sub = (name, handler, customRef) => {
   const ref = customRef || collection(db, name);
