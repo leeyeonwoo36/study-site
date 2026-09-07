@@ -738,8 +738,10 @@
       <button class="btn small secondary" onclick="openStudentEditFromDetail()">인적사항 수정</button>
       <button class="btn small secondary" onclick="resetPw(currentDetailUid)">비밀번호 재설정 메일 보내기</button>
     </div>
-    <h3>과제·시험 현황</h3>
-    <div id="detail-task-status" style="margin-bottom:18px;"></div>
+   <h3>과제·시험 현황</h3>
+    <p class="note">항목을 클릭하면 아래에 상세 결과가 나타납니다.</p>
+    <div id="detail-task-status" style="margin-bottom:10px;"></div>
+    <div id="detail-task-detail" style="margin-bottom:18px;"></div>
     <h3>시험 성적 추이</h3>
     <div id="detail-trend-chart"></div>
     <h3 style="margin-top:18px;">개별 메모</h3>
@@ -1263,21 +1265,61 @@ function drawStudentTrend(u){
 }
 function renderStudentTaskStatus(u){
   const box = $('detail-task-status'); if(!box) return;
+  $('detail-task-detail').innerHTML = '';
   const row = (kind, t) => {
     if(Array.isArray(t.assignedTo) && !t.assignedTo.includes(u)) return '';
     const sub = submissions[t.tid+'|'+u];
-    let status;
-    if(!sub){
-      status = '<span class="badge warn">미제출</span>';
-    } else {
-      status = `<span class="badge good">채점 완료 (${sub.correct}/${sub.total})</span>`;
-    }
-    return `<tr><td>${esc(t.title)}</td><td>${esc(kind==='hw'?'과제':'시험')}</td><td>${status}</td></tr>`;
+    const status = sub
+      ? `<span class="badge good">채점 완료 (${sub.correct}/${sub.total})</span>`
+      : '<span class="badge warn">미제출</span>';
+    return `<div class="bank-item" style="cursor:pointer;" onclick="showStudentTaskDetail('${kind}','${t.tid}','${u}')">
+      <div class="bi-body">
+        <b>${esc(t.title)}</b>
+        <span style="color:#8993AA; font-size:12px;"> ${esc(kind==='hw'?'과제':'시험')}</span>
+        <div style="margin-top:4px;">${status}</div>
+      </div>
+    </div>`;
   };
   const rows = tasks.hw.map(t=>row('hw',t)).join('') + tasks.exam.map(t=>row('exam',t)).join('');
-  box.innerHTML = rows
-    ? `<table><tr><th>과제/시험명</th><th>구분</th><th>제출 상태</th></tr>${rows}</table>`
-    : '<p class="empty-hint">배정된 과제/시험이 없습니다.</p>';
+  box.innerHTML = rows || '<p class="empty-hint">배정된 과제/시험이 없습니다.</p>';
+}
+  function showStudentTaskDetail(kind, tid, u){
+  $('detail-task-detail').innerHTML =
+    `<h3 style="margin-top:14px;">상세 결과</h3>` + buildTaskDetailHtml(kind, tid, u);
+}
+function buildTaskDetailHtml(kind, tid, u){
+  const t = tasks[kind].find(x=>x.tid===tid);
+  if(!t) return '<p class="empty-hint">해당 항목을 찾을 수 없습니다.</p>';
+  const sub = submissions[tid+'|'+u];
+  const qs = (t.qids||[]).map(q=>questions.find(x=>x.qid===q)).filter(Boolean);
+  const head = sub
+    ? `<p class="note">제출일시 ${esc(sub.date)} · 자동채점 <b>${sub.correct}/${sub.total}</b></p>`
+    : '<p class="note">아직 제출하지 않았습니다.</p>';
+  const body = qs.map((q,i)=>{
+    const mine = sub ? ((sub.answers||{})[q.qid]||'') : '';
+    const ok = q.type==='mc' ? mine===String(q.answer) : normalize(mine)===normalize(q.answer);
+    const mineLabel = q.type==='mc'
+      ? (mine ? (CIRCLE[parseInt(mine,10)-1]||'')+' '+esc((q.choices||[])[parseInt(mine,10)-1]||'') : '무응답')
+      : (mine ? esc(mine) : '무응답');
+    const choicesHtml = q.type==='mc' ? (q.choices||[]).map((c,ci)=>{
+      const isAns = String(ci+1)===String(q.answer);
+      const isMineWrong = String(ci+1)===mine && !ok;
+      return `<div class="choice-line ${isAns?'correct':''} ${isMineWrong?'mine-wrong':''}">
+        ${CIRCLE[ci]} ${esc(c)} ${isAns?'<span class="badge good" style="margin-left:6px;">정답</span>':''}
+        ${isMineWrong?'<span class="badge warn" style="margin-left:6px;">내 선택</span>':''}</div>`;
+    }).join('') : '';
+    return `<div class="review-q">
+      <div class="rhead"><b>문제 ${i+1}</b>
+        ${sub? (ok?'<span class="badge good">정답</span>':'<span class="badge warn">오답</span>')
+             : '<span class="badge muted">미제출</span>'}</div>
+      <div style="white-space:pre-wrap; font-weight:700;">${esc(q.body)}</div>
+      ${q.hasPassage? `<div class="passage-box"><div class="ptitle">&lt;보기&gt;</div>${esc(q.passage)}</div>`:''}
+      ${choicesHtml}
+      <div class="ans-row"><b>내 답:</b> ${mineLabel} &nbsp;|&nbsp; <b>정답:</b> ${esc(answerLabel(q))}</div>
+      ${q.explain? `<div class="exam-explain ${ok?'':'wrong'}"><b>해설</b><br>${esc(q.explain)}</div>`:''}
+    </div>`;
+  }).join('') || '<p class="empty-hint">등록된 문항이 없습니다.</p>';
+  return head + body;
 }
 function renderTrendSvg(containerId, arr){
   const c = $(containerId); if(!c) return;
