@@ -1776,7 +1776,15 @@ function buildAnswerExplainHtml(qs){
     const explain = q.explain ? `<div class="exp-text">${esc(q.explain)}</div>` : '';
     return `<div class="exp-item">
       <span class="exp-num">${i+1}.</span>
-      <span class="exp-answer">정답
+      <span class="exp-answer">정답 ${esc(answerLabel(q))}</span>
+      ${explain}
+    </div>`;
+  }).join('');
+  return `<div class="back-page">
+    <div class="back-title">정답 · 해설</div>
+    ${items}
+  </div>`;
+}
 
 function openAssignPicker(kind){
   assignKind = kind;
