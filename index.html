@@ -305,7 +305,12 @@
             <div><label>교실</label><input type="text" id="sch-room" placeholder="예: 본관 401호"></div>
             <div><label>예상 진도</label><input type="text" id="sch-topic" placeholder="예: 국제기구 1~2장"></div>
           </div>
-          <button class="btn" onclick="addSchedule()">일정 등록</button>
+                    <div class="field-section">
+            <span class="section-label">출석 대상 학생</span>
+            <button class="btn secondary" style="width:100%;" onclick="openAssignPicker('sch')">학생 지정</button>
+            <div class="picked-list" id="sch-assignees" style="margin-top:8px;">대상 학생: 전체</div>
+          </div>
+          <button class="btn" style="width:100%; margin-top:16px;" onclick="addSchedule()">일정 등록</button>
         </div>
         <div class="card">
           <h3>등록된 일정</h3>
@@ -695,6 +700,11 @@
       <div><label>교실</label><input type="text" id="esc-room" placeholder="예: 본관 401호"></div>
       <div><label>예상 진도</label><input type="text" id="esc-topic" placeholder="예: 국제기구 1~2장"></div>
     </div>
+        <div class="field-section">
+      <span class="section-label">출석 대상 학생</span>
+      <button class="btn secondary" style="width:100%;" onclick="openAssignPicker('sch-edit')">학생 지정</button>
+      <div class="picked-list" id="sch-edit-assignees" style="margin-top:8px;">대상 학생: 전체</div>
+    </div>
     <button class="btn" onclick="saveScheduleEdit()">저장</button>
     <button class="btn ghost" onclick="closeModal('schedule-edit-modal')">취소</button>
   </div>
@@ -894,7 +904,7 @@ let editStudentUid = null;
 let editingQid = null;
 let draftQids = {hw:[], exam:[]};
 let pdfSelectedQids = [];
-let draftAssignees = {hw:null, exam:null}; // null=전체 학생, 배열=지정된 uid 목록
+let draftAssignees = {hw:null, exam:null, sch:null, 'sch-edit':null}; // null=전체 학생, 배열=지정된 uid 목록
 let assignKind = null;
 let pickerKind = null;
 let reasonTarget = null;
@@ -1431,13 +1441,19 @@ function openScheduleEdit(sid){
   $('esc-time').value = s.time||'';
   $('esc-room').value = s.room||'';
   $('esc-topic').value = s.topic||'';
+  draftAssignees['sch-edit'] = Array.isArray(s.assignedTo) ? s.assignedTo.slice() : null;
+  renderAssigneeSummary('sch-edit');
   openModal('schedule-edit-modal');
 }
 function saveScheduleEdit(){
   if(!editScheduleSid) return;
   const date = $('esc-date').value.trim(), time = $('esc-time').value.trim(), room = $('esc-room').value.trim();
   if(!date || !time || !room){ alert('날짜·시간·교실을 입력해주세요.'); return; }
-  const data = { date, time, room, topic: $('esc-topic').value.trim() };
+  const assignedTo = draftAssignees['sch-edit'];
+  if(Array.isArray(assignedTo) && !assignedTo.length){
+    alert('출석 대상 학생이 없습니다. 학생을 선택하거나 전체 선택을 체크해주세요.'); return;
+  }
+  const data = { date, time, room, topic: $('esc-topic').value.trim(), assignedTo };
   closeModal('schedule-edit-modal');
   const { db, doc, updateDoc } = window.fb;
   updateDoc(doc(db,'schedules', editScheduleSid), data).catch(e=>alert('수정 실패: '+e.message));
@@ -1492,13 +1508,17 @@ function saveReason(){
 function renderAttendance(){
   const sel=$('att-session'), tb=$('att-table'); if(!sel||!tb) return;
   const sid = sel.value;
-  if(!sid || !schedules.some(s=>s.sid===sid)){
+  const sch = schedules.find(s=>s.sid===sid);
+  if(!sid || !sch){
     tb.innerHTML='<tr><td colspan="3" class="empty-hint">등록된 일정이 없습니다.</td></tr>'; return;
   }
-  tb.innerHTML = students.filter(s=>s.approved).map(st=>{
+  const targets = Array.isArray(sch.assignedTo)
+    ? students.filter(s=>s.approved && sch.assignedTo.includes(s.uid))
+    : students.filter(s=>s.approved);
+  tb.innerHTML = targets.map(st=>{
     const rec=(attendance[sid]||{})[st.uid];
     const s = rec ? rec.status : null;
-      const dots = `<div class="att-dots">
+    const dots = `<div class="att-dots">
       <div class="att-dot p ${s==='p'?'on':''}" title="출석" onclick="setAttendance('${sid}','${st.uid}','p')">출석</div>
       <div class="att-dot l ${s==='l'?'on':''}" title="지각" onclick="setAttendance('${sid}','${st.uid}','l')">지각</div>
       <div class="att-dot a ${s==='a'?'on':''}" title="결석" onclick="setAttendance('${sid}','${st.uid}','a')">결석</div>
@@ -1511,11 +1531,12 @@ function renderAttendance(){
     return `<tr><td>${esc(st.name)} <span style="color:#8993AA; font-size:12px;">(${esc(st.grade)})</span></td>
       <td>${dots}</td>
       <td>${reasonCell}</td></tr>`;
-  }).join('') || '<tr><td colspan="3" class="empty-hint">등록된 학생이 없습니다.</td></tr>';
+  }).join('') || '<tr><td colspan="3" class="empty-hint">출석 대상 학생이 없습니다.</td></tr>';
 }
 function renderStudentSchedule(){
   const tb=$('t-schedule-table'); if(!tb || !currentStudent) return;
-  tb.innerHTML = schedules.map(s=>{
+  const visible = schedules.filter(s => !Array.isArray(s.assignedTo) || s.assignedTo.includes(currentStudent));
+  tb.innerHTML = visible.map(s=>{
     const f=fmtDate(s.date), rec=(attendance[s.sid]||{})[currentStudent];
     const st = rec? rec.status : null;
     const b = st ? `<span class="att-badge ${st}">${st==='p'?'출석':st==='l'?'지각':'결석'}</span>`
@@ -1874,7 +1895,8 @@ function applyAssignPicker(){
   renderAssigneeSummary(assignKind);
 }
 function renderAssigneeSummary(kind){
-  const box = $(kind==='hw'?'hw-assignees':'exam-assignees'); if(!box) return;
+  const boxId = {hw:'hw-assignees', exam:'exam-assignees', sch:'sch-assignees', 'sch-edit':'sch-edit-assignees'}[kind];
+  const box = $(boxId); if(!box) return;
   const cur = draftAssignees[kind];
   if(cur===null){ box.textContent = '대상 학생: 전체'; return; }
   if(!cur.length){ box.innerHTML = '<span style="color:#e0455b;">대상 학생: 선택된 학생 없음</span>'; return; }
