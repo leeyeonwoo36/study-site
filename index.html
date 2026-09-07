@@ -738,6 +738,8 @@
       <button class="btn small secondary" onclick="openStudentEditFromDetail()">인적사항 수정</button>
       <button class="btn small secondary" onclick="resetPw(currentDetailUid)">비밀번호 재설정 메일 보내기</button>
     </div>
+    <h3>과제·시험 현황</h3>
+    <div id="detail-task-status" style="margin-bottom:18px;"></div>
     <h3>시험 성적 추이</h3>
     <div id="detail-trend-chart"></div>
     <h3 style="margin-top:18px;">개별 메모</h3>
@@ -1184,6 +1186,7 @@ function openStudentDetail(u){
     ? '<span class="badge good">승인됨</span>' : '<span class="badge warn">승인 대기</span>';
   $('detail-email').textContent = s.email || '미등록';
   drawStudentTrend(u);
+  renderStudentTaskStatus(u);
   renderMemos();
   openModal('student-detail-modal');
 }
@@ -1257,6 +1260,24 @@ function drawStudentTrend(u){
     return pct===null ? null : {label:t.title, score:pct};
   }).filter(Boolean);
   renderTrendSvg('detail-trend-chart', arr);
+}
+function renderStudentTaskStatus(u){
+  const box = $('detail-task-status'); if(!box) return;
+  const row = (kind, t) => {
+    if(Array.isArray(t.assignedTo) && !t.assignedTo.includes(u)) return '';
+    const sub = submissions[t.tid+'|'+u];
+    let status;
+    if(!sub){
+      status = '<span class="badge warn">미제출</span>';
+    } else {
+      status = `<span class="badge good">채점 완료 (${sub.correct}/${sub.total})</span>`;
+    }
+    return `<tr><td>${esc(t.title)}</td><td>${esc(kind==='hw'?'과제':'시험')}</td><td>${status}</td></tr>`;
+  };
+  const rows = tasks.hw.map(t=>row('hw',t)).join('') + tasks.exam.map(t=>row('exam',t)).join('');
+  box.innerHTML = rows
+    ? `<table><tr><th>과제/시험명</th><th>구분</th><th>제출 상태</th></tr>${rows}</table>`
+    : '<p class="empty-hint">배정된 과제/시험이 없습니다.</p>';
 }
 function renderTrendSvg(containerId, arr){
   const c = $(containerId); if(!c) return;
