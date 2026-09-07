@@ -163,6 +163,9 @@
   .bank-item .bi-body{flex:1; font-size:13px;}
   .picked-list{font-size:12.5px; color:var(--ink-soft); background:var(--paper);
     border:1px dashed var(--border); border-radius:var(--radius); padding:8px 10px; margin-bottom:10px;}
+    .field-section{padding-top:16px; margin-top:16px; border-top:1px dashed var(--paper-line);}
+  .field-section:first-of-type{padding-top:0; margin-top:0; border-top:none;}
+  .section-label{display:block; font-size:12px; font-weight:700; color:var(--brand); margin-bottom:8px;}
 
   @media (max-width:760px){
     .layout{flex-direction:column; min-height:auto;}
@@ -273,68 +276,98 @@
       </div>
 
       <!-- 과제 관리 -->
-      <div class="tabpanel" id="tab-a-hw">
-        <div class="page-head"><div><h1>과제 관리</h1><p>과제를 등록·삭제하고 원본 PDF를 업로드합니다. 문제는 세트 단위 또는 문제은행에서 낱개로 담을 수 있습니다.</p></div></div>
-        <div class="card">
+             <div class="card">
           <h3>과제 등록</h3>
           <div class="form-grid">
             <div><label>과제명</label><input type="text" id="hw-title" placeholder="예: 3주차 국제기구 이해 과제"></div>
-            <div><label>마감일시</label><input type="datetime-local" id="hw-due"></div>
           </div>
-          <div class="form-grid">
-            <div><label>문제 세트에서 한 번에 담기</label>
-              <div style="display:flex; gap:6px;"><select id="hw-qset"></select>
-                <button class="btn secondary small" style="white-space:nowrap;" onclick="addSetToDraft('hw')">세트 담기</button></div>
+
+          <div class="field-section">
+            <span class="section-label">일정</span>
+            <div class="form-grid">
+              <div><label>시작일시</label><input type="datetime-local" id="hw-start"></div>
+              <div><label>마감일시</label><input type="datetime-local" id="hw-due"></div>
             </div>
-            <div><label>문제은행에서 낱개로 담기</label>
-              <button class="btn secondary" style="width:100%;" onclick="openPicker('hw')">문제 골라 담기</button></div>
           </div>
-          <div class="picked-list" id="hw-picked">담긴 문제: 없음</div>
-          <div class="form-grid full"><div><label>대상 학생</label>
-  <button class="btn secondary" style="width:100%;" onclick="openAssignPicker('hw')">학생 지정</button></div></div>
-<div class="picked-list" id="hw-assignees">대상 학생: 전체</div>
-          <div class="form-grid full"><div><label>원본 PDF 업로드 (Storage 연동 후 활성화)</label>
-            <input type="file" id="hw-pdf" accept="application/pdf" disabled></div></div>
-          <button class="btn" onclick="addTask('hw')">과제 등록</button>
+
+          <div class="field-section">
+            <span class="section-label">문항 구성</span>
+            <div class="form-grid">
+              <div><label>문제 세트에서 한 번에 담기</label>
+                <div style="display:flex; gap:6px;"><select id="hw-qset"></select>
+                  <button class="btn secondary small" style="white-space:nowrap;" onclick="addSetToDraft('hw')">세트 담기</button></div>
+              </div>
+              <div><label>문제은행에서 낱개로 담기</label>
+                <button class="btn secondary" style="width:100%;" onclick="openPicker('hw')">문제 골라 담기</button></div>
+            </div>
+            <div class="picked-list" id="hw-picked">담긴 문제: 없음</div>
+          </div>
+
+          <div class="field-section">
+            <span class="section-label">대상 학생</span>
+            <button class="btn secondary" style="width:100%;" onclick="openAssignPicker('hw')">학생 지정</button>
+            <div class="picked-list" id="hw-assignees" style="margin-top:8px;">대상 학생: 전체</div>
+          </div>
+
+          <div class="field-section">
+            <label>원본 PDF 업로드 (Storage 연동 후 활성화)</label>
+            <input type="file" id="hw-pdf" accept="application/pdf" disabled>
+          </div>
+
+          <button class="btn" style="width:100%; margin-top:16px;" onclick="addTask('hw')">과제 등록</button>
         </div>
         <div class="card">
           <h3>등록된 과제</h3>
-          <table><tr><th>과제명</th><th>마감일</th><th>문항수</th><th>PDF</th><th>대상</th><th>제출현황</th><th></th></tr>
+          <table><tr><th>과제명</th><th>기간</th><th>문항수</th><th>PDF</th><th>대상</th><th>제출현황</th><th></th></tr>
             <tbody id="hw-table"></tbody></table>
         </div>
-      </div>
 
       <!-- 시험 관리 -->
-      <div class="tabpanel" id="tab-a-exam">
-        <div class="page-head"><div><h1>시험 관리</h1><p>시험 등록도 과제와 동일한 온라인 OMR 방식을 사용합니다</p></div></div>
-        <div class="card">
+             <div class="card">
           <h3>시험 등록</h3>
           <div class="form-grid">
             <div><label>시험명</label><input type="text" id="ex-title" placeholder="예: 1차 모의고사"></div>
-            <div><label>시험일시</label><input type="datetime-local" id="ex-due"></div>
           </div>
-          <div class="form-grid">
-            <div><label>문제 세트에서 한 번에 담기</label>
-              <div style="display:flex; gap:6px;"><select id="ex-qset"></select>
-                <button class="btn secondary small" style="white-space:nowrap;" onclick="addSetToDraft('exam')">세트 담기</button></div>
+
+          <div class="field-section">
+            <span class="section-label">일정</span>
+            <div class="form-grid">
+              <div><label>시작일시</label><input type="datetime-local" id="ex-start"></div>
+              <div><label>마감일시</label><input type="datetime-local" id="ex-due"></div>
             </div>
-            <div><label>문제은행에서 낱개로 담기</label>
-              <button class="btn secondary" style="width:100%;" onclick="openPicker('exam')">문제 골라 담기</button></div>
           </div>
-          <div class="picked-list" id="exam-picked">담긴 문제: 없음</div>
-          <div class="form-grid full"><div><label>대상 학생</label>
-  <button class="btn secondary" style="width:100%;" onclick="openAssignPicker('exam')">학생 지정</button></div></div>
-<div class="picked-list" id="exam-assignees">대상 학생: 전체</div>
-          <div class="form-grid full"><div><label>원본 PDF 업로드 (Storage 연동 후 활성화)</label>
-            <input type="file" id="ex-pdf" accept="application/pdf" disabled></div></div>
-          <button class="btn" onclick="addTask('exam')">시험 등록</button>
+
+          <div class="field-section">
+            <span class="section-label">문항 구성</span>
+            <div class="form-grid">
+              <div><label>문제 세트에서 한 번에 담기</label>
+                <div style="display:flex; gap:6px;"><select id="ex-qset"></select>
+                  <button class="btn secondary small" style="white-space:nowrap;" onclick="addSetToDraft('exam')">세트 담기</button></div>
+              </div>
+              <div><label>문제은행에서 낱개로 담기</label>
+                <button class="btn secondary" style="width:100%;" onclick="openPicker('exam')">문제 골라 담기</button></div>
+            </div>
+            <div class="picked-list" id="exam-picked">담긴 문제: 없음</div>
+          </div>
+
+          <div class="field-section">
+            <span class="section-label">대상 학생</span>
+            <button class="btn secondary" style="width:100%;" onclick="openAssignPicker('exam')">학생 지정</button>
+            <div class="picked-list" id="exam-assignees" style="margin-top:8px;">대상 학생: 전체</div>
+          </div>
+
+          <div class="field-section">
+            <label>원본 PDF 업로드 (Storage 연동 후 활성화)</label>
+            <input type="file" id="ex-pdf" accept="application/pdf" disabled>
+          </div>
+
+          <button class="btn" style="width:100%; margin-top:16px;" onclick="addTask('exam')">시험 등록</button>
         </div>
         <div class="card">
           <h3>등록된 시험</h3>
-          <table><tr><th>시험명</th><th>시험일</th><th>문항수</th><th>PDF</th><th>대상</th><th>제출현황</th><th></th></tr>
+          <table><tr><th>시험명</th><th>기간</th><th>문항수</th><th>PDF</th><th>대상</th><th>제출현황</th><th></th></tr>
             <tbody id="exam-table"></tbody></table>
         </div>
-      </div>
 
       <!-- 문제 등록 -->
       <div class="tabpanel" id="tab-a-questions">
@@ -477,7 +510,7 @@
         <div class="page-head"><div><h1>과제</h1><p>온라인으로 풀거나 사진으로 제출할 수 있습니다. 제출 후에는 수정할 수 없고 결과·해설만 볼 수 있어요.</p></div></div>
         <div class="card">
           <table>
-            <tr><th>과제명</th><th>마감일</th><th>원본 PDF</th><th>수행 여부</th><th>상태</th><th></th></tr>
+            <tr><th>과제명</th><th>기간</th><th>원본 PDF</th><th>수행 여부</th><th>상태</th><th></th></tr>
             <tbody id="t-hw-table"></tbody></table>
         </div>
       </div>
@@ -486,7 +519,7 @@
         <div class="page-head"><div><h1>시험</h1><p>온라인으로 풀거나 사진으로 제출할 수 있습니다. 제출 후에는 수정할 수 없고 결과·해설만 볼 수 있어요.</p></div></div>
         <div class="card">
           <table>
-            <tr><th>시험명</th><th>시험일</th><th>원본 PDF</th><th>상태</th><th></th></tr>
+            <tr><th>시험명</th><th>기간</th><th>원본 PDF</th><th>상태</th><th></th></tr>
             <tbody id="t-exam-table"></tbody></table>
         </div>
       </div>
@@ -1190,12 +1223,18 @@ function fmtDate(d){
   return {label:(dt.getMonth()+1)+'월 '+dt.getDate()+'일', day:DAYS[dt.getDay()]+'요일'};
 }
 function fmtDue(due){
-  if(!due || due==='미정') return '미정';
+  if(!due) return '미정';
   const dt = new Date(due);
   if(isNaN(dt)) return esc(due);
   const hh = String(dt.getHours()).padStart(2,'0');
   const mm = String(dt.getMinutes()).padStart(2,'0');
   return `${dt.getMonth()+1}월 ${dt.getDate()}일(${DAYS[dt.getDay()]}) ${hh}:${mm}`;
+}
+function fmtPeriod(t){
+  if(t.startAt && t.due) return `${fmtDue(t.startAt)} ~ ${fmtDue(t.due)}`;
+  if(t.due) return fmtDue(t.due);
+  if(t.startAt) return fmtDue(t.startAt)+' 부터';
+  return '미정';
 }
 function addSchedule(){
   const v = id => $(id).value.trim();
@@ -1604,11 +1643,13 @@ function addTask(kind){
     alert('지정된 학생이 없습니다. 학생을 선택하거나 전체 선택을 체크해주세요.'); return;
   }
   const data = {
-    kind, title, due: $(prefix+'-due').value || '미정',
+    kind, title,
+    startAt: $(prefix+'-start').value || '',
+    due: $(prefix+'-due').value || '',
     qids: draftQids[kind].slice(), pdfName: '', pdfUrl: null,
     assignedTo: assignedTo
   };
-  $(prefix+'-title').value=''; $(prefix+'-due').value='';
+  $(prefix+'-title').value=''; $(prefix+'-start').value=''; $(prefix+'-due').value='';
   draftQids[kind]=[]; renderDraft(kind);
   draftAssignees[kind]=null; renderAssigneeSummary(kind);
   const { db, collection, doc, setDoc } = window.fb;
@@ -1638,7 +1679,7 @@ function renderTasks(){
     const targetCount = Array.isArray(t.assignedTo) ? t.assignedTo.length : students.filter(s=>s.approved).length;
     const targetLabel = Array.isArray(t.assignedTo) ? `${t.assignedTo.length}명 지정` : '전체';
     return `
-    <tr><td>${esc(t.title)}</td><td>${fmtDue(t.due)}</td><td>${(t.qids||[]).length}문항</td>
+    <tr><td>${esc(t.title)}</td><td>${fmtPeriod(t)}</td><td>${(t.qids||[]).length}문항</td>
     <td>${pdfCell(t)}</td>
     <td><span class="badge muted">${esc(targetLabel)}</span></td>
     <td><span class="badge muted">제출 ${submitCount(t.tid)}/${targetCount}</span></td>
@@ -1680,7 +1721,7 @@ function renderStudentTasks(kind){
       btn = `<button class="btn small secondary" onclick="openReview('${kind}','${t.tid}','${currentStudent}',false)">결과·해설 보기</button>`;
     }
     const doneCell = kind==='hw' ? `<td>${statusBadge(rec.status||'미완료')}</td>` : '';
-    return `<tr><td>${esc(t.title)}</td><td>${fmtDue(t.due)}</td><td>${pdfCell(t)}</td>${doneCell}
+    return `<tr><td>${esc(t.title)}</td><td>${fmtPeriod(t)}</td><td>${pdfCell(t)}</td>${doneCell}
       <td>${status}</td><td>${btn}</td></tr>`;
   }).join('') || `<tr><td colspan="${kind==='hw'?6:5}" class="empty-hint">등록된 항목이 없습니다.</td></tr>`;
 }
