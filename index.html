@@ -1011,6 +1011,7 @@ async function uploadToCloudinary(file){
    Firestore 구독
    ========================================================= */
 function startSubscriptions(isAdmin, ownerUid){
+    console.log('구독 시작', Date.now());
   if(subsOwner === ownerUid) return;          // 같은 계정이면 재구독 불필요
   if(subsOwner !== null) stopSubscriptions(); // 계정이 바뀌었으면 이전 구독을 먼저 끊는다
   if(!window.fb){ setTimeout(()=>startSubscriptions(isAdmin, ownerUid), 120); return; }
@@ -1026,6 +1027,7 @@ function startSubscriptions(isAdmin, ownerUid){
   if(isAdmin){
     // 관리자만 students 컬렉션 전체를 읽을 수 있음
     sub('students', snap => {
+      console.log('students 데이터 도착', Date.now());
       students = snap.docs.map(d => ({ uid:d.id, ...d.data() }));
       ensureScoreSlots();
       renderStudents(); renderAttendance();
