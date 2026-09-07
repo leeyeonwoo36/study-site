@@ -1587,6 +1587,25 @@ function clearDraft(kind){ draftQids[kind]=[]; renderDraft(kind); }
    과제 · 시험
    ========================================================= */
 function addTask(kind){
+  const prefix = kind==='hw' ? 'hw' : 'ex';
+  const title = $(prefix+'-title').value.trim();
+  if(!title){ alert('제목을 입력하세요.'); return; }
+  if(!draftQids[kind].length && !confirm('담긴 문제가 없습니다. 그래도 등록할까요?')) return;
+  const assignedTo = draftAssignees[kind];
+  if(Array.isArray(assignedTo) && !assignedTo.length){
+    alert('지정된 학생이 없습니다. 학생을 선택하거나 전체 선택을 체크해주세요.'); return;
+  }
+  const data = {
+    kind, title, due: $(prefix+'-due').value || '미정',
+    qids: draftQids[kind].slice(), pdfName: '', pdfUrl: null,
+    assignedTo: assignedTo
+  };
+  $(prefix+'-title').value=''; $(prefix+'-due').value='';
+  draftQids[kind]=[]; renderDraft(kind);
+  draftAssignees[kind]=null; renderAssigneeSummary(kind);
+  const { db, collection, doc, setDoc } = window.fb;
+  setDoc(doc(collection(db,'tasks')), data).catch(e=>alert('등록 실패: '+e.message));
+}
 function removeTask(kind,tid){
   if(!confirm('삭제할까요? 관련 성적·제출 기록도 함께 삭제됩니다.')) return;
   const { db, doc, deleteDoc } = window.fb;
@@ -1872,6 +1891,17 @@ function renderScoreTable(kind){
     ? students.filter(s=>t.assignedTo.includes(s.uid))
     : students.filter(s=>s.approved);
   tb.innerHTML = targetStudents.map(s=>{
+    const rec = (scores[kind][tid]||{})[s.uid] || {score:'',status:'미완료'};
+    const statusCell = kind==='hw' ? `<td>
+      <select id="ss-${kind}-${s.uid}" style="width:110px;">
+        ${['미완료','일부완료','완료'].map(o=>`<option ${rec.status===o?'selected':''}>${o}</option>`).join('')}
+      </select></td>` : '';
+    return `<tr><td>${esc(s.name)}</td><td>${esc(s.phone)}</td>${statusCell}
+      <td><input type="text" id="si-${kind}-${s.uid}" value="${esc(rec.score)}"
+          placeholder="예: 4/5 또는 82" style="width:110px; display:inline-block;"></td>
+      <td><button class="btn small" onclick="saveScore('${kind}','${s.uid}')">저장</button></td></tr>`;
+  }).join('') || `<tr><td colspan="${colspan}" class="empty-hint">등록된 학생이 없습니다.</td></tr>`;
+}
 function saveScore(kind, u){
   const tid = $(kind==='hw'?'score-hw-select':'score-exam-select').value;
   if(!tid) return;
