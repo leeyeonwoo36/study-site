@@ -1961,7 +1961,7 @@ function renderFirebaseGuide(){
 <span style="color:#94a3b8;">// 1) 초기화 (index.html &lt;head&gt;에 type="module"로)</span>
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import { getAuth, signInWithEmailAndPassword, sendPasswordResetEmail, onAuthStateChanged, signOut, createUserWithEmailAndPassword, reauthenticateWithCredential, updateEmail, EmailAuthProvider }
-  from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+  from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js"; //이메일 변경까지 반영
 import { getFirestore, collection, onSnapshot, doc, getDoc, updateDoc, setDoc, deleteDoc } 
   from "https://www.gstatic.com/firebasejs/10.x.x/firebase-firestore.js";
 import { getStorage, ref, uploadBytes, getDownloadURL } from ".../firebase-storage.js";
