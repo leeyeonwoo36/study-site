@@ -383,8 +383,8 @@
           </div>
 
           <div class="field-section">
-            <label>원본 PDF 업로드 (Storage 연동 후 활성화)</label>
-            <input type="file" id="hw-pdf" accept="application/pdf" disabled>
+            <label>원본 PDF 업로드</label>
+            <input type="file" id="hw-pdf" accept="application/pdf">
           </div>
 
           <button class="btn" style="width:100%; margin-top:16px;" onclick="addTask('hw')">과제 등록</button>
@@ -433,8 +433,8 @@
           </div>
 
           <div class="field-section">
-            <label>원본 PDF 업로드 (Storage 연동 후 활성화)</label>
-            <input type="file" id="ex-pdf" accept="application/pdf" disabled>
+            <label>원본 PDF 업로드</label>
+            <input type="file" id="ex-pdf" accept="application/pdf">
           </div>
 
           <button class="btn" style="width:100%; margin-top:16px;" onclick="addTask('exam')">시험 등록</button>
@@ -476,7 +476,8 @@
             <label for="q-has-passage" style="margin:0; font-size:13px; color:var(--ink-soft);">&lt;보기&gt; 사용</label>
           </div>
           <div class="form-grid full" id="q-passage-area" style="display:none;">
-            <div><label>&lt;보기&gt; 내용</label><textarea id="q-passage" placeholder="보기 지문을 입력하세요 (여러 줄 입력 가능)"></textarea></div>
+             <div><label>&lt;보기&gt; 내용</label><textarea id="q-passage" placeholder="보기 지문을 입력하세요 (여러 줄 입력 가능)"></textarea></div>
+            <div><label>&lt;보기&gt; 이미지 (선택)</label><input type="file" id="q-passage-image" accept="image/*"></div>
           </div>
 
           <div id="q-mc-area" class="form-grid five">
@@ -934,6 +935,20 @@ function renderAll(){
   renderTasks(); renderBank(); renderScoreSelects();
   renderScoreTable('hw'); renderScoreTable('exam');
   renderGradingTable(); renderStudentSite();
+}
+
+const CLOUDINARY_CLOUD_NAME = 'vuszb14k';
+const CLOUDINARY_UPLOAD_PRESET = 'mdfh-study-lms';
+
+async function uploadToCloudinary(file){
+  const fd = new FormData();
+  fd.append('file', file);
+  fd.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
+  const res = await fetch(`https://api.cloudinary.com/v1_1/${mdfh-study-lms}/auto/upload`, {
+    method:'POST', body: fd
+  });
+  if(!res.ok) throw new Error('업로드 실패');
+  return (await res.json()).secure_url; // 이 URL을 Firestore에 저장
 }
 
 /* =========================================================
@@ -1620,7 +1635,7 @@ function qsetQuestionHtml(q,n){
   return `<div class="qset-q"><b>Q${n+1}.</b>
     <span class="qset-tag type">${q.type==='mc'?'객관식':'단답형'}</span>${esc(q.body)}
     <span class="qset-tag ans">정답 ${esc(answerLabel(q))}</span>
-    ${q.hasPassage? `<div class="passage-box"><div class="ptitle">&lt;보기&gt;</div>${esc(q.passage)}</div>`:''}
+    ${q.hasPassage? `<div class="passage-box"><div class="ptitle">&lt;보기&gt;</div>${esc(q.passage)}${q.passageImageUrl?`<img src="${q.passageImageUrl}" style="max-width:100%;border-radius:6px;margin-top:6px;">`:''}</div>`:''}
     ${q.type==='mc'? `<div style="margin-top:4px; color:#4C5875;">${(q.choices||[]).map((c,i)=>CIRCLE[i]+' '+esc(c)).join(' &nbsp; ')}</div>`:''}
     ${q.explain? `<div style="color:#8993AA; font-size:12px; margin-top:4px;">해설: ${esc(q.explain)}</div>`:''}</div>`;
 }
@@ -1638,7 +1653,7 @@ function toggleQType(){
 function togglePassage(){
   $('q-passage-area').style.display = $('q-has-passage').checked ? 'grid':'none';
 }
-function saveQuestion(){
+async function saveQuestion(){
   const type=$('q-type').value;
   const body=$('q-body').value.trim();
   if(!body){ alert('물음(문제 지문)을 입력하세요.'); return; }
@@ -1654,7 +1669,13 @@ function saveQuestion(){
     answer=$('q-answer-short').value.trim();
     if(!answer){ alert('단답형 정답을 입력하세요.'); return; }
   }
-  const data={set:$('q-set').value, type, body, hasPassage, passage, choices, answer,
+  let passageImageUrl = (editingQid && questions.find(x=>x.qid===editingQid)?.passageImageUrl) || '';
+  const imgFile = $('q-passage-image').files[0];
+  if(imgFile){
+    try { passageImageUrl = await uploadToCloudinary(imgFile); }
+    catch(e){ alert('이미지 업로드 실패: '+e.message); return; }
+  }
+  const data={set:$('q-set').value, type, body, hasPassage, passage, passageImageUrl, choices, answer,
               explain:$('q-explain').value.trim()};
   const editId = editingQid;
   cancelQuestionEdit();
@@ -1748,7 +1769,7 @@ function renderBank(){
           ${q.hasPassage?'<span class="qset-tag ans">보기 포함</span>':''}
         </div>
         <b>${esc(q.body)}</b>
-        ${q.hasPassage? `<div class="passage-box"><div class="ptitle">&lt;보기&gt;</div>${esc(q.passage)}</div>`:''}
+        ${q.hasPassage? `<div class="passage-box"><div class="ptitle">&lt;보기&gt;</div>${esc(q.passage)}${q.passageImageUrl?`<img src="${q.passageImageUrl}" style="max-width:100%;border-radius:6px;margin-top:6px;">`:''}</div>`:''}
         ${q.type==='mc'? `<div style="margin-top:4px; color:#4C5875;">${(q.choices||[]).map((c,i)=>CIRCLE[i]+' '+esc(c)).join('<br>')}</div>`:''}
         <div style="margin-top:6px; font-size:12.5px;"><b>정답:</b> ${esc(answerLabel(q))}</div>
         ${q.explain? `<div class="exam-explain" style="margin-top:6px;">${esc(q.explain)}</div>`:''}
@@ -1970,7 +1991,7 @@ function clearDraft(kind){ draftQids[kind]=[]; renderDraft(kind); }
 /* =========================================================
    과제 · 시험
    ========================================================= */
-function addTask(kind){
+async function addTask(kind){                                    // ← function 앞에 async 추가
   const prefix = kind==='hw' ? 'hw' : 'ex';
   const title = $(prefix+'-title').value.trim();
   if(!title){ alert('제목을 입력하세요.'); return; }
@@ -1979,14 +2000,23 @@ function addTask(kind){
   if(Array.isArray(assignedTo) && !assignedTo.length){
     alert('지정된 학생이 없습니다. 학생을 선택하거나 전체 선택을 체크해주세요.'); return;
   }
+
+  const pdfFile = $(prefix+'-pdf').files[0];                      // ← 새로 추가
+  let pdfUrl = null, pdfName = '';                                // ← 새로 추가
+  if(pdfFile){                                                    // ← 새로 추가
+    try { pdfName = pdfFile.name; pdfUrl = await uploadToCloudinary(pdfFile); }  // ← 새로 추가
+    catch(e){ alert('PDF 업로드 실패: '+e.message); return; }      // ← 새로 추가
+  }                                                                // ← 새로 추가
+
   const data = {
     kind, title,
     startAt: $(prefix+'-start').value || '',
     due: $(prefix+'-due').value || '',
-    qids: draftQids[kind].slice(), pdfName: '', pdfUrl: null,
+    qids: draftQids[kind].slice(), pdfName, pdfUrl,                // ← pdfName:'', pdfUrl:null 이었던 자리를 변수로 교체
     assignedTo: assignedTo
   };
   $(prefix+'-title').value=''; $(prefix+'-start').value=''; $(prefix+'-due').value='';
+  $(prefix+'-pdf').value='';                                       // ← 새로 추가 (파일 인풋 초기화)
   draftQids[kind]=[]; renderDraft(kind);
   draftAssignees[kind]=null; renderAssigneeSummary(kind);
   const { db, collection, doc, setDoc } = window.fb;
@@ -2157,7 +2187,7 @@ function openStudentSolve(kind,tid){
   $('solve-body').innerHTML = qs.length ? qs.map((q,i)=>`
     <div class="omr-q">
       <div class="qnum">문제 ${i+1}. ${esc(q.body)}</div>
-      ${q.hasPassage? `<div class="passage-box"><div class="ptitle">&lt;보기&gt;</div>${esc(q.passage)}</div>`:''}
+      ${q.hasPassage? `<div class="passage-box"><div class="ptitle">&lt;보기&gt;</div>${esc(q.passage)}${q.passageImageUrl?`<img src="${q.passageImageUrl}" style="max-width:100%;border-radius:6px;margin-top:6px;">`:''}</div>`:''}
       ${q.type==='mc'
         ? `<div class="omr-choices">${(q.choices||[]).map((c,ci)=>
             `<label class="omr-bubble" onclick="pickChoice(this)">
@@ -2249,7 +2279,7 @@ function openReview(kind,tid,stuUid,isAdmin){
         ${sub? (ok?'<span class="badge good">정답</span>':'<span class="badge warn">오답</span>')
              : '<span class="badge muted">미제출</span>'}</div>
       <div style="white-space:pre-wrap; font-weight:700;">${esc(q.body)}</div>
-      ${q.hasPassage? `<div class="passage-box"><div class="ptitle">&lt;보기&gt;</div>${esc(q.passage)}</div>`:''}
+      ${q.hasPassage? `<div class="passage-box"><div class="ptitle">&lt;보기&gt;</div>${esc(q.passage)}${q.passageImageUrl?`<img src="${q.passageImageUrl}" style="max-width:100%;border-radius:6px;margin-top:6px;">`:''}</div>`:''}
       ${choicesHtml}
       <div class="ans-row"><b>내 답:</b> ${mineLabel} &nbsp;|&nbsp; <b>정답:</b> ${esc(answerLabel(q))}</div>
       ${q.explain? `<div class="exam-explain ${ok?'':'wrong'}"><b>해설</b><br>${esc(q.explain)}</div>`:''}
