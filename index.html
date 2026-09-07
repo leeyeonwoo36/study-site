@@ -961,10 +961,11 @@ function startSubscriptions(isAdmin, ownerUid){
   subsOwner = ownerUid;
   const { db, collection, doc, onSnapshot } = window.fb;
 
-  const sub = (name, handler) => {
-    unsubs.push(onSnapshot(collection(db, name), handler,
-      err => console.error(name+' 구독 에러:', err.code, err.message)));
-  };
+  const sub = (name, handler, customRef) => {
+  const ref = customRef || collection(db, name);
+  unsubs.push(onSnapshot(ref, handler,
+    err => console.error(name+' 구독 에러:', err.code, err.message)));
+};
 
   if(isAdmin){
     // 관리자만 students 컬렉션 전체를 읽을 수 있음
@@ -1014,11 +1015,14 @@ function startSubscriptions(isAdmin, ownerUid){
     renderScoreTable('hw'); renderScoreTable('exam');
     renderStudentSite(); renderGradingTable();
   });
-  sub('submissions', snap => {
-    submissions = {};
-    snap.docs.forEach(d => { submissions[d.id] = d.data(); });
-    renderStudentSite(); renderTasks(); renderGradingTable();
-  });
+ const submissionsRef = isAdmin
+  ? collection(db,'submissions')
+  : query(collection(db,'submissions'), where('studentUid','==', ownerUid));
+sub('submissions', snap => {
+  submissions = {};
+  snap.docs.forEach(d => { submissions[d.id] = d.data(); });
+  renderStudentSite(); renderTasks(); renderGradingTable();
+}, submissionsRef);
   sub('scores', snap => {
     scores.hw = {}; scores.exam = {};
     snap.docs.forEach(d => {
@@ -2429,7 +2433,7 @@ import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword,
          sendPasswordResetEmail, onAuthStateChanged, signOut,
          reauthenticateWithCredential, updateEmail, EmailAuthProvider }
   from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-import { getFirestore, collection, doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, deleteField, onSnapshot }
+import { getFirestore, collection, doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, deleteField, onSnapshot, query, where }
   from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
 const firebaseConfig = {
@@ -2447,7 +2451,7 @@ const db   = getFirestore(app);
 
 window.fb = {
   db, auth,
-  collection, doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, deleteField, onSnapshot,
+  collection, doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, deleteField, onSnapshot, query, where,   // ← query, where 추가
   signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut,
   sendPasswordResetEmail, reauthenticateWithCredential, updateEmail, EmailAuthProvider
 };
