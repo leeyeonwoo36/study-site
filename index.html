@@ -1735,7 +1735,7 @@ function renderTasks(){
     return `
     <tr><td>${esc(t.title)}</td><td>${fmtPeriod(t)}</td><td>${(t.qids||[]).length}문항</td>
     <td>${pdfCell(t)}</td>
-    <td><span class="badge muted">${esc(targetLabel)}</span></td>
+    <td><span class="badge muted" style="cursor:pointer;" onclick="showAssignedStudents('${kind}','${t.tid}')">${esc(targetLabel)}</span></td>
     <td><span class="badge muted">제출 ${submitCount(t.tid)}/${targetCount}</span></td>
     <td><button class="btn small danger" onclick="removeTask('${kind}','${t.tid}')">삭제</button></td></tr>`;
   };
@@ -1743,6 +1743,19 @@ function renderTasks(){
     || '<tr><td colspan="7" class="empty-hint">등록된 과제가 없습니다.</td></tr>';
   ext.innerHTML = tasks.exam.map(t=>row('exam',t)).join('')
     || '<tr><td colspan="7" class="empty-hint">등록된 시험이 없습니다.</td></tr>';
+}
+
+function showAssignedStudents(kind, tid){
+  const t = tasks[kind].find(x=>x.tid===tid);
+  if(!t) return;
+  const list = Array.isArray(t.assignedTo)
+    ? students.filter(s=>t.assignedTo.includes(s.uid))
+    : students.filter(s=>s.approved);
+  const label = Array.isArray(t.assignedTo) ? `지정된 학생 ${list.length}명` : `전체 학생 ${list.length}명`;
+  const names = list.length
+    ? list.map(s=>'• '+s.name+(s.grade?' ('+s.grade+')':'')).join('\n')
+    : '표시할 학생이 없습니다.';
+  alert(t.title+'\n'+label+'\n\n'+names);
 }
 
 /* =========================================================
