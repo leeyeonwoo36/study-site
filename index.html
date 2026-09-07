@@ -1777,6 +1777,15 @@ function showAssignedStudents(kind, tid){
 
   openModal('view-assignees-modal');
 }
+  function openStudentFromAssignees(uid){
+  const s = students.find(x=>x.uid===uid);
+  if(!s){
+    alert('학생 정보를 찾을 수 없습니다. 목록이 갱신되었을 수 있어요. 다시 시도해주세요.');
+    return;
+  }
+  closeModal('view-assignees-modal');
+  openStudentDetail(uid);
+}
 /* =========================================================
    학생 사이트
    ========================================================= */
