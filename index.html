@@ -897,7 +897,7 @@ async function doSignup(){
     else alert('회원가입 중 오류가 발생했습니다: ' + e.code);
   }
 }
-  const ADMIN_UIDS = [
+  window.ADMIN_UIDS = [
   'MdFLPZCpGib4AsdOwoaTptQqk7k2'
 ];
 async function doLogin(){
@@ -1961,7 +1961,7 @@ function renderFirebaseGuide(){
 <span style="color:#94a3b8;">// 1) 초기화 (index.html &lt;head&gt;에 type="module"로)</span>
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import { getAuth, signInWithEmailAndPassword, sendPasswordResetEmail, onAuthStateChanged, signOut, createUserWithEmailAndPassword, reauthenticateWithCredential, updateEmail, EmailAuthProvider }
-  from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js"; //이메일 변경까지 반영
+  from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 import { getFirestore, collection, onSnapshot, doc, getDoc, updateDoc, setDoc, deleteDoc } 
   from "https://www.gstatic.com/firebasejs/10.x.x/firebase-firestore.js";
 import { getStorage, ref, uploadBytes, getDownloadURL } from ".../firebase-storage.js";
