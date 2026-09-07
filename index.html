@@ -290,13 +290,16 @@
               <button class="btn secondary" style="width:100%;" onclick="openPicker('hw')">문제 골라 담기</button></div>
           </div>
           <div class="picked-list" id="hw-picked">담긴 문제: 없음</div>
+          <div class="form-grid full"><div><label>대상 학생</label>
+  <button class="btn secondary" style="width:100%;" onclick="openAssignPicker('hw')">학생 지정</button></div></div>
+<div class="picked-list" id="hw-assignees">대상 학생: 전체</div>
           <div class="form-grid full"><div><label>원본 PDF 업로드 (Storage 연동 후 활성화)</label>
             <input type="file" id="hw-pdf" accept="application/pdf" disabled></div></div>
           <button class="btn" onclick="addTask('hw')">과제 등록</button>
         </div>
         <div class="card">
           <h3>등록된 과제</h3>
-          <table><tr><th>과제명</th><th>마감일</th><th>문항수</th><th>PDF</th><th>제출현황</th><th></th></tr>
+          <table><tr><th>과제명</th><th>마감일</th><th>문항수</th><th>PDF</th><th>대상</th><th>제출현황</th><th></th></tr>
             <tbody id="hw-table"></tbody></table>
         </div>
       </div>
@@ -319,13 +322,16 @@
               <button class="btn secondary" style="width:100%;" onclick="openPicker('exam')">문제 골라 담기</button></div>
           </div>
           <div class="picked-list" id="exam-picked">담긴 문제: 없음</div>
+          <div class="form-grid full"><div><label>대상 학생</label>
+  <button class="btn secondary" style="width:100%;" onclick="openAssignPicker('exam')">학생 지정</button></div></div>
+<div class="picked-list" id="exam-assignees">대상 학생: 전체</div>
           <div class="form-grid full"><div><label>원본 PDF 업로드 (Storage 연동 후 활성화)</label>
             <input type="file" id="ex-pdf" accept="application/pdf" disabled></div></div>
           <button class="btn" onclick="addTask('exam')">시험 등록</button>
         </div>
         <div class="card">
           <h3>등록된 시험</h3>
-          <table><tr><th>시험명</th><th>시험일</th><th>문항수</th><th>PDF</th><th>제출현황</th><th></th></tr>
+          <table><tr><th>시험명</th><th>시험일</th><th>문항수</th><th>PDF</th><th>대상</th><th>제출현황</th><th></th></tr>
             <tbody id="exam-table"></tbody></table>
         </div>
       </div>
@@ -581,7 +587,21 @@
     </div>
   </div>
 </div>
-
+<!-- 대상 학생 지정 -->
+<div class="modal-bg" id="assign-modal">
+  <div class="modal wide">
+    <button class="modal-close" onclick="closeModal('assign-modal')">✕</button>
+    <h3>대상 학생 지정</h3>
+    <div class="form-grid full">
+      <label style="display:flex; align-items:center; gap:8px; font-weight:600;">
+        <input type="checkbox" id="assign-all" onchange="toggleAssignAll()"> 전체 선택 (전체 학생에게 배정)
+      </label>
+    </div>
+    <div id="assign-list" style="max-height:44vh; overflow:auto; margin:10px 0;"></div>
+    <button class="btn" onclick="applyAssignPicker()">선택 완료</button>
+    <button class="btn ghost" onclick="closeModal('assign-modal')">닫기</button>
+  </div>
+</div>
 <!-- 문제 골라 담기 -->
 <div class="modal-bg" id="picker-modal">
   <div class="modal wide">
@@ -732,6 +752,8 @@ let currentDetailUid = null;
 let editStudentUid = null;
 let editingQid = null;
 let draftQids = {hw:[], exam:[]};
+let draftAssignees = {hw:null, exam:null}; // null=전체 학생, 배열=지정된 uid 목록
+let assignKind = null;
 let pickerKind = null;
 let reasonTarget = null;
 let memoEditIndex = null;
@@ -745,7 +767,8 @@ function ensureScoreSlots(){
   ['hw','exam'].forEach(kind=>{
     tasks[kind].forEach(t=>{
       scores[kind][t.tid] = scores[kind][t.tid] || {};
-      students.forEach(s=>{
+      const targets = Array.isArray(t.assignedTo) ? students.filter(s=>t.assignedTo.includes(s.uid)) : students;
+      targets.forEach(s=>{
         if(!scores[kind][t.tid][s.uid]) scores[kind][t.tid][s.uid] = {score:'', status:'미완료'};
         if(scores[kind][t.tid][s.uid].status===undefined) scores[kind][t.tid][s.uid].status='미완료';
       });
@@ -1464,6 +1487,46 @@ function renderBank(){
     </div>`).join('') : '<p class="empty-hint">조건에 맞는 문제가 없습니다.</p>';
 }
 
+function openAssignPicker(kind){
+  assignKind = kind;
+  renderAssignPicker();
+  openModal('assign-modal');
+}
+function renderAssignPicker(){
+  const cur = draftAssignees[assignKind];
+  $('assign-all').checked = cur===null;
+  const list = students.filter(s=>s.approved);
+  $('assign-list').innerHTML = list.length ? list.map(s=>{
+    const on = cur===null || (cur && cur.includes(s.uid));
+    return `<label class="bank-item${on?' sel':''}">
+      <input type="checkbox" class="assign-check" value="${s.uid}" ${on?'checked':''}>
+      <div class="bi-body"><b>${esc(s.name)}</b> <span style="color:#8993AA; font-size:12px;">${esc(s.grade||'')} · ${esc(s.school||'')}</span></div>
+    </label>`;
+  }).join('') : '<p class="empty-hint">등록된(승인된) 학생이 없습니다.</p>';
+}
+function toggleAssignAll(){
+  const all = $('assign-all').checked;
+  document.querySelectorAll('.assign-check').forEach(c=>{ c.checked = all; });
+}
+function applyAssignPicker(){
+  if($('assign-all').checked){
+    draftAssignees[assignKind] = null;
+  } else {
+    const checked = Array.from(document.querySelectorAll('.assign-check')).filter(c=>c.checked).map(c=>c.value);
+    draftAssignees[assignKind] = checked;
+  }
+  closeModal('assign-modal');
+  renderAssigneeSummary(assignKind);
+}
+function renderAssigneeSummary(kind){
+  const box = $(kind==='hw'?'hw-assignees':'exam-assignees'); if(!box) return;
+  const cur = draftAssignees[kind];
+  if(cur===null){ box.textContent = '대상 학생: 전체'; return; }
+  if(!cur.length){ box.innerHTML = '<span style="color:#e0455b;">대상 학생: 선택된 학생 없음</span>'; return; }
+  const names = cur.map(u=>{ const s=students.find(x=>x.uid===u); return s ? s.name : u; });
+  box.innerHTML = `<b>대상 학생 ${cur.length}명</b>: ${names.map(n=>esc(n)).join(', ')}`;
+}
+
 /* ---------- 문제 골라 담기 ---------- */
 function openPicker(kind){
   pickerKind = kind;
@@ -1524,19 +1587,6 @@ function clearDraft(kind){ draftQids[kind]=[]; renderDraft(kind); }
    과제 · 시험
    ========================================================= */
 function addTask(kind){
-  const prefix = kind==='hw' ? 'hw' : 'ex';
-  const title = $(prefix+'-title').value.trim();
-  if(!title){ alert('제목을 입력하세요.'); return; }
-  if(!draftQids[kind].length && !confirm('담긴 문제가 없습니다. 그래도 등록할까요?')) return;
-  const data = {
-    kind, title, due: $(prefix+'-due').value || '미정',
-    qids: draftQids[kind].slice(), pdfName: '', pdfUrl: null
-  };
-  $(prefix+'-title').value=''; $(prefix+'-due').value='';
-  draftQids[kind]=[]; renderDraft(kind);
-  const { db, collection, doc, setDoc } = window.fb;
-  setDoc(doc(collection(db,'tasks')), data).catch(e=>alert('등록 실패: '+e.message));
-}
 function removeTask(kind,tid){
   if(!confirm('삭제할까요? 관련 성적·제출 기록도 함께 삭제됩니다.')) return;
   const { db, doc, deleteDoc } = window.fb;
@@ -1557,15 +1607,20 @@ function pdfCell(t){
 }
 function renderTasks(){
   const hwt = $('hw-table'), ext = $('exam-table'); if(!hwt||!ext) return;
-  const row = (kind,t) => `
+  const row = (kind,t) => {
+    const targetCount = Array.isArray(t.assignedTo) ? t.assignedTo.length : students.filter(s=>s.approved).length;
+    const targetLabel = Array.isArray(t.assignedTo) ? `${t.assignedTo.length}명 지정` : '전체';
+    return `
     <tr><td>${esc(t.title)}</td><td>${esc(t.due)}</td><td>${(t.qids||[]).length}문항</td>
     <td>${pdfCell(t)}</td>
-    <td><span class="badge muted">제출 ${submitCount(t.tid)}/${students.filter(s=>s.approved).length}</span></td>
+    <td><span class="badge muted">${esc(targetLabel)}</span></td>
+    <td><span class="badge muted">제출 ${submitCount(t.tid)}/${targetCount}</span></td>
     <td><button class="btn small danger" onclick="removeTask('${kind}','${t.tid}')">삭제</button></td></tr>`;
+  };
   hwt.innerHTML = tasks.hw.map(t=>row('hw',t)).join('')
-    || '<tr><td colspan="6" class="empty-hint">등록된 과제가 없습니다.</td></tr>';
+    || '<tr><td colspan="7" class="empty-hint">등록된 과제가 없습니다.</td></tr>';
   ext.innerHTML = tasks.exam.map(t=>row('exam',t)).join('')
-    || '<tr><td colspan="6" class="empty-hint">등록된 시험이 없습니다.</td></tr>';
+    || '<tr><td colspan="7" class="empty-hint">등록된 시험이 없습니다.</td></tr>';
 }
 
 /* =========================================================
@@ -1581,9 +1636,12 @@ function renderStudentSite(){
   renderStudentTasks('hw'); renderStudentTasks('exam');
   fillMyInfo();
 }
+function isAssignedToMe(t){
+  return !Array.isArray(t.assignedTo) || t.assignedTo.includes(currentStudent);
+}
 function renderStudentTasks(kind){
   const tb = $(kind==='hw'?'t-hw-table':'t-exam-table'); if(!tb) return;
-  tb.innerHTML = tasks[kind].map(t=>{
+  tb.innerHTML = tasks[kind].filter(isAssignedToMe).map(t=>{
     const sub = submissions[t.tid+'|'+currentStudent];
     const rec = (scores[kind][t.tid]||{})[currentStudent] || {};
     let status, btn;
@@ -1771,7 +1829,7 @@ function renderGradingTable(){
   const rows = [];
   ['hw','exam'].forEach(kind=>{
     tasks[kind].forEach(t=>{
-      students.filter(s=>s.approved).forEach(s=>{
+      students.filter(s=>s.approved && (!Array.isArray(t.assignedTo) || t.assignedTo.includes(s.uid))).forEach(s=>{
         const sub = submissions[t.tid+'|'+s.uid];
         let mode, status, btn;
         if(!sub){
@@ -1809,18 +1867,11 @@ function renderScoreTable(kind){
   const colspan = kind==='hw'?5:4;
   if(!tid){ tb.innerHTML=`<tr><td colspan="${colspan}" class="empty-hint">등록된 항목이 없습니다.</td></tr>`; return; }
   ensureScoreSlots();
-  tb.innerHTML = students.filter(s=>s.approved).map(s=>{
-    const rec = (scores[kind][tid]||{})[s.uid] || {score:'',status:'미완료'};
-    const statusCell = kind==='hw' ? `<td>
-      <select id="ss-${kind}-${s.uid}" style="width:110px;">
-        ${['미완료','일부완료','완료'].map(o=>`<option ${rec.status===o?'selected':''}>${o}</option>`).join('')}
-      </select></td>` : '';
-    return `<tr><td>${esc(s.name)}</td><td>${esc(s.phone)}</td>${statusCell}
-      <td><input type="text" id="si-${kind}-${s.uid}" value="${esc(rec.score)}"
-          placeholder="예: 4/5 또는 82" style="width:110px; display:inline-block;"></td>
-      <td><button class="btn small" onclick="saveScore('${kind}','${s.uid}')">저장</button></td></tr>`;
-  }).join('') || `<tr><td colspan="${colspan}" class="empty-hint">등록된 학생이 없습니다.</td></tr>`;
-}
+  const t = tasks[kind].find(x=>x.tid===tid);
+  const targetStudents = (t && Array.isArray(t.assignedTo))
+    ? students.filter(s=>t.assignedTo.includes(s.uid))
+    : students.filter(s=>s.approved);
+  tb.innerHTML = targetStudents.map(s=>{
 function saveScore(kind, u){
   const tid = $(kind==='hw'?'score-hw-select':'score-exam-select').value;
   if(!tid) return;
