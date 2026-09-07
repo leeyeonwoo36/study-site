@@ -265,6 +265,7 @@
       <div class="brand"><h3 style="color:#fff; font-size:16px; margin:0;">관리자</h3><small>명덕외고 국제정치 스터디</small></div>
       <nav>
         <button class="admin-nav active" data-tab="a-main" onclick="setAdminTab('a-main')">메인</button>
+        <button class="admin-nav" data-tab="a-attendance" onclick="setAdminTab('a-attendance')">출석 체크</button>
         <button class="admin-nav" data-tab="a-students" onclick="setAdminTab('a-students')">학생 관리</button>
         <button class="admin-nav" data-tab="a-hw" onclick="setAdminTab('a-hw')">과제 관리</button>
         <button class="admin-nav" data-tab="a-exam" onclick="setAdminTab('a-exam')">시험 관리</button>
@@ -293,17 +294,19 @@
         </div>
         <div class="card">
           <h3>등록된 일정</h3>
-          <table class="schedule-table"><tr><th>날짜</th><th>요일</th><th>시간</th><th>교실</th><th>예상 진도</th><th></th></tr>
+          <table class="schedule-table"><tr><th>날짜</th><th>요일</th><th>시간</th><th>교실</th><th>예상 진도</th><th colspan="2"></th></tr>
             <tbody id="schedule-table"></tbody></table>
         </div>
+      </div>
+      <!-- 출석 체크 -->
+      <div class="tabpanel" id="tab-a-attendance">
+        <div class="page-head"><div><h1>출석 체크</h1><p>회차를 선택해 출석 상태를 체크합니다</p></div></div>
         <div class="card">
-          <h3>출석 체크</h3>
           <p class="note">칩을 누르면 <b>출석 → 지각 → 결석 → 미체크</b> 순으로 바뀝니다. 결석·지각을 선택하면 사유를 입력할 수 있고, 학생 사이트 메인탭에 사유까지 그대로 반영됩니다.</p>
           <div class="form-grid full"><div><label>회차 선택</label><select id="att-session" onchange="renderAttendance()"></select></div></div>
           <table><tr><th style="width:30%;">학생</th><th style="width:22%;">출석 상태</th><th>사유 / 비고</th></tr><tbody id="att-table"></tbody></table>
         </div>
       </div>
-
       <!-- 학생 관리 -->
       <div class="tabpanel" id="tab-a-students">
         <div class="page-head"><div><h1>학생 관리</h1><p>학생 가입 승인·수정·삭제, 인적사항을 관리합니다. 이름을 클릭하면 상세정보·성적추이·메모를 볼 수 있습니다.</p></div></div>
@@ -666,7 +669,21 @@
     <button class="btn ghost" onclick="closeModal('student-edit-modal')">취소</button>
   </div>
 </div>
-
+<!-- 일정 수정 -->
+<div class="modal-bg" id="schedule-edit-modal">
+  <div class="modal">
+    <button class="modal-close" onclick="closeModal('schedule-edit-modal')">✕</button>
+    <h3>일정 수정</h3>
+    <div class="form-grid">
+      <div><label>날짜</label><input type="date" id="esc-date"></div>
+      <div><label>시간</label><input type="text" id="esc-time" placeholder="예: 18:30-20:00"></div>
+      <div><label>교실</label><input type="text" id="esc-room" placeholder="예: 본관 401호"></div>
+      <div><label>예상 진도</label><input type="text" id="esc-topic" placeholder="예: 국제기구 1~2장"></div>
+    </div>
+    <button class="btn" onclick="saveScheduleEdit()">저장</button>
+    <button class="btn ghost" onclick="closeModal('schedule-edit-modal')">취소</button>
+  </div>
+</div>
 <!-- 출석 사유 -->
 <div class="modal-bg" id="reason-modal">
   <div class="modal">
@@ -830,6 +847,7 @@ function setAdminTab(id){
   const btn = document.querySelector('.admin-nav[data-tab="'+id+'"]');
   if(btn) btn.classList.add('active');
   if(id==='a-scores'){ renderScoreSelects(); renderScoreTable('hw'); renderScoreTable('exam'); }
+  if(id==='a-attendance') renderAttendance();
   if(id==='a-bank') renderBank();
   if(id==='a-grading') renderGradingTable();
 }
@@ -865,6 +883,7 @@ let draftAssignees = {hw:null, exam:null}; // null=전체 학생, 배열=지정�
 let assignKind = null;
 let pickerKind = null;
 let reasonTarget = null;
+let editScheduleSid = null;
 let memoEditIndex = null;
 let currentSolve = null;
 let openedTaskDetailKey = null;
@@ -1390,12 +1409,31 @@ function deleteSchedule(sid){
   deleteDoc(doc(db,'schedules',sid)).catch(e=>alert('삭제 실패: '+e.message));
   deleteDoc(doc(db,'attendance',sid)).catch(()=>{});
 }
+function openScheduleEdit(sid){
+  const s = schedules.find(x=>x.sid===sid); if(!s) return;
+  editScheduleSid = sid;
+  $('esc-date').value = s.date||'';
+  $('esc-time').value = s.time||'';
+  $('esc-room').value = s.room||'';
+  $('esc-topic').value = s.topic||'';
+  openModal('schedule-edit-modal');
+}
+function saveScheduleEdit(){
+  if(!editScheduleSid) return;
+  const date = $('esc-date').value.trim(), time = $('esc-time').value.trim(), room = $('esc-room').value.trim();
+  if(!date || !time || !room){ alert('날짜·시간·교실을 입력해주세요.'); return; }
+  const data = { date, time, room, topic: $('esc-topic').value.trim() };
+  closeModal('schedule-edit-modal');
+  const { db, doc, updateDoc } = window.fb;
+  updateDoc(doc(db,'schedules', editScheduleSid), data).catch(e=>alert('수정 실패: '+e.message));
+}
 function renderSchedules(){
   const tb = $('schedule-table'); if(!tb) return;
   tb.innerHTML = schedules.map(s=>{
     const f=fmtDate(s.date);
-    return `<tr><td><b>${f.label}</b></td><td>${f.day}</td><td>${esc(s.time)}</td><td>${esc(s.room)}</td>
+        return `<tr><td><b>${f.label}</b></td><td>${f.day}</td><td>${esc(s.time)}</td><td>${esc(s.room)}</td>
       <td>${esc(s.topic)||'-'}</td>
+      <td><button class="btn small secondary" onclick="openScheduleEdit('${s.sid}')">수정</button></td>
       <td><button class="btn small danger" onclick="deleteSchedule('${s.sid}')">삭제</button></td></tr>`;
   }).join('') || '<tr><td colspan="6" class="empty-hint">등록된 일정이 없습니다.</td></tr>';
 
