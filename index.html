@@ -1423,8 +1423,13 @@ function fmtPeriod(t){
 function addSchedule(){
   const v = id => $(id).value.trim();
   if(!v('sch-date')||!v('sch-time')||!v('sch-room')){ alert('날짜·시간·교실을 입력해주세요.'); return; }
-  const data = {date:v('sch-date'), time:v('sch-time'), room:v('sch-room'), topic:v('sch-topic')};
+  const assignedTo = draftAssignees['sch'];
+  if(Array.isArray(assignedTo) && !assignedTo.length){
+    alert('출석 대상 학생이 없습니다. 학생을 선택하거나 전체 선택을 체크해주세요.'); return;
+  }
+  const data = {date:v('sch-date'), time:v('sch-time'), room:v('sch-room'), topic:v('sch-topic'), assignedTo};
   ['sch-date','sch-time','sch-room','sch-topic'].forEach(i=>$(i).value='');
+  draftAssignees['sch'] = null; renderAssigneeSummary('sch');
   const { db, collection, doc, setDoc } = window.fb;
   setDoc(doc(collection(db,'schedules')), data).catch(e=>alert('등록 실패: '+e.message));
 }
@@ -1568,6 +1573,7 @@ function renderQSetOptions(){
 function addQSet(){
   const name=$('new-qset-name').value.trim();
   if(!name){ alert('세트 이름을 입력하세요.'); return; }
+  if(name.includes('/')){ alert("세트 이름에는 '/'를 사용할 수 없습니다."); return; }
   if(questionSets.includes(name)){ alert('이미 존재하는 세트명입니다.'); return; }
   $('new-qset-name').value='';
   const { db, doc, setDoc } = window.fb;
@@ -1580,6 +1586,7 @@ function renameQSet(old){
   const name = nn.trim();
   if(name===old) return;
   if(questionSets.includes(name)){ alert('이미 존재하는 세트명입니다.'); return; }
+   if(name.includes('/')){ alert("세트 이름에는 '/'를 사용할 수 없습니다."); return; }
   const { db, doc, setDoc, deleteDoc, updateDoc } = window.fb;
   setDoc(doc(db,'questionSets', name), {name})
     .then(()=>deleteDoc(doc(db,'questionSets', old)))
@@ -2011,7 +2018,7 @@ function renderTasks(){
     return `
     <tr><td>${esc(t.title)}</td><td>${fmtPeriod(t)}</td><td>${(t.qids||[]).length}문항</td>
     <td>${pdfCell(t)}</td>
-    <td><span class="badge muted">${esc(targetLabel)}</span></td>
+    <td><span class="badge muted" style="cursor:pointer;" onclick="showAssignedStudents('${kind}','${t.tid}')">${esc(targetLabel)}</span></td>
     <td><span class="badge muted">제출 ${submitCount(t.tid)}/${targetCount}</span></td>
     <td><button class="btn small danger" onclick="removeTask('${kind}','${t.tid}')">삭제</button></td></tr>`;
   };
@@ -2294,6 +2301,7 @@ function renderScoreTable(kind){
   const sel = $(kind==='hw'?'score-hw-select':'score-exam-select');
   const tb  = $(kind==='hw'?'score-hw-table':'score-exam-table');
   if(!sel||!tb) return;
+  if(document.activeElement && tb.contains(document.activeElement)) return; // 입력 중이면 재렌더 스킵
   const tid = sel.value;
   const colspan = kind==='hw'?5:4;
   if(!tid){ tb.innerHTML=`<tr><td colspan="${colspan}" class="empty-hint">등록된 항목이 없습니다.</td></tr>`; return; }
