@@ -804,12 +804,23 @@
     <button class="btn" style="width:100%; margin-top:6px;" onclick="submitSolve()">제출하기</button>
   </div>
 </div>
-
+  
+<!-- 관리자 답안 수정 -->
+<div class="modal-bg" id="edit-omr-modal">
+  <div class="modal wide">
+    <button class="modal-close" onclick="closeModal('edit-omr-modal')">✕</button>
+    <h3 id="edit-omr-title">학생 답안 수정</h3>
+    <p class="note">답안을 바꾸면 정답과 자동 비교해 점수가 다시 계산되고 성적에 즉시 반영됩니다.</p>
+    <div id="edit-omr-body"></div>
+    <button class="btn" style="width:100%; margin-top:6px;" onclick="saveOmrEdit()">수정 저장</button>
+  </div>
+</div>
 <!-- 결과 · 해설 -->
 <div class="modal-bg" id="review-modal">
   <div class="modal wide">
     <button class="modal-close" onclick="closeModal('review-modal')">✕</button>
     <h3 id="review-title">결과 · 해설 확인</h3>
+    <div id="review-omr-edit-btn"></div>
     <div id="review-body"></div>
   </div>
 </div>
@@ -954,6 +965,7 @@ let reasonTarget = null;
 let editScheduleSid = null;
 let memoEditIndex = null;
 let currentSolve = null;
+let editOmrTarget = null; // {kind, tid, uid}
 let openedTaskDetailKey = null;
 
 /* 구독 관리 — 로그인 후에만 켜고, 계정이 바뀌거나 로그아웃하면 반드시 해제 */
@@ -2405,8 +2417,77 @@ function openReview(kind,tid,stuUid,isAdmin){
       ${q.explain? `<div class="exam-explain ${ok?'':'wrong'}"><b>해설</b><br>${esc(q.explain)}</div>`:''}
     </div>`;
   }).join('') || '<p class="empty-hint">등록된 문항이 없습니다.</p>';
-    $('review-body').innerHTML = head + photoHtml + body;
+   const canEdit = isAdmin && sub && sub.mode==='omr' && qs.length>0;
+  $('review-omr-edit-btn').innerHTML = canEdit
+    ? `<button class="btn secondary" style="width:100%; margin-bottom:14px;" onclick="openOmrEdit('${kind}','${tid}','${stuUid}')">학생 답안 수정</button>`
+    : '';
+  $('review-body').innerHTML = head + photoHtml + body;
   openModal('review-modal');
+}
+  function openOmrEdit(kind, tid, stuUid){
+  const t = tasks[kind].find(x=>x.tid===tid); if(!t) return;
+  const s = students.find(x=>x.uid===stuUid);
+  const sub = submissions[tid+'|'+stuUid]; if(!sub) return;
+  editOmrTarget = {kind, tid, uid:stuUid};
+  const qs = (t.qids||[]).map(q=>questions.find(x=>x.qid===q)).filter(Boolean);
+
+  $('edit-omr-title').textContent = t.title + ' · ' + (s?s.name:'') + ' 답안 수정';
+  $('edit-omr-body').innerHTML = qs.map((q,i)=>{
+    const mine = (sub.answers||{})[q.qid] || '';
+    if(q.type==='mc'){
+      const choices = (q.choices||[]).map((c,ci)=>{
+        const val = String(ci+1);
+        return `<label class="omr-bubble ${mine===val?'picked':''}" onclick="pickChoice(this)">
+          <input type="radio" name="eomr_${q.qid}" value="${val}" ${mine===val?'checked':''}>${CIRCLE[ci]} ${esc(c)}</label>`;
+      }).join('');
+      return `<div class="omr-q"><div class="qnum">문제 ${i+1}. ${esc(q.body)}</div>
+        <div class="omr-choices">${choices}</div></div>`;
+    } else {
+      return `<div class="omr-q"><div class="qnum">문제 ${i+1}. ${esc(q.body)}</div>
+        <input type="text" id="eomr_${q.qid}" value="${esc(mine)}" placeholder="정답 입력"></div>`;
+    }
+  }).join('') || '<p class="empty-hint">등록된 문항이 없습니다.</p>';
+
+  closeModal('review-modal');
+  openModal('edit-omr-modal');
+}
+
+function saveOmrEdit(){
+  if(!editOmrTarget) return;
+  const {kind, tid, uid} = editOmrTarget;
+  const t = tasks[kind].find(x=>x.tid===tid); if(!t) return;
+  const qs = (t.qids||[]).map(q=>questions.find(x=>x.qid===q)).filter(Boolean);
+
+  const answers = {};
+  let correct = 0;
+  qs.forEach(q=>{
+    let val;
+    if(q.type==='mc'){
+      const picked = document.querySelector('input[name="eomr_'+q.qid+'"]:checked');
+      val = picked ? picked.value : '';
+    } else {
+      const el = $('eomr_'+q.qid);
+      val = el ? el.value.trim() : '';
+    }
+    answers[q.qid] = val;
+    const ok = q.type==='mc' ? val===String(q.answer) : normalize(val)===normalize(q.answer);
+    if(ok) correct++;
+  });
+
+  const rec = {
+    score: correct+'/'+qs.length,
+    status: correct===qs.length ? '완료' : (correct>0 ? '일부완료' : '미완료')
+  };
+  const { db, doc, updateDoc, setDoc } = window.fb;
+  const scorePayload = {}; scorePayload[uid] = rec;
+  updateDoc(doc(db,'submissions', tid+'|'+uid), { answers, correct })
+    .then(()=> setDoc(doc(db,'scores', kind+'__'+tid), scorePayload, {merge:true}))
+    .then(()=>{
+      alert(`저장되었습니다. 수정된 점수: ${correct}/${qs.length}`);
+      closeModal('edit-omr-modal');
+      editOmrTarget = null;
+    })
+    .catch(e=>alert('저장 실패: '+e.message));
 }
 
 /* =========================================================
