@@ -279,7 +279,7 @@
           <h3>과제 등록</h3>
           <div class="form-grid">
             <div><label>과제명</label><input type="text" id="hw-title" placeholder="예: 3주차 국제기구 이해 과제"></div>
-            <div><label>마감일</label><input type="date" id="hw-due"></div>
+            <div><label>마감일시</label><input type="datetime-local" id="hw-due"></div>
           </div>
           <div class="form-grid">
             <div><label>문제 세트에서 한 번에 담기</label>
@@ -311,7 +311,7 @@
           <h3>시험 등록</h3>
           <div class="form-grid">
             <div><label>시험명</label><input type="text" id="ex-title" placeholder="예: 1차 모의고사"></div>
-            <div><label>시험일</label><input type="date" id="ex-due"></div>
+            <div><label>시험일시</label><input type="datetime-local" id="ex-due"></div>
           </div>
           <div class="form-grid">
             <div><label>문제 세트에서 한 번에 담기</label>
@@ -1189,6 +1189,14 @@ function fmtDate(d){
   if(isNaN(dt)) return {label:d, day:'-'};
   return {label:(dt.getMonth()+1)+'월 '+dt.getDate()+'일', day:DAYS[dt.getDay()]+'요일'};
 }
+function fmtDue(due){
+  if(!due || due==='미정') return '미정';
+  const dt = new Date(due);
+  if(isNaN(dt)) return esc(due);
+  const hh = String(dt.getHours()).padStart(2,'0');
+  const mm = String(dt.getMinutes()).padStart(2,'0');
+  return `${dt.getMonth()+1}월 ${dt.getDate()}일(${DAYS[dt.getDay()]}) ${hh}:${mm}`;
+}
 function addSchedule(){
   const v = id => $(id).value.trim();
   if(!v('sch-date')||!v('sch-time')||!v('sch-room')){ alert('날짜·시간·교실을 입력해주세요.'); return; }
@@ -1630,7 +1638,7 @@ function renderTasks(){
     const targetCount = Array.isArray(t.assignedTo) ? t.assignedTo.length : students.filter(s=>s.approved).length;
     const targetLabel = Array.isArray(t.assignedTo) ? `${t.assignedTo.length}명 지정` : '전체';
     return `
-    <tr><td>${esc(t.title)}</td><td>${esc(t.due)}</td><td>${(t.qids||[]).length}문항</td>
+    <tr><td>${esc(t.title)}</td><td>${fmtDue(t.due)}</td><td>${(t.qids||[]).length}문항</td>
     <td>${pdfCell(t)}</td>
     <td><span class="badge muted">${esc(targetLabel)}</span></td>
     <td><span class="badge muted">제출 ${submitCount(t.tid)}/${targetCount}</span></td>
@@ -1672,7 +1680,7 @@ function renderStudentTasks(kind){
       btn = `<button class="btn small secondary" onclick="openReview('${kind}','${t.tid}','${currentStudent}',false)">결과·해설 보기</button>`;
     }
     const doneCell = kind==='hw' ? `<td>${statusBadge(rec.status||'미완료')}</td>` : '';
-    return `<tr><td>${esc(t.title)}</td><td>${esc(t.due)}</td><td>${pdfCell(t)}</td>${doneCell}
+    return `<tr><td>${esc(t.title)}</td><td>${fmtDue(t.due)}</td><td>${pdfCell(t)}</td>${doneCell}
       <td>${status}</td><td>${btn}</td></tr>`;
   }).join('') || `<tr><td colspan="${kind==='hw'?6:5}" class="empty-hint">등록된 항목이 없습니다.</td></tr>`;
 }
