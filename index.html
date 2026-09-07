@@ -759,7 +759,12 @@
     <button class="modal-close" onclick="closeModal('solve-modal')">✕</button>
     <h3 id="solve-title">온라인 OMR 풀이</h3>
     <p class="note">제출 후에는 답안을 수정할 수 없습니다.</p>
-    <div id="solve-body"></div>
+       <div id="solve-body"></div>
+    <div class="field-section">
+      <span class="section-label">손으로 푼 답안 사진 첨부 (선택)</span>
+      <p class="note" style="margin-bottom:8px;">문제를 프린트해서 풀었거나 별도 풀이 과정을 보여줘야 할 때 사진을 첨부하세요. 여러 장 선택 가능합니다.</p>
+      <input type="file" id="solve-photos" accept="image/*" multiple>
+    </div>
     <button class="btn" style="width:100%; margin-top:6px;" onclick="submitSolve()">제출하기</button>
   </div>
 </div>
@@ -2117,9 +2122,13 @@ function renderStudentTasks(kind){
     const sub = submissions[t.tid+'|'+currentStudent];
     const rec = (scores[kind][t.tid]||{})[currentStudent] || {};
     let status, btn;
-    if(!sub){
+     if(!sub){
       status = '<span class="badge warn">미제출</span>';
       btn = `<button class="btn small" onclick="openStudentSolve('${kind}','${t.tid}')">풀기</button>`;
+    } else if(sub.mode==='photo'){
+      status = rec.score ? `<span class="badge good">채점 완료 (${esc(rec.score)})</span>`
+                         : '<span class="badge part">사진 제출 · 채점 대기</span>';
+      btn = `<button class="btn small secondary" onclick="openReview('${kind}','${t.tid}','${currentStudent}',false)">제출 내용 보기</button>`;
     } else {
       status = `<span class="badge good">채점 완료 (${sub.correct}/${sub.total})</span>`;
       btn = `<button class="btn small secondary" onclick="openReview('${kind}','${t.tid}','${currentStudent}',false)">결과·해설 보기</button>`;
@@ -2197,7 +2206,8 @@ function openStudentSolve(kind,tid){
             `<label class="omr-bubble" onclick="pickChoice(this)">
               <input type="radio" name="ans_${q.qid}" value="${ci+1}">${CIRCLE[ci]} ${esc(c)}</label>`).join('')}</div>`
         : `<input type="text" id="ans_${q.qid}" placeholder="정답 입력">`}
-    </div>`).join('') : '<p class="empty-hint">등록된 문항이 없습니다.</p>';
+    </div>`).join('') : '<p class="empty-hint">등록된 문항이 없습니다. PDF를 내려받아 풀고 아래에 사진을 첨부해 제출해주세요.</p>';
+  $('solve-photos').value = '';
   openModal('solve-modal');
 }
 function pickChoice(el){
@@ -2206,12 +2216,13 @@ function pickChoice(el){
   el.querySelector('input').checked = true;
 }
 function normalize(s){ return String(s||'').replace(/\s+/g,'').toLowerCase(); }
-function submitSolve(){
+async function submitSolve(){
   if(!currentSolve) return;
   const kind = currentSolve.kind, tid = currentSolve.tid;
   const t = tasks[kind].find(x=>x.tid===tid);
   const qs = (t.qids||[]).map(q=>questions.find(x=>x.qid===q)).filter(Boolean);
-  if(!qs.length){ alert('등록된 문항이 없습니다.'); return; }
+  const photoFiles = Array.from($('solve-photos').files || []);
+
   const answers = {};
   let answered = 0;
   qs.forEach(q=>{
@@ -2224,8 +2235,25 @@ function submitSolve(){
     }
     if(answers[q.qid]) answered++;
   });
-  if(!answered){ alert('답안을 입력해주세요.'); return; }
+
+  if(!answered && !photoFiles.length){
+    alert('답안을 입력하거나 사진을 첨부해주세요.');
+    return;
+  }
   if(!confirm('제출하면 답안을 수정할 수 없습니다. 제출할까요?')) return;
+
+  let photos = [];
+  if(photoFiles.length){
+    try{
+      for(const f of photoFiles){
+        const url = await uploadToCloudinary(f);
+        photos.push({name:f.name, url});
+      }
+    }catch(e){
+      alert('사진 업로드 실패: '+e.message);
+      return;
+    }
+  }
 
   let correct = 0;
   qs.forEach(q=>{
@@ -2233,16 +2261,19 @@ function submitSolve(){
                              : normalize(answers[q.qid])===normalize(q.answer);
     if(ok) correct++;
   });
+
+  const mode = answered ? 'omr' : 'photo';
   const subData = {
-    studentUid: currentStudent,          // Firestore 규칙이 이 필드를 검사함
-    taskId: tid, kind, mode:'omr',
-    answers, total:qs.length, correct,
+    studentUid: currentStudent,
+    taskId: tid, kind, mode,
+    answers, photos, total:qs.length, correct,
     date:new Date().toLocaleString('ko-KR')
   };
-  const rec = {
-    score: correct+'/'+qs.length,
-    status: correct===qs.length ? '완료' : (correct>0 ? '일부완료' : '미완료')
-  };
+  const rec = mode==='omr'
+    ? { score: correct+'/'+qs.length,
+        status: correct===qs.length ? '완료' : (correct>0 ? '일부완료' : '미완료') }
+    : { score: '', status: '일부완료' };  // 사진 제출은 관리자가 성적 관리에서 직접 채점
+
   closeModal('solve-modal');
   currentSolve=null;
 
@@ -2250,10 +2281,11 @@ function submitSolve(){
   const scorePayload = {}; scorePayload[currentStudent] = rec;
   setDoc(doc(db,'submissions', tid+'|'+currentStudent), subData)
     .then(()=> setDoc(doc(db,'scores', kind+'__'+tid), scorePayload, {merge:true}))
-    .then(()=> alert(`제출되었습니다. 자동 채점 결과 ${correct}/${qs.length}입니다.`))
+    .then(()=> alert(mode==='omr'
+      ? `제출되었습니다. 자동 채점 결과 ${correct}/${qs.length}입니다.`
+      : '사진이 제출되었습니다. 관리자가 확인 후 채점합니다.'))
     .catch(e=>{ console.error(e); alert('제출 실패: '+e.message); });
 }
-
 /* ---------- 결과 · 해설 ---------- */
 function openReview(kind,tid,stuUid,isAdmin){
   const t = tasks[kind].find(x=>x.tid===tid);
@@ -2262,9 +2294,19 @@ function openReview(kind,tid,stuUid,isAdmin){
   const sub = submissions[tid+'|'+stuUid];
   $('review-title').textContent = t.title + ' · ' + (s?s.name:'') + (isAdmin?' (관리자 확인)':'');
   const qs = (t.qids||[]).map(q=>questions.find(x=>x.qid===q)).filter(Boolean);
-  const head = sub
-    ? `<p class="note">제출일시 ${esc(sub.date)} · 자동채점 <b>${sub.correct}/${sub.total}</b> · 제출한 답안은 수정할 수 없습니다.</p>`
-    : '<p class="note">아직 제출하지 않았습니다.</p>';
+    let head;
+  if(!sub){
+    head = '<p class="note">아직 제출하지 않았습니다.</p>';
+  } else if(sub.mode==='photo'){
+    head = `<p class="note">제출일시 ${esc(sub.date)} · 사진 제출 · 관리자 수동 채점이 필요합니다.</p>`;
+  } else {
+    head = `<p class="note">제출일시 ${esc(sub.date)} · 자동채점 <b>${sub.correct}/${sub.total}</b> · 제출한 답안은 수정할 수 없습니다.</p>`;
+  }
+  const photoHtml = (sub && sub.photos && sub.photos.length)
+    ? `<div class="card"><h3>첨부 사진</h3><div class="thumb-row">${
+        sub.photos.map(p=>`<a href="${p.url}" target="_blank"><img src="${p.url}" alt="${esc(p.name)}"></a>`).join('')
+      }</div></div>`
+    : '';
   const body = qs.map((q,i)=>{
     const mine = sub ? ((sub.answers||{})[q.qid]||'') : '';
     const ok = q.type==='mc' ? mine===String(q.answer) : normalize(mine)===normalize(q.answer);
@@ -2289,7 +2331,7 @@ function openReview(kind,tid,stuUid,isAdmin){
       ${q.explain? `<div class="exam-explain ${ok?'':'wrong'}"><b>해설</b><br>${esc(q.explain)}</div>`:''}
     </div>`;
   }).join('') || '<p class="empty-hint">등록된 문항이 없습니다.</p>';
-  $('review-body').innerHTML = head + body;
+    $('review-body').innerHTML = head + photoHtml + body;
   openModal('review-modal');
 }
 
@@ -2308,6 +2350,10 @@ function renderGradingTable(){
           mode='<span style="color:#8993AA;">-</span>';
           status='<span class="badge warn">미제출</span>';
           btn='<button class="btn small secondary" disabled>결과 보기</button>';
+        } else if(sub.mode==='photo'){
+          mode='<span class="badge muted">사진 업로드</span>';
+          status='<span class="badge part">수동채점 필요</span>';
+          btn=`<button class="btn small secondary" onclick="openReview('${kind}','${t.tid}','${s.uid}',true)">제출 보기</button>`;
         } else {
           mode='<span class="badge muted">온라인 OMR</span>';
           status=`<span class="badge good">자동채점 완료 (${sub.correct}/${sub.total})</span>`;
