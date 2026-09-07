@@ -297,7 +297,7 @@
 
             <!-- 메인: 대시보드 -->
       <div class="tabpanel active" id="tab-a-main">
-        <div class="page-head"><div><h1>대시보드</h1><p>스터디 운영 현황을 한눈에 확인합니다</p></div></div>
+        <div class="page-head"><div><h1>대시보드</h1><p>스터디 운영 현황을 한눈에 확인합니다.</p></div></div>
 
         <div class="form-grid three">
           <div class="card" style="text-align:center; cursor:pointer;" onclick="setAdminTab('a-students')">
@@ -332,7 +332,7 @@
 
       <!-- 수업 일정 -->
       <div class="tabpanel" id="tab-a-schedule">
-        <div class="page-head"><div><h1>수업 일정</h1><p>날짜 · 요일 · 시간 · 교실 · 예상 진도를 등록하고 출석 대상을 지정합니다</p></div></div>
+        <div class="page-head"><div><h1>수업 일정</h1><p>날짜 · 요일 · 시간 · 교실 · 예상 진도를 등록하고 출석 대상을 지정합니다.</p></div></div>
         <div class="card">
           <h3>일정 추가</h3>
           <div class="form-grid">
@@ -1961,7 +1961,7 @@ function renderAssignPicker(){
   $('assign-list').innerHTML = list.length ? list.map(s=>{
     const on = cur===null || (cur && cur.includes(s.uid));
     return `<label class="bank-item${on?' sel':''}">
-      <input type="checkbox" class="assign-check" value="${s.uid}" ${on?'checked':''}>
+            <input type="checkbox" class="assign-check" value="${s.uid}" ${on?'checked':''} onchange="onAssignCheckChange()">
       <div class="bi-body"><b>${esc(s.name)}</b> <span style="color:#8993AA; font-size:12px;">${esc(s.grade||'')} · ${esc(s.school||'')}</span></div>
     </label>`;
   }).join('') : '<p class="empty-hint">등록된(승인된) 학생이 없습니다.</p>';
@@ -1969,6 +1969,12 @@ function renderAssignPicker(){
 function toggleAssignAll(){
   const all = $('assign-all').checked;
   document.querySelectorAll('.assign-check').forEach(c=>{ c.checked = all; });
+}
+function onAssignCheckChange(){
+  // 학생 체크박스를 하나라도 해제하면 "전체 선택"도 자동으로 풀린다
+  const boxes = Array.from(document.querySelectorAll('.assign-check'));
+  const allChecked = boxes.every(c=>c.checked);
+  $('assign-all').checked = allChecked;
 }
 function applyAssignPicker(){
   if($('assign-all').checked){
