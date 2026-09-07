@@ -1263,8 +1263,10 @@ function drawStudentTrend(u){
   }).filter(Boolean);
   renderTrendSvg('detail-trend-chart', arr);
 }
+
 function renderStudentTaskStatus(u){
   const box = $('detail-task-status'); if(!box) return;
+  openedTaskDetailKey = null;
   $('detail-task-detail').innerHTML = '';
   const row = (kind, t) => {
     if(Array.isArray(t.assignedTo) && !t.assignedTo.includes(u)) return '';
