@@ -1293,11 +1293,6 @@ function renderStudentTaskStatus(u){
   exBox.innerHTML = exRows || '<p class="empty-hint">배정된 시험이 없습니다.</p>';
 }
 
-  const hwRows = tasks.hw.map(t=>row('hw',t)).join('');
-  const exRows = tasks.exam.map(t=>row('exam',t)).join('');
-  hwBox.innerHTML = hwRows || '<p class="empty-hint">배정된 과제가 없습니다.</p>';
-  exBox.innerHTML = exRows || '<p class="empty-hint">배정된 시험이 없습니다.</p>';
-}
  function showStudentTaskDetail(kind, tid, u){
   const key = kind+'|'+tid;
   if(openedTaskDetailKey === key){
