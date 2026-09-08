@@ -2049,13 +2049,26 @@ function renderDraft(kind){
   const box = $(kind==='hw'?'hw-picked':'exam-picked'); if(!box) return;
   const arr = draftQids[kind];
   if(!arr.length){ box.textContent='담긴 문제: 없음'; return; }
-  box.innerHTML = `<b>담긴 문제 ${arr.length}개</b> ` +
+  box.innerHTML = `<b>담긴 문제 ${arr.length}개</b> · 화살표로 순서를 바꿀 수 있습니다 ` +
     `<button class="btn small ghost" onclick="clearDraft('${kind}')">전체 비우기</button><br>` +
     arr.map((qid,i)=>{
       const q=questions.find(x=>x.qid===qid); if(!q) return '';
-      return `<div style="margin-top:4px;">${i+1}. ${esc(q.body.slice(0,40))}${q.body.length>40?'…':''}
-        <button class="btn small danger" onclick="removeFromDraft('${kind}','${qid}')">빼기</button></div>`;
+      return `<div style="display:flex; align-items:center; gap:6px; margin-top:6px;">
+        <span style="width:20px; text-align:right; color:var(--muted); font-size:12px;">${i+1}.</span>
+        <span style="flex:1;">${esc(q.body.slice(0,40))}${q.body.length>40?'…':''}</span>
+        <button class="btn small ghost" style="padding:2px 8px;" ${i===0?'disabled':''} onclick="moveDraftItem('${kind}','${qid}',-1)" title="위로">▲</button>
+        <button class="btn small ghost" style="padding:2px 8px;" ${i===arr.length-1?'disabled':''} onclick="moveDraftItem('${kind}','${qid}',1)" title="아래로">▼</button>
+        <button class="btn small danger" onclick="removeFromDraft('${kind}','${qid}')">빼기</button>
+      </div>`;
     }).join('');
+}
+function moveDraftItem(kind, qid, dir){
+  const arr = draftQids[kind];
+  const i = arr.indexOf(qid);
+  const j = i + dir;
+  if(i<0 || j<0 || j>=arr.length) return;
+  [arr[i], arr[j]] = [arr[j], arr[i]];
+  renderDraft(kind);
 }
 function removeFromDraft(kind,qid){ draftQids[kind]=draftQids[kind].filter(x=>x!==qid); renderDraft(kind); }
 function clearDraft(kind){ draftQids[kind]=[]; renderDraft(kind); }
