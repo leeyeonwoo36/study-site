@@ -2577,6 +2577,12 @@ function saveOmrEdit(){
 /* =========================================================
    채점 확인 (관리자)
    ========================================================= */
+  try {
+  const test = window.__state.tasks.hw.map(t => `<option value="hw|${t.tid}">[과제] ${t.title}</option>`);
+  console.log('생성된 옵션:', test);
+} catch(e) {
+  console.log('에러 발생:', e.message);
+}
 function renderGradingTable(){
   const tb = $('grading-table'); if(!tb) return;
 
