@@ -808,6 +808,8 @@
       <button class="btn small secondary" onclick="openStudentEditFromDetail()">인적사항 수정</button>
       <button class="btn small secondary" onclick="resetPw(currentDetailUid)">비밀번호 재설정 메일 보내기</button>
     </div>
+        <h3>출결 현황</h3>
+    <div id="detail-attendance-status" style="margin-bottom:18px;"></div>
    <h3>과제 현황</h3>
 <div id="detail-hw-status" style="margin-bottom:14px;"></div>
 
@@ -1286,8 +1288,9 @@ function openStudentDetail(u){
   $('detail-approved').innerHTML = s.approved
     ? '<span class="badge good">승인됨</span>' : '<span class="badge warn">승인 대기</span>';
   $('detail-email').textContent = s.email || '미등록';
-  drawStudentTrend(u);
+    drawStudentTrend(u);
   renderStudentTaskStatus(u);
+  renderStudentAttendanceStatus(u);
   renderMemos();
   openModal('student-detail-modal');
 }
@@ -1386,6 +1389,32 @@ function renderStudentTaskStatus(u){
   const exRows = tasks.exam.map(t=>row('exam',t)).join('');
   hwBox.innerHTML = hwRows || '<p class="empty-hint">배정된 과제가 없습니다.</p>';
   exBox.innerHTML = exRows || '<p class="empty-hint">배정된 시험이 없습니다.</p>';
+}
+  function renderStudentAttendanceStatus(u){
+  const box = $('detail-attendance-status'); if(!box) return;
+  const visible = schedules.filter(s => !Array.isArray(s.assignedTo) || s.assignedTo.includes(u));
+  if(!visible.length){ box.innerHTML = '<p class="empty-hint">배정된 수업 일정이 없습니다.</p>'; return; }
+
+  let pCount=0, lCount=0, aCount=0, nCount=0;
+  const rows = visible.map(s=>{
+    const rec = (attendance[s.sid]||{})[u];
+    const st = rec ? rec.status : null;
+    if(st==='p') pCount++; else if(st==='l') lCount++; else if(st==='a') aCount++; else nCount++;
+    const f = fmtDate(s.date);
+    const badge = st ? `<span class="att-badge ${st}">${st==='p'?'출석':st==='l'?'지각':'결석'}</span>`
+                     : '<span class="att-badge n">미체크</span>';
+    const reason = (rec && rec.reason) ? esc(rec.reason).replace(/\n/g,'<br>') : '-';
+    return `<tr><td>${f.label} (${f.day})</td><td>${esc(s.time)}</td><td>${badge}</td><td style="font-size:12px;">${reason}</td></tr>`;
+  }).join('');
+
+  const summary = `<div style="display:flex; gap:8px; margin-bottom:10px; flex-wrap:wrap;">
+    <span class="badge good">출석 ${pCount}</span>
+    <span class="badge part">지각 ${lCount}</span>
+    <span class="badge warn">결석 ${aCount}</span>
+    <span class="badge muted">미체크 ${nCount}</span>
+  </div>`;
+
+  box.innerHTML = summary + `<table><tr><th>날짜</th><th>시간</th><th>출결</th><th>사유</th></tr>${rows}</table>`;
 }
 
  function showStudentTaskDetail(kind, tid, u){
