@@ -387,8 +387,8 @@
       <!-- 과제 관리 -->
       <div class="tabpanel" id="tab-a-hw">
         <div class="page-head"><div><h1>과제 관리</h1><p>과제를 등록·삭제하고 문항과 대상 학생을 지정합니다.</p></div></div>
-        <div class="card">
-          <h3>과제 등록</h3>
+           <div class="card">
+          <h3 id="hw-form-title">과제 등록</h3>
           <div class="form-grid">
             <div><label>과제명</label><input type="text" id="hw-title" placeholder="예: 3주차 국제기구 이해 과제"></div>
           </div>
@@ -425,7 +425,8 @@
             <input type="file" id="hw-pdf" accept="application/pdf">
           </div>
 
-          <button class="btn" style="width:100%; margin-top:16px;" onclick="addTask('hw')">과제 등록</button>
+          <button class="btn" id="hw-submit-btn" style="width:100%; margin-top:16px;" onclick="addTask('hw')">과제 등록</button>
+          <button class="btn ghost" id="hw-cancel-btn" style="width:100%; margin-top:8px; display:none;" onclick="cancelTaskEdit('hw')">수정 취소</button>
         </div>
         <div class="card">
           <h3>등록된 과제</h3>
@@ -437,8 +438,8 @@
       <!-- 시험 관리 -->
       <div class="tabpanel" id="tab-a-exam">
         <div class="page-head"><div><h1>시험 관리</h1><p>시험을 등록·삭제하고 문항과 대상 학생을 지정합니다.</p></div></div>
-        <div class="card">
-          <h3>시험 등록</h3>
+                <div class="card">
+          <h3 id="exam-form-title">시험 등록</h3>
           <div class="form-grid">
             <div><label>시험명</label><input type="text" id="ex-title" placeholder="예: 1차 모의고사"></div>
           </div>
@@ -475,7 +476,8 @@
             <input type="file" id="ex-pdf" accept="application/pdf">
           </div>
 
-          <button class="btn" style="width:100%; margin-top:16px;" onclick="addTask('exam')">시험 등록</button>
+                    <button class="btn" id="exam-submit-btn" style="width:100%; margin-top:16px;" onclick="addTask('exam')">시험 등록</button>
+          <button class="btn ghost" id="exam-cancel-btn" style="width:100%; margin-top:8px; display:none;" onclick="cancelTaskEdit('exam')">수정 취소</button>
         </div>
         <div class="card">
           <h3>등록된 시험</h3>
@@ -965,6 +967,7 @@ let assignKind = null;
 let pickerKind = null;
 let reasonTarget = null;
 let editScheduleSid = null;
+  let editTaskId = {hw:null, exam:null};
 let memoEditIndex = null;
 let currentSolve = null;
 let editOmrTarget = null; // {kind, tid, uid}
@@ -2060,7 +2063,35 @@ function clearDraft(kind){ draftQids[kind]=[]; renderDraft(kind); }
 /* =========================================================
    과제 · 시험
    ========================================================= */
-async function addTask(kind){                                    // ← function 앞에 async 추가
+function startTaskEdit(kind, tid){
+  const t = tasks[kind].find(x=>x.tid===tid); if(!t) return;
+  const prefix = kind==='hw' ? 'hw' : 'ex';
+  editTaskId[kind] = tid;
+
+  $(prefix+'-title').value = t.title || '';
+  $(prefix+'-start').value = t.startAt || '';
+  $(prefix+'-due').value = t.due || '';
+  draftQids[kind] = (t.qids||[]).slice();
+  renderDraft(kind);
+  draftAssignees[kind] = Array.isArray(t.assignedTo) ? t.assignedTo.slice() : null;
+  renderAssigneeSummary(kind);
+
+  $(kind+'-form-title').textContent = (kind==='hw'?'과제':'시험') + ' 수정';
+  $(kind+'-submit-btn').textContent = '수정 저장';
+  $(kind+'-cancel-btn').style.display = 'block';
+  setAdminTab(kind==='hw'?'a-hw':'a-exam');
+}
+function cancelTaskEdit(kind){
+  editTaskId[kind] = null;
+  const prefix = kind==='hw' ? 'hw' : 'ex';
+  $(prefix+'-title').value=''; $(prefix+'-start').value=''; $(prefix+'-due').value='';
+  draftQids[kind]=[]; renderDraft(kind);
+  draftAssignees[kind]=null; renderAssigneeSummary(kind);
+  $(kind+'-form-title').textContent = (kind==='hw'?'과제':'시험') + ' 등록';
+  $(kind+'-submit-btn').textContent = (kind==='hw'?'과제':'시험') + ' 등록';
+  $(kind+'-cancel-btn').style.display = 'none';
+}
+ async function addTask(kind){
   const prefix = kind==='hw' ? 'hw' : 'ex';
   const title = $(prefix+'-title').value.trim();
   if(!title){ alert('제목을 입력하세요.'); return; }
@@ -2070,26 +2101,40 @@ async function addTask(kind){                                    // ← function
     alert('지정된 학생이 없습니다. 학생을 선택하거나 전체 선택을 체크해주세요.'); return;
   }
 
-  const pdfFile = $(prefix+'-pdf').files[0];                      // ← 새로 추가
-  let pdfUrl = null, pdfName = '';                                // ← 새로 추가
-  if(pdfFile){                                                    // ← 새로 추가
-    try { pdfName = pdfFile.name; pdfUrl = await uploadToCloudinary(pdfFile); }  // ← 새로 추가
-    catch(e){ alert('PDF 업로드 실패: '+e.message); return; }      // ← 새로 추가
-  }                                                                // ← 새로 추가
+  const editId = editTaskId[kind];
+  const existing = editId ? tasks[kind].find(x=>x.tid===editId) : null;
+
+  const pdfFile = $(prefix+'-pdf').files[0];
+  let pdfUrl = existing ? existing.pdfUrl : null;
+  let pdfName = existing ? existing.pdfName : '';
+  if(pdfFile){
+    try { pdfName = pdfFile.name; pdfUrl = await uploadToCloudinary(pdfFile); }
+    catch(e){ alert('PDF 업로드 실패: '+e.message); return; }
+  }
 
   const data = {
     kind, title,
     startAt: $(prefix+'-start').value || '',
     due: $(prefix+'-due').value || '',
-    qids: draftQids[kind].slice(), pdfName, pdfUrl,                // ← pdfName:'', pdfUrl:null 이었던 자리를 변수로 교체
+    qids: draftQids[kind].slice(), pdfName, pdfUrl,
     assignedTo: assignedTo
   };
+
   $(prefix+'-title').value=''; $(prefix+'-start').value=''; $(prefix+'-due').value='';
-  $(prefix+'-pdf').value='';                                       // ← 새로 추가 (파일 인풋 초기화)
+  $(prefix+'-pdf').value='';
   draftQids[kind]=[]; renderDraft(kind);
   draftAssignees[kind]=null; renderAssigneeSummary(kind);
-  const { db, collection, doc, setDoc } = window.fb;
-  setDoc(doc(collection(db,'tasks')), data).catch(e=>alert('등록 실패: '+e.message));
+
+  const { db, collection, doc, setDoc, updateDoc } = window.fb;
+  if(editId){
+    editTaskId[kind] = null;
+    $(kind+'-form-title').textContent = (kind==='hw'?'과제':'시험') + ' 등록';
+    $(kind+'-submit-btn').textContent = (kind==='hw'?'과제':'시험') + ' 등록';
+    $(kind+'-cancel-btn').style.display = 'none';
+    updateDoc(doc(db,'tasks', editId), data).catch(e=>alert('수정 실패: '+e.message));
+  } else {
+    setDoc(doc(collection(db,'tasks')), data).catch(e=>alert('등록 실패: '+e.message));
+  }
 }
 function removeTask(kind,tid){
   if(!confirm('삭제할까요? 관련 성적·제출 기록도 함께 삭제됩니다.')) return;
@@ -2119,7 +2164,10 @@ function renderTasks(){
     <td>${pdfCell(t)}</td>
     <td><span class="badge muted" style="cursor:pointer;" onclick="showAssignedStudents('${kind}','${t.tid}')">${esc(targetLabel)}</span></td>
     <td><span class="badge muted">제출 ${submitCount(t.tid)}/${targetCount}</span></td>
-    <td><button class="btn small danger" onclick="removeTask('${kind}','${t.tid}')">삭제</button></td></tr>`;
+    <td class="row-actions">
+      <button class="btn small secondary" onclick="startTaskEdit('${kind}','${t.tid}')">수정</button>
+      <button class="btn small danger" onclick="removeTask('${kind}','${t.tid}')">삭제</button>
+    </td></tr>`;
   };
   hwt.innerHTML = tasks.hw.map(t=>row('hw',t)).join('')
     || '<tr><td colspan="7" class="empty-hint">등록된 과제가 없습니다.</td></tr>';
