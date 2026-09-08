@@ -538,17 +538,20 @@
         </div>
       </div>
 
-      <!-- 채점 확인 -->
+            <!-- 채점 확인 -->
       <div class="tabpanel" id="tab-a-grading">
         <div class="page-head"><div><h1>채점 · 제출 확인</h1><p>학생이 제출한 온라인 OMR 답안은 자동으로 채점됩니다</p></div></div>
         <div class="card">
+          <div class="form-grid three">
+            <div><label>구분</label><select id="grading-kind-filter" onchange="renderGradingTable()">
+              <option value="">전체</option><option value="hw">과제</option><option value="exam">시험</option></select></div>
+            <div><label>과제/시험 선택</label><select id="grading-task-filter" onchange="renderGradingTable()">
+              <option value="">전체</option></select></div>
+            <div><label>제출 상태</label><select id="grading-status-filter" onchange="renderGradingTable()">
+              <option value="">전체</option><option value="submitted">제출됨</option><option value="pending">미제출</option><option value="needsGrading">채점 대기(사진)</option></select></div>
+          </div>
           <h3>제출 현황</h3>
           <table>
-            <tr><th>학생</th><th>과제/시험명</th><th>제출방식</th><th>상태</th><th></th></tr>
-            <tbody id="grading-table"></tbody>
-          </table>
-        </div>
-      </div>
 
       <!-- 성적 관리 -->
       <div class="tabpanel" id="tab-a-scores">
@@ -2576,11 +2579,34 @@ function saveOmrEdit(){
    ========================================================= */
 function renderGradingTable(){
   const tb = $('grading-table'); if(!tb) return;
+
+  // 과제/시험 선택 드롭다운을 "구분" 필터에 맞춰 채운다
+  const kindFilter = $('grading-kind-filter').value;
+  const taskSel = $('grading-task-filter');
+  const prevTask = taskSel.value;
+  const kindsToList = kindFilter ? [kindFilter] : ['hw','exam'];
+  const opts = kindsToList.flatMap(k => tasks[k].map(t =>
+    `<option value="${k}|${t.tid}">${k==='hw'?'[과제] ':'[시험] '}${esc(t.title)}</option>`));
+  taskSel.innerHTML = '<option value="">전체</option>' + opts.join('');
+  if(prevTask && taskSel.querySelector('option[value="'+prevTask+'"]')) taskSel.value = prevTask;
+
+  const statusFilter = $('grading-status-filter').value;
+  const taskFilter = taskSel.value; // "kind|tid" 형태 또는 ""
+
   const rows = [];
   ['hw','exam'].forEach(kind=>{
+    if(kindFilter && kindFilter!==kind) return;
     tasks[kind].forEach(t=>{
+      if(taskFilter && taskFilter !== (kind+'|'+t.tid)) return;
       students.filter(s=>s.approved && (!Array.isArray(t.assignedTo) || t.assignedTo.includes(s.uid))).forEach(s=>{
         const sub = submissions[t.tid+'|'+s.uid];
+        const rec = (scores[kind][t.tid]||{})[s.uid];
+        const needsGrading = sub && sub.mode==='photo' && !(rec && rec.score);
+
+        if(statusFilter==='submitted' && !sub) return;
+        if(statusFilter==='pending' && sub) return;
+        if(statusFilter==='needsGrading' && !needsGrading) return;
+
         let mode, status, btn;
         if(!sub){
           mode='<span style="color:#8993AA;">-</span>';
@@ -2588,18 +2614,19 @@ function renderGradingTable(){
           btn='<button class="btn small secondary" disabled>결과 보기</button>';
         } else if(sub.mode==='photo'){
           mode='<span class="badge muted">사진 업로드</span>';
-          status='<span class="badge part">수동채점 필요</span>';
+          status= needsGrading ? '<span class="badge part">수동채점 필요</span>' : `<span class="badge good">채점 완료 (${esc(rec.score)})</span>`;
           btn=`<button class="btn small secondary" onclick="openReview('${kind}','${t.tid}','${s.uid}',true)">제출 보기</button>`;
         } else {
           mode='<span class="badge muted">온라인 OMR</span>';
           status=`<span class="badge good">자동채점 완료 (${sub.correct}/${sub.total})</span>`;
           btn=`<button class="btn small secondary" onclick="openReview('${kind}','${t.tid}','${s.uid}',true)">결과 보기</button>`;
         }
-        rows.push(`<tr><td>${esc(s.name)}</td><td>${esc(t.title)}</td><td>${mode}</td><td>${status}</td><td>${btn}</td></tr>`);
+        const kindLabel = kind==='hw' ? '<span class="badge muted">과제</span>' : '<span class="badge muted">시험</span>';
+        rows.push(`<tr><td>${esc(s.name)}</td><td>${kindLabel} ${esc(t.title)}</td><td>${mode}</td><td>${status}</td><td>${btn}</td></tr>`);
       });
     });
   });
-  tb.innerHTML = rows.join('') || '<tr><td colspan="5" class="empty-hint">표시할 제출 내역이 없습니다.</td></tr>';
+  tb.innerHTML = rows.join('') || '<tr><td colspan="5" class="empty-hint">조건에 맞는 제출 내역이 없습니다.</td></tr>';
 }
 
 /* =========================================================
