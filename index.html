@@ -108,6 +108,13 @@
     border-radius:var(--radius); padding:24px;}
   .modal.wide{width:680px;}
   .modal-close{float:right; background:none; border:none; font-size:18px; cursor:pointer; color:var(--muted);}
+    #preview-banner{display:none; position:fixed; top:0; left:0; right:0; z-index:100;
+    background:var(--accent); color:#fff; padding:10px 16px; text-align:center;
+    font-size:13.5px; font-weight:700; box-shadow:0 2px 8px rgba(0,0,0,.15);}
+  #preview-banner button{margin-left:12px; padding:5px 14px; border:1px solid #fff;
+    background:#fff; color:var(--accent); border-radius:20px; font-size:12.5px;
+    font-weight:700; cursor:pointer; font-family:inherit;}
+  body.previewing .layout{padding-top:42px;}
   .empty-hint{color:var(--muted); font-size:13px; padding:14px 0;}
   .file-drop{border:1.5px dashed var(--border); border-radius:var(--radius); padding:16px;
     text-align:center; color:var(--muted); font-size:13px; background:var(--paper);}
@@ -252,7 +259,10 @@
 </style>
 </head>
 <body>
-
+<div id="preview-banner">
+  <span id="preview-banner-text">학생 화면 미리보기 중</span>
+  <button onclick="exitStudentPreview()">관리자로 돌아가기</button>
+</div>
 <div class="site-switch" style="display:none;">
   <button id="switch-login" class="active" onclick="switchSite('login')">학생 로그인</button>
   <button id="switch-admin" onclick="switchSite('admin')">관리자 사이트</button>
@@ -294,6 +304,7 @@
         <button class="admin-nav" data-tab="a-bank" onclick="setAdminTab('a-bank')">문제은행</button>
         <button class="admin-nav" data-tab="a-grading" onclick="setAdminTab('a-grading')">채점 확인</button>
         <button class="admin-nav" data-tab="a-scores" onclick="setAdminTab('a-scores')">성적 관리</button>
+        <button class="admin-nav" data-tab="a-preview" onclick="setAdminTab('a-preview')">학생 화면 보기</button>
         <button class="admin-nav" data-tab="a-firebase" onclick="setAdminTab('a-firebase')">운영 안내</button>
         <button class="admin-nav" onclick="logout()" style="margin-top:14px; border-top:1px solid rgba(255,255,255,.18);">로그아웃</button>
       </nav>
@@ -572,7 +583,16 @@
           <table><tr><th>학생</th><th>전화번호</th><th>점수</th><th></th></tr><tbody id="score-exam-table"></tbody></table>
         </div>
       </div>
-
+            <!-- 학생 화면 보기 -->
+      <div class="tabpanel" id="tab-a-preview">
+        <div class="page-head"><div><h1>학생 화면 보기</h1><p>선택한 학생의 화면을 그대로 확인합니다. 관리자 세션은 유지됩니다.</p></div></div>
+        <div class="card">
+          <div class="form-grid">
+            <div><label>학생 선택</label><select id="preview-student-select"></select></div>
+          </div>
+          <button class="btn" style="width:100%;" onclick="startStudentPreview()">이 학생 화면으로 보기</button>
+        </div>
+      </div>
       <!-- 운영 안내 -->
       <div class="tabpanel" id="tab-a-firebase">
         <div class="page-head"><div><h1>운영 안내</h1><p>계정·권한·데이터 구조와 남은 작업을 정리해 둡니다.</p></div></div>
@@ -909,6 +929,7 @@ function setAdminTab(id){
   if(btn) btn.classList.add('active');
   if(id==='a-scores'){ renderScoreSelects(); renderScoreTable('hw'); renderScoreTable('exam'); }
   if(id==='a-attendance') renderAttendance();
+    if(id==='a-preview') renderPreviewStudentSelect();
   if(id==='a-bank') renderBank();
   if(id==='a-grading') renderGradingTable();
 }
@@ -936,6 +957,7 @@ let scores = { hw:{}, exam:{} };  // scores[kind][tid][uid] = {score, status}
 let currentStudent = null;
 let currentUserIsAdmin = false;
 let currentDetailUid = null;
+  let previewingStudent = false;
 let editStudentUid = null;
 let editingQid = null;
 let draftQids = {hw:[], exam:[]};
@@ -1100,6 +1122,7 @@ function handleSignedOut(){
 }
 
 function logout(){
+  if(previewingStudent){ exitStudentPreview(); return; }
   stopSubscriptions();
   currentStudent = null;
   currentUserIsAdmin = false;
@@ -2220,6 +2243,34 @@ function pdfCell(t){
   if(!t.pdfName) return '<span style="color:#8993AA;">없음</span>';
   if(!t.pdfUrl) return esc(t.pdfName)+' <span style="color:#8993AA; font-size:11px;">(업로드 대기)</span>';
   return `<a href="${t.pdfUrl}" download="${esc(t.pdfName)}" target="_blank">${esc(t.pdfName)}</a>`;
+}
+  function renderPreviewStudentSelect(){
+  const sel = $('preview-student-select'); if(!sel) return;
+  const prev = sel.value;
+  const list = students.filter(s=>s.approved);
+  sel.innerHTML = list.length
+    ? list.map(s=>`<option value="${s.uid}">${esc(s.name)} (${esc(s.grade||'')})</option>`).join('')
+    : '<option value="">승인된 학생이 없습니다</option>';
+  if(prev && sel.querySelector('option[value="'+prev+'"]')) sel.value = prev;
+}
+function startStudentPreview(){
+  const uid = $('preview-student-select').value;
+  const s = students.find(x=>x.uid===uid);
+  if(!s){ alert('학생을 선택해주세요.'); return; }
+  previewingStudent = true;
+  currentStudent = uid;
+  document.body.classList.add('previewing');
+  $('preview-banner').style.display = 'block';
+  $('preview-banner-text').textContent = `"${s.name}" 학생 화면 미리보기 중 (관리자 세션 유지됨)`;
+  switchSite('student');
+}
+function exitStudentPreview(){
+  previewingStudent = false;
+  currentStudent = null;
+  document.body.classList.remove('previewing');
+  $('preview-banner').style.display = 'none';
+  switchSite('admin');
+  setAdminTab('a-preview');
 }
 function renderTasks(){
   const hwt = $('hw-table'), ext = $('exam-table'); if(!hwt||!ext) return;
