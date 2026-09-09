@@ -600,11 +600,17 @@
             <!-- 학생 화면 보기 -->
       <div class="tabpanel" id="tab-a-preview">
         <div class="page-head"><div><h1>학생 화면 보기</h1><p>선택한 학생의 화면을 그대로 확인합니다. 관리자 세션은 유지됩니다.</p></div></div>
-        <div class="card">
+               <div class="card">
           <div class="form-grid">
             <div><label>학생 선택</label><select id="preview-student-select"></select></div>
           </div>
           <button class="btn" style="width:100%;" onclick="startStudentPreview()">이 학생 화면으로 보기</button>
+        </div>
+
+        <div class="card">
+          <h3>관리자 전체 보기</h3>
+          <p class="note">배정 여부와 상관없이 등록한 모든 과제·시험·일정이 학생 화면 형태로 표시됩니다. 문항 검수·전체 현황 확인용입니다.</p>
+          <button class="btn secondary" style="width:100%;" onclick="startAdminPreview()">관리자 시점으로 학생 화면 보기</button>
         </div>
       </div>
       <!-- 운영 안내 -->
@@ -1002,7 +1008,8 @@ let scores = { hw:{}, exam:{} };  // scores[kind][tid][uid] = {score, status}
 let currentStudent = null;
 let currentUserIsAdmin = false;
 let currentDetailUid = null;
-  let previewingStudent = false;
+let previewingStudent = false;
+let adminViewAll = false; // 관리자가 전체보기 모드로 학생 화면을 볼 때 true
 let editStudentUid = null;
 let editingQid = null;
 let draftQids = {hw:[], exam:[]};
@@ -1698,7 +1705,8 @@ function renderAttendance(){
 }
 function renderStudentSchedule(){
   const tb=$('t-schedule-table'); if(!tb || !currentStudent) return;
-  const visible = schedules.filter(s => !Array.isArray(s.assignedTo) || s.assignedTo.includes(currentStudent));
+    const visible = adminViewAll ? schedules.slice()
+    : schedules.filter(s => !Array.isArray(s.assignedTo) || s.assignedTo.includes(currentStudent));
   tb.innerHTML = visible.map(s=>{
     const f=fmtDate(s.date), rec=(attendance[s.sid]||{})[currentStudent];
     const st = rec? rec.status : null;
@@ -2303,7 +2311,17 @@ function pdfCell(t){
     : '<option value="">승인된 학생이 없습니다</option>';
   if(prev && sel.querySelector('option[value="'+prev+'"]')) sel.value = prev;
 }
+  function startAdminPreview(){
+  previewingStudent = true;
+  adminViewAll = true;
+  currentStudent = '__admin_view__';   // 실제 학생 uid가 아닌 가상 값
+  document.body.classList.add('previewing');
+  $('preview-banner').style.display = 'block';
+  $('preview-banner-text').textContent = '관리자 전체 보기 (배정 무관 · 모든 과제·시험·일정 표시)';
+  switchSite('student');
+}
 function startStudentPreview(){
+    adminViewAll = false;
   const uid = $('preview-student-select').value;
   const s = students.find(x=>x.uid===uid);
   if(!s){ alert('학생을 선택해주세요.'); return; }
@@ -2316,6 +2334,7 @@ function startStudentPreview(){
 }
 function exitStudentPreview(){
   previewingStudent = false;
+    adminViewAll = false;
   currentStudent = null;
   document.body.classList.remove('previewing');
   $('preview-banner').style.display = 'none';
@@ -2381,10 +2400,10 @@ function showAssignedStudents(kind, tid){
    ========================================================= */
 function renderStudentSite(){
   if(!currentStudent) return;
-  const s = students.find(x=>x.uid===currentStudent);
+   const s = adminViewAll ? {name:'관리자', school:'전체 보기', grade:''} : students.find(x=>x.uid===currentStudent);
   if(!s) return;
-   $('stu-name').textContent = s.name+' 학생';
-  $('stu-sub').textContent = (s.school||'')+' · '+(s.grade||'');
+  $('stu-name').textContent = adminViewAll ? '관리자 (전체보기)' : s.name+' 학생';
+  $('stu-sub').textContent = adminViewAll ? '모든 항목 표시 중' : (s.school||'')+' · '+(s.grade||'');
   renderStudentDashboard(s);
   renderStudentSchedule();
   renderStudentTasks('hw'); renderStudentTasks('exam');
@@ -2490,6 +2509,7 @@ function renderStudentDashboard(s){
   renderTrendSvg('stu-trend-chart', arr);
 }
 function isAssignedToMe(t){
+  if(adminViewAll) return true;   // 관리자 전체보기: 모든 항목 통과
   return !Array.isArray(t.assignedTo) || t.assignedTo.includes(currentStudent);
 }
 function renderStudentTasks(kind){
