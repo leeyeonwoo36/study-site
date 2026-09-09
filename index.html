@@ -2301,6 +2301,7 @@ function initAiApiKeyStorage(){
     localStorage.setItem('ai-gemini-apikey', input.value.trim());
   });
 }
+  initAiApiKeyStorage();
 async function generateAiQuestions(){
   const apiKey = $('ai-apikey').value.trim();
   const prompt = $('ai-prompt').value.trim();
