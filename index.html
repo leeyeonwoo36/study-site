@@ -634,9 +634,29 @@
     </div>
     <div class="main">
 
-      <div class="tabpanel active" id="tab-t-main">
-        <div class="page-head"><div><h1>메인</h1><p>수업 일정과 나의 출석 현황</p></div></div>
+           <div class="tabpanel active" id="tab-t-main">
+        <div class="page-head"><div><h1 id="stu-greeting">메인</h1><p>오늘 할 일과 나의 학습 현황을 한눈에 확인하세요</p></div></div>
+
+        <div id="stu-deadline-card" class="card" style="border-left:4px solid var(--accent);"></div>
+
+        <div class="form-grid">
+          <div class="card">
+            <h3>내 출석 현황</h3>
+            <div id="stu-attendance-summary"></div>
+          </div>
+          <div class="card">
+            <h3>과제·시험 진행률</h3>
+            <div id="stu-progress-summary"></div>
+          </div>
+        </div>
+
         <div class="card">
+          <h3>내 시험 성적 추이</h3>
+          <div id="stu-trend-chart"></div>
+        </div>
+
+        <div class="card">
+          <h3>수업 일정 · 출석</h3>
           <table class="schedule-table">
             <tr><th>날짜</th><th>요일</th><th>시간</th><th>교실</th><th>예상 진도</th><th>출석</th><th>사유</th></tr>
             <tbody id="t-schedule-table"></tbody></table>
@@ -2349,11 +2369,111 @@ function renderStudentSite(){
   if(!currentStudent) return;
   const s = students.find(x=>x.uid===currentStudent);
   if(!s) return;
-  $('stu-name').textContent = s.name+' 학생';
+   $('stu-name').textContent = s.name+' 학생';
   $('stu-sub').textContent = (s.school||'')+' · '+(s.grade||'');
+  renderStudentDashboard(s);
   renderStudentSchedule();
   renderStudentTasks('hw'); renderStudentTasks('exam');
   fillMyInfo();
+}
+  /* D-day 계산: 오늘 기준 남은 일수. 문자열(YYYY-MM-DD 또는 datetime-local) 대응 */
+function dday(dateStr){
+  if(!dateStr) return null;
+  const target = new Date(dateStr);
+  if(isNaN(target)) return null;
+  const today = new Date(); today.setHours(0,0,0,0);
+  const t = new Date(target); t.setHours(0,0,0,0);
+  return Math.round((t - today) / 86400000);
+}
+function ddayBadge(dueStr){
+  const d = dday(dueStr);
+  if(d===null) return '';
+  if(d < 0)  return '<span class="badge muted">마감</span>';
+  if(d === 0) return '<span class="badge warn">오늘 마감</span>';
+  if(d <= 3) return `<span class="badge warn">D-${d}</span>`;
+  return `<span class="badge muted">D-${d}</span>`;
+}
+
+function renderStudentDashboard(s){
+  if(!currentStudent) return;
+
+  // 인사
+  const g = $('stu-greeting');
+  if(g) g.textContent = `안녕하세요, ${s.name}님`;
+
+  // 내게 배정된 과제·시험만
+  const myHw   = tasks.hw.filter(t=>!Array.isArray(t.assignedTo)||t.assignedTo.includes(currentStudent));
+  const myExam = tasks.exam.filter(t=>!Array.isArray(t.assignedTo)||t.assignedTo.includes(currentStudent));
+
+  /* ── 마감 임박 카드 ── */
+  const box = $('stu-deadline-card');
+  if(box){
+    const pending = [...myHw.map(t=>({t,kind:'hw'})), ...myExam.map(t=>({t,kind:'exam'}))]
+      .filter(x=> !submissions[x.t.tid+'|'+currentStudent])   // 미제출만
+      .map(x=> ({...x, d: dday(x.t.due)}))
+      .filter(x=> x.d===null || x.d>=0)                        // 지난 건 제외
+      .sort((a,b)=> (a.d===null?9999:a.d) - (b.d===null?9999:b.d));
+    if(pending.length){
+      const x = pending[0];
+      box.innerHTML = `<div style="font-size:12.5px; color:var(--muted); margin-bottom:4px;">가장 급한 할 일</div>
+        <div style="font-size:16px; font-weight:900;">${esc(x.t.title)} ${ddayBadge(x.t.due)}</div>
+        <div style="font-size:12.5px; color:var(--ink-soft); margin-top:4px;">
+          ${x.kind==='hw'?'과제':'시험'} · 마감 ${x.t.due? fmtDue(x.t.due):'미정'}
+          ${pending.length>1?` · 그 외 미제출 ${pending.length-1}건`:''}
+        </div>`;
+    } else {
+      box.innerHTML = `<div style="font-weight:700; color:var(--good);">제출하지 않은 과제·시험이 없습니다. 잘하고 있어요!</div>`;
+    }
+  }
+
+  /* ── 출석 요약 ── */
+  const attBox = $('stu-attendance-summary');
+  if(attBox){
+    const mySch = schedules.filter(sc=>!Array.isArray(sc.assignedTo)||sc.assignedTo.includes(currentStudent));
+    let p=0,l=0,a=0,n=0;
+    mySch.forEach(sc=>{
+      const st=(attendance[sc.sid]||{})[currentStudent];
+      const v = st?st.status:null;
+      if(v==='p')p++; else if(v==='l')l++; else if(v==='a')a++; else n++;
+    });
+    const checked = p+l+a;
+    const rate = checked? Math.round(p/checked*100) : null;
+    attBox.innerHTML = `
+      <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:8px;">
+        <span class="badge good">출석 ${p}</span>
+        <span class="badge part">지각 ${l}</span>
+        <span class="badge warn">결석 ${a}</span>
+        <span class="badge muted">미체크 ${n}</span>
+      </div>
+      <div style="font-size:13px; color:var(--ink-soft);">
+        ${rate===null ? '아직 체크된 출석이 없습니다.' : `출석률 <b style="color:var(--brand);">${rate}%</b> (${p}/${checked})`}
+      </div>`;
+  }
+
+  /* ── 진행률 요약 ── */
+  const progBox = $('stu-progress-summary');
+  if(progBox){
+    const all = [...myHw, ...myExam];
+    const done = all.filter(t=>submissions[t.tid+'|'+currentStudent]).length;
+    const total = all.length;
+    const pct = total? Math.round(done/total*100) : 0;
+    progBox.innerHTML = `
+      <div style="font-size:13px; color:var(--ink-soft); margin-bottom:8px;">
+        전체 ${total}개 중 <b style="color:var(--brand);">${done}개</b> 제출 완료
+      </div>
+      <div style="background:var(--paper-line); border-radius:20px; height:14px; overflow:hidden;">
+        <div style="background:var(--brand); height:100%; width:${pct}%; transition:width .3s;"></div>
+      </div>
+      <div style="text-align:right; font-size:12px; color:var(--muted); margin-top:4px;">${pct}%</div>`;
+  }
+
+  /* ── 성적 추이 (관리자용 함수 재사용) ── */
+  const arr = myExam.map(t=>{
+    const rec = (scores.exam[t.tid]||{})[currentStudent];
+    const pctScore = rec ? scoreToPercent(rec.score) : null;
+    return pctScore===null ? null : {label:t.title, score:pctScore};
+  }).filter(Boolean);
+  renderTrendSvg('stu-trend-chart', arr);
 }
 function isAssignedToMe(t){
   return !Array.isArray(t.assignedTo) || t.assignedTo.includes(currentStudent);
@@ -2376,7 +2496,8 @@ function renderStudentTasks(kind){
       btn = `<button class="btn small secondary" onclick="openReview('${kind}','${t.tid}','${currentStudent}',false)">결과·해설 보기</button>`;
     }
     const doneCell = kind==='hw' ? `<td>${statusBadge(rec.status||'미완료')}</td>` : '';
-    return `<tr><td>${esc(t.title)}</td><td>${fmtPeriod(t)}</td><td>${pdfCell(t)}</td>${doneCell}
+        const dbadge = sub ? '' : ' ' + ddayBadge(t.due);
+    return `<tr><td>${esc(t.title)}${dbadge}</td><td>${fmtPeriod(t)}</td><td>${pdfCell(t)}</td>${doneCell}
       <td>${status}</td><td>${btn}</td></tr>`;
   }).join('') || `<tr><td colspan="${kind==='hw'?6:5}" class="empty-hint">등록된 항목이 없습니다.</td></tr>`;
 }
