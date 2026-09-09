@@ -2380,7 +2380,7 @@ ${refFile ? '- 첨부된 참고 자료의 내용을 최대한 반영해서 문�
     }
 
     // ✅ [수정 완료] URL 변수명(apiKey) 수정, fetch 함수 복구, gemini-3.6-flash 적용
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${apiKey}`;
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
      const res = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
