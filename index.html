@@ -2297,8 +2297,15 @@ async function generateAiQuestions(){
   const prompt = $('ai-prompt').value.trim();
   const count = parseInt($('ai-count').value, 10) || 5;
   const type = $('ai-type').value;
-  const difficulty = $('ai-difficulty').value;
+const difficultyElement = document.getElementById('difficulty'); // 사용 중인 HTML id값 확인 필요
+const difficulty = difficultyElement ? difficultyElement.value : 'medium';
   const refFile = $('ai-ref-file').files[0];
+  let difficultyInstruction = '보통 난이도로 문제를 생성해줘.';
+  if (difficulty === 'easy') {
+    difficultyInstruction = '쉬운 난이도로 초보자도 풀 수 있게 만들어줘.';
+  } else if (difficulty === 'hard') {
+    difficultyInstruction = '어려운 난이도로 깊이 있는 응용 문제를 만들어줘.';
+  }
   if(!apiKey){ alert('Gemini API 키를 입력하세요.'); return; }
   if(!prompt && !refFile){ alert('주제/지시사항을 입력하거나 참고 자료를 첨부하세요.'); return; }
 
