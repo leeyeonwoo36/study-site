@@ -594,7 +594,10 @@
     </select>
   </div>
   <div><label>참고 자료 업로드 (선택, PDF/이미지/텍스트)</label>
-    <input type="file" id="ai-ref-file" accept=".pdf,.txt,image/*">
+    <div style="display:flex; gap:6px;">
+  <input type="file" id="ai-ref-file" accept=".pdf,.txt,image/*" style="flex:1;">
+  <button type="button" class="btn secondary small" style="white-space:nowrap;" onclick="clearAiRefFile()">삭제</button>
+</div>
   </div>
 </div>
         <textarea id="ai-prompt" placeholder="예: 국제기구(UN, WTO, IMF)의 설립 목적과 주요 기능을 다루는 문제. 고등학생 국제정치 수준."></textarea>
@@ -2292,6 +2295,10 @@ function fileToBase64(file){
   });
 }
 /* AI 문제 생성 - API 키 저장/자동입력 */
+  function clearAiRefFile(){
+  const input = $('ai-ref-file');
+  if(input) input.value = '';
+}
 function initAiApiKeyStorage(){
   const input = $('ai-apikey');
   if(!input) return;
