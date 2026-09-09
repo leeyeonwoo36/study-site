@@ -364,12 +364,10 @@
       <!-- 학생 관리 -->
       <div class="tabpanel" id="tab-a-students">
         <div class="page-head"><div><h1>학생 관리</h1><p>학생 가입 승인·수정·삭제, 인적사항을 관리합니다. 이름을 클릭하면 상세정보·성적추이·메모를 볼 수 있습니다.</p></div></div>
-        <div class="card">
-          <h3>가입 승인 대기</h3>
-          <table>
-            <tr><th>이름</th><th>학년</th><th>학교</th><th>전화번호</th><th>이메일</th><th></th></tr>
-            <tbody id="pending-table"></tbody>
-          </table>
+                <div class="card">
+          <button class="btn secondary" onclick="openModal('pending-modal')">
+            가입 승인 대기 <span id="pending-count-badge" class="badge warn" style="margin-left:6px;">0</span>
+          </button>
         </div>
         <div class="card">
           <h3>학생 목록</h3>
@@ -896,6 +894,17 @@
     <div class="memo-board" id="memo-board"></div>
   </div>
 </div>
+  <!-- 가입 승인 대기 -->
+<div class="modal-bg" id="pending-modal">
+  <div class="modal wide">
+    <button class="modal-close" onclick="closeModal('pending-modal')">✕</button>
+    <h3>가입 승인 대기</h3>
+    <table>
+      <tr><th>이름</th><th>학년</th><th>학교</th><th>전화번호</th><th>이메일</th><th></th></tr>
+      <tbody id="pending-table"></tbody>
+    </table>
+  </div>
+</div>
 <!-- 대상 학생 보기 -->
 <div class="modal-bg" id="view-assignees-modal">
   <div class="modal">
@@ -1280,6 +1289,11 @@ function renderStudents(){
   if(!pt || !st) return;
   const approved = students.filter(s=>s.approved);
   const pending  = students.filter(s=>!s.approved);
+    const badge = $('pending-count-badge');
+  if(badge){
+    badge.textContent = pending.length;
+    badge.className = pending.length ? 'badge warn' : 'badge muted';
+  }
 
   pt.innerHTML = pending.map(s=>`
     <tr>
