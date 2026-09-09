@@ -1949,9 +1949,8 @@ function renderBank(){
 function updateBankSelectAllState(arr){
   const sa = $('bank-select-all'); if(!sa) return;
   const allSelected = arr.length>0 && arr.every(q=>pdfSelectedQids.includes(q.qid));
-  const someSelected = arr.some(q=>pdfSelectedQids.includes(q.qid));
   sa.checked = allSelected;
-  sa.indeterminate = !allSelected && someSelected;
+  sa.indeterminate = false; // 하나라도 해제되면 그냥 빈 체크박스로
 }
  function togglePdfPick(qid, checked){
   if(checked){ if(!pdfSelectedQids.includes(qid)) pdfSelectedQids.push(qid); }
