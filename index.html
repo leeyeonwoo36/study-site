@@ -2291,7 +2291,16 @@ function fileToBase64(file){
     r.readAsDataURL(file);
   });
 }
-
+/* AI 문제 생성 - API 키 저장/자동입력 */
+function initAiApiKeyStorage(){
+  const input = $('ai-apikey');
+  if(!input) return;
+  const saved = localStorage.getItem('ai-gemini-apikey');
+  if(saved) input.value = saved;
+  input.addEventListener('input', ()=>{
+    localStorage.setItem('ai-gemini-apikey', input.value.trim());
+  });
+}
 async function generateAiQuestions(){
   const apiKey = $('ai-apikey').value.trim();
   const prompt = $('ai-prompt').value.trim();
