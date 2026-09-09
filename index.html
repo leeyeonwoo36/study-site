@@ -553,7 +553,10 @@
             <div><label>검색어</label><input type="text" id="bank-search" placeholder="물음·보기·선지 검색" oninput="renderBank()"></div>
           </div>
           <div id="bank-count" class="note" style="margin-bottom:10px;"></div>
-          <div style="display:flex; align-items:center; gap:8px; margin-bottom:10px; flex-wrap:wrap;">
+  <div style="display:flex; align-items:center; gap:8px; margin-bottom:10px; flex-wrap:wrap;">
+  <label style="display:flex; align-items:center; gap:6px; font-size:12.5px; font-weight:600; color:var(--ink-soft);">
+    <input type="checkbox" id="bank-select-all" onchange="toggleBankSelectAll()"> 전체 선택 (현재 목록 기준)
+  </label>
   <span id="pdf-select-bar" class="badge muted">선택한 문제: 없음</span>
   <button class="btn small secondary" onclick="clearPdfSelection()">선택 초기화</button>
   <button class="btn small" onclick="openQuestionSheet(false)">문제지 만들기 (백지)</button>
@@ -1908,6 +1911,7 @@ function filterQuestions(setVal, typeVal, kw){
 function renderBank(){
   const list = $('bank-list'); if(!list) return;
   const arr = filterQuestions($('bank-set-filter').value, $('bank-type-filter').value, $('bank-search').value);
+  updateBankSelectAllState(arr);                                          // ← 추가
   $('bank-count').textContent = `전체 ${questions.length}문제 중 ${arr.length}문제 표시 중 · 과제/시험 등록 화면의 "문제 골라 담기"에서 낱개 선택이 가능합니다.`;
     list.innerHTML = arr.length ? arr.map(q=>`
     <div class="bank-item">
@@ -1931,10 +1935,29 @@ function renderBank(){
       </div>
     </div>`).join('') : '<p class="empty-hint">조건에 맞는 문제가 없습니다.</p>';
 }
-  function togglePdfPick(qid, checked){
+  function toggleBankSelectAll(){
+  const arr = filterQuestions($('bank-set-filter').value, $('bank-type-filter').value, $('bank-search').value);
+  const checked = $('bank-select-all').checked;
+  if(checked){
+    arr.forEach(q=>{ if(!pdfSelectedQids.includes(q.qid)) pdfSelectedQids.push(q.qid); });
+  } else {
+    const ids = arr.map(q=>q.qid);
+    pdfSelectedQids = pdfSelectedQids.filter(x=>!ids.includes(x));
+  }
+  renderBank();
+}
+function updateBankSelectAllState(arr){
+  const sa = $('bank-select-all'); if(!sa) return;
+  const allSelected = arr.length>0 && arr.every(q=>pdfSelectedQids.includes(q.qid));
+  const someSelected = arr.some(q=>pdfSelectedQids.includes(q.qid));
+  sa.checked = allSelected;
+  sa.indeterminate = !allSelected && someSelected;
+}
+ function togglePdfPick(qid, checked){
   if(checked){ if(!pdfSelectedQids.includes(qid)) pdfSelectedQids.push(qid); }
   else pdfSelectedQids = pdfSelectedQids.filter(x=>x!==qid);
   renderPdfBar();
+  updateBankSelectAllState(filterQuestions($('bank-set-filter').value, $('bank-type-filter').value, $('bank-search').value)); // ← 추가
 }
 function clearPdfSelection(){
   pdfSelectedQids = [];
