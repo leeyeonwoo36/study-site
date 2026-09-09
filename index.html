@@ -2539,10 +2539,16 @@ function renderStudentTasks(kind){
   tb.innerHTML = tasks[kind].filter(isAssignedToMe).map(t=>{
     const sub = submissions[t.tid+'|'+currentStudent];
     const rec = (scores[kind][t.tid]||{})[currentStudent] || {};
-    let status, btn;
+        let status, btn;
+    const notStarted = t.startAt && new Date(t.startAt) > new Date();
      if(!sub){
-      status = '<span class="badge warn">미제출</span>';
-      btn = `<button class="btn small" onclick="openStudentSolve('${kind}','${t.tid}')">풀기</button>`;
+      if(notStarted){
+        status = '<span class="badge muted">시작 전</span>';
+        btn = `<button class="btn small ghost" disabled title="${esc(fmtDue(t.startAt))}부터 풀 수 있습니다">풀기</button>`;
+      } else {
+        status = '<span class="badge warn">미제출</span>';
+        btn = `<button class="btn small" onclick="openStudentSolve('${kind}','${t.tid}')">풀기</button>`;
+      }
     } else if(sub.mode==='photo'){
       status = rec.score ? `<span class="badge good">채점 완료 (${esc(rec.score)})</span>`
                          : '<span class="badge part">사진 제출 · 채점 대기</span>';
@@ -2605,6 +2611,10 @@ function openStudentSolve(kind,tid){
   const t = tasks[kind].find(x=>x.tid===tid);
   if(!t){ alert('해당 과제/시험을 찾을 수 없습니다. 목록이 갱신되었을 수 있어요. 다시 시도해주세요.'); return; }
   if(submissions[tid+'|'+currentStudent]){ openReview(kind,tid,currentStudent,false); return; }
+  if(t.startAt && new Date(t.startAt) > new Date()){
+    alert(fmtDue(t.startAt) + '부터 풀 수 있습니다.');
+    return;
+  }
   currentSolve = {kind,tid};
   $('solve-title').textContent = t.title + ' · 온라인 OMR 풀이';
   const qs = (t.qids||[]).map(q=>questions.find(x=>x.qid===q)).filter(Boolean);
