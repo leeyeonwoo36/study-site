@@ -1908,11 +1908,16 @@ async function onQDrop(e){
 }
 function renderQSetList(){
   const wrap=$('qset-list'); if(!wrap) return;
+  const openSets = new Set();
+  wrap.querySelectorAll('.qset-block.open').forEach(el=>{
+    const idx = Number(el.id.replace('qset-block-',''));
+    if(questionSets[idx]) openSets.add(questionSets[idx]);
+  });
   wrap.innerHTML = questionSets.length ? questionSets.map((set,si)=>{
         const qs = questions.filter(q=>q.set===set).sort((a,b)=>(a.order??0)-(b.order??0));
         const items = qs.length ? qs.map((q,n)=>qsetQuestionHtml(q,n,qs.length)).join('')
       : '<p class="note">이 세트에 등록된 문제가 없습니다.</p>';
-    return `<div class="qset-block" id="qset-block-${si}">
+        return `<div class="qset-block${openSets.has(set)?' open':''}" id="qset-block-${si}">
       <div class="qset-head" onclick="document.getElementById('qset-block-${si}').classList.toggle('open')">
         <span>${esc(set)}<span class="qset-count">${qs.length}문제 · 클릭하여 펼치기</span></span>
         <span style="display:flex; gap:6px;">
