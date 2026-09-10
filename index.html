@@ -2960,7 +2960,7 @@ function renderStudentTasks(kind){
     const sub = submissions[t.tid+'|'+currentStudent];
     const rec = (scores[kind][t.tid]||{})[currentStudent] || {};
         let status, btn;
-    const notStarted = t.startAt && new Date(t.startAt) > new Date();
+        const notStarted = !adminViewAll && t.startAt && new Date(t.startAt) > new Date();
      if(!sub){
       if(notStarted){
         status = '<span class="badge muted">시작 전</span>';
