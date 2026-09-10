@@ -2343,7 +2343,45 @@ function fileToBase64(file){
 
 function removeExtractedQuestion(i){
   extractedQuestionsCache.splice(i,1);
-  let extractedQuestionsCache = [];
+  renderExtractedQuestionsPreview();
+}
+
+async function saveExtractedQuestion(i){
+  const q = extractedQuestionsCache[i];
+  const data = {
+    set: $('q-extract-set').value,
+    type: q.type, body: q.body, hasPassage: q.hasPassage,
+    passage: q.passage || '', passageImageUrl: '',
+    choices: q.type==='mc' ? q.choices : [],
+    answer: String(q.answer), explain: q.explain || ''
+  };
+  const { db, doc, collection, setDoc } = window.fb;
+  try {
+    await setDoc(doc(collection(db,'questions')), data);
+    extractedQuestionsCache.splice(i,1);
+    renderExtractedQuestionsPreview();
+  } catch(e){ alert('저장 실패: '+e.message); }
+}
+
+async function saveAllExtractedQuestions(){
+  if(!confirm(extractedQuestionsCache.length+'개 문제를 모두 저장할까요?')) return;
+  const { db, doc, collection, setDoc } = window.fb;
+  const set = $('q-extract-set').value;
+  for(const q of [...extractedQuestionsCache]){
+    const data = {
+      set, type: q.type, body: q.body, hasPassage: q.hasPassage,
+      passage: q.passage || '', passageImageUrl: '',
+      choices: q.type==='mc' ? q.choices : [],
+      answer: String(q.answer), explain: q.explain || ''
+    };
+    try { await setDoc(doc(collection(db,'questions')), data); }
+    catch(e){ alert('저장 실패: '+e.message); return; }
+  }
+  extractedQuestionsCache = [];
+  renderExtractedQuestionsPreview();
+}
+
+let extractedQuestionsCache = [];
 
 async function extractQuestionsFromPdf(){
   const apiKey = $('ai-apikey').value.trim();
