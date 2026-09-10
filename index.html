@@ -1903,7 +1903,10 @@ async function saveQuestion(){
     try { passageImageUrl = await uploadToCloudinary(imgFile); }
     catch(e){ alert('이미지 업로드 실패: '+e.message); return; }
   }
+    const sameSetCount = questions.filter(x=>x.set===$('q-set').value).length;
+  const existingOrder = editId ? questions.find(x=>x.qid===editId)?.order : undefined;
   const data={set:$('q-set').value, type, body, hasPassage, passage, passageImageUrl, choices, answer,
+              order: existingOrder ?? sameSetCount,
               explain:$('q-explain').value.trim()};
   const editId = editingQid;
   cancelQuestionEdit();
