@@ -1792,11 +1792,17 @@ function renderStudentSchedule(){
    ========================================================= */
 function renderQSetOptions(){
   const opts = questionSets.map(s=>`<option value="${esc(s)}">${esc(s)}</option>`).join('');
-  ['q-set','hw-qset','ex-qset', 'q-extract-set'].forEach(id=>{
+    ['q-set','hw-qset','ex-qset'].forEach(id=>{
     const el=$(id); if(!el) return;
     const prev=el.value; el.innerHTML=opts;
     if(questionSets.includes(prev)) el.value=prev;
   });
+  const extractEl = $('q-extract-set');
+  if(extractEl){
+    const prev = extractEl.value;
+    extractEl.innerHTML = '<option value="">미분류</option>' + opts;
+    if(prev && extractEl.querySelector('option[value="'+prev+'"]')) extractEl.value=prev;
+  }
   const all = '<option value="">전체</option>' + opts + '<option value="__none__">미분류</option>';
   ['bank-set-filter','picker-set'].forEach(id=>{
     const el=$(id); if(!el) return;
