@@ -1702,14 +1702,24 @@ function saveScheduleEdit(){
   const { db, doc, updateDoc } = window.fb;
   updateDoc(doc(db,'schedules', editScheduleSid), data).catch(e=>alert('수정 실패: '+e.message));
 }
+  function findNearestSessionSid(){
+  const today = new Date(); today.setHours(0,0,0,0);
+  let best = null, bestDiff = Infinity;
+  schedules.forEach(s=>{
+    const d = new Date(s.date+'T00:00:00');
+    if(isNaN(d)) return;
+    const diffDays = Math.round((d - today)/86400000);
+    if(Math.abs(diffDays) <= 1 && Math.abs(diffDays) < bestDiff){
+      bestDiff = Math.abs(diffDays);
+      best = s.sid;
+    }
+  });
+  return best;
+}
 function renderSchedules(){
   const tb = $('schedule-table'); if(!tb) return;
   tb.innerHTML = schedules.map(s=>{
-    const f=fmtDate(s.date);
-        return `<tr><td><b>${f.label}</b></td><td>${f.day}</td><td>${esc(s.time)}</td><td>${esc(s.room)}</td>
-      <td>${esc(s.topic)||'-'}</td>
-      <td><button class="btn small secondary" onclick="openScheduleEdit('${s.sid}')">수정</button></td>
-      <td><button class="btn small danger" onclick="deleteSchedule('${s.sid}')">삭제</button></td></tr>`;
+    ...
   }).join('') || '<tr><td colspan="6" class="empty-hint">등록된 일정이 없습니다.</td></tr>';
 
   const sel=$('att-session'), prev=sel.value;
@@ -1717,7 +1727,12 @@ function renderSchedules(){
     const f=fmtDate(s.date);
     return `<option value="${s.sid}">${f.label} (${f.day}) ${esc(s.time)} · ${esc(s.room)}</option>`;
   }).join('');
-  if(prev && sel.querySelector('option[value="'+prev+'"]')) sel.value=prev;
+  if(prev && sel.querySelector('option[value="'+prev+'"]')){
+    sel.value=prev;
+  } else {                                                    // ← 새로 추가
+    const nearest = findNearestSessionSid();                  // ← 새로 추가
+    if(nearest && sel.querySelector('option[value="'+nearest+'"]')) sel.value = nearest;  // ← 새로 추가
+  }                                                            // ← 새로 추가
   renderAttendance(); renderStudentSchedule();
 }
 function setAttendance(sid, u, status){
