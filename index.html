@@ -1792,7 +1792,7 @@ function renderStudentSchedule(){
    ========================================================= */
 function renderQSetOptions(){
   const opts = questionSets.map(s=>`<option value="${esc(s)}">${esc(s)}</option>`).join('');
-  ['q-set','hw-qset','ex-qset'].forEach(id=>{
+  ['q-set','hw-qset','ex-qset', 'q-extract-set'].forEach(id=>{
     const el=$(id); if(!el) return;
     const prev=el.value; el.innerHTML=opts;
     if(questionSets.includes(prev)) el.value=prev;
@@ -2311,6 +2311,124 @@ function fileToBase64(file){
     r.onerror = () => rej(new Error('파일 읽기 실패'));
     r.readAsDataURL(file);
   });
+}
+  function renderExtractedQuestionsPreview(){
+  const wrap = $('q-extract-preview');
+  if(!extractedQuestionsCache.length){
+    wrap.innerHTML = '<p class="note">추출된 문제가 없습니다.</p>';
+    return;
+  }
+  const rows = extractedQuestionsCache.map((q,i)=>{
+    const choicesHtml = q.type==='mc'
+      ? '<ol style="margin:4px 0 0 18px; padding:0;">' + q.choices.map((c,ci)=>`<li${String(ci+1)===String(q.answer)?' style="font-weight:bold;color:var(--brand,#2a6);"':''}>${esc(c)}</li>`).join('') + '</ol>'
+      : `<p style="margin:4px 0 0;"><b>정답:</b> ${esc(q.answer)}</p>`;
+    return `
+      <div class="card" style="margin-bottom:10px; background:rgba(0,0,0,0.02);">
+        <div style="display:flex; justify-content:space-between; align-items:start; gap:8px;">
+          <div style="flex:1;">
+            <p style="margin:0;"><b>[${i+1}] (${q.type==='mc'?'객관식':'단답형'})</b> ${esc(q.body)}</p>
+            ${q.hasPassage ? `<p class="note" style="white-space:pre-wrap; margin:6px 0;">&lt;보기&gt; ${esc(q.passage)}</p>` : ''}
+            ${choicesHtml}
+            <p class="note" style="margin:6px 0 0;"><b>해설:</b> ${esc(q.explain)}</p>
+          </div>
+          <div style="display:flex; flex-direction:column; gap:4px;">
+            <button class="btn secondary small" onclick="saveExtractedQuestion(${i})">저장</button>
+            <button class="btn secondary small" onclick="removeExtractedQuestion(${i})">삭제</button>
+          </div>
+        </div>
+      </div>`;
+  }).join('');
+  wrap.innerHTML = rows + `<button class="btn" onclick="saveAllExtractedQuestions()">전체 저장 (${extractedQuestionsCache.length}개)</button>`;
+}
+
+function removeExtractedQuestion(i){
+  extractedQuestionsCache.splice(i,1);
+  let extractedQuestionsCache = [];
+
+async function extractQuestionsFromPdf(){
+  const apiKey = $('ai-apikey').value.trim();
+  const examFile = $('q-extract-exam-file').files[0];
+  const answerFile = $('q-extract-answer-file').files[0];
+
+  if(!apiKey){ alert('Gemini API 키를 입력하세요 (AI 문제 생성 탭에서 입력한 키를 그대로 사용합니다).'); return; }
+  if(!examFile){ alert('문제지 PDF를 첨부하세요.'); return; }
+  if(!answerFile){ alert('정답지 PDF를 첨부하세요.'); return; }
+
+  const btn = $('q-extract-btn');
+  btn.disabled = true;
+  btn.textContent = '추출 중...';
+  $('q-extract-preview').innerHTML = '';
+
+  const schema = {
+    type: "object",
+    properties: {
+      questions: {
+        type: "array",
+        items: {
+          type: "object",
+          properties: {
+            type: { type: "string", enum: ["mc","short"] },
+            body: { type: "string" },
+            hasPassage: { type: "boolean" },
+            passage: { type: "string" },
+            choices: { type: "array", items: { type: "string" }, minItems: 5, maxItems: 5 },
+            answer: { type: "string" },
+            explain: { type: "string" }
+          },
+          required: ["type","body","hasPassage","passage","answer","explain"]
+        }
+      }
+    },
+    required: ["questions"]
+  };
+
+  const sysPrompt = `너는 한국 고등학교 국제정치 과목 문제를 정리하는 편집자다.
+첨부된 두 개의 PDF 중 첫 번째는 문제지, 두 번째는 정답지(및 해설)다.
+문제지에 있는 문제를 하나도 빠짐없이 순서대로 추출하고, 정답지를 참고하여 각 문제의 정답과 해설을 매칭하라.
+- 객관식(mc)은 choices 배열에 선지 5개, answer는 정답 번호("1"~"5") 문자열로.
+- 단답형(short)은 choices는 빈 배열로 두고, answer는 정답 텍스트.
+- <보기> 지문이 있는 문제는 hasPassage를 true로 하고 passage에 그 내용을 그대로 채워라. 없으면 false와 빈 문자열("").
+- explain에는 정답지의 해설을 최대한 반영해 2~4문장으로 작성. 정답지에 해설이 없으면 문제 내용을 근거로 간단히 작성.
+- 반드시 지정된 JSON 스키마 형식으로만 응답하라. 다른 텍스트는 포함하지 마라.`;
+
+  try {
+    const examBase64 = await fileToBase64(examFile);
+    const answerBase64 = await fileToBase64(answerFile);
+    const parts = [
+      { text: sysPrompt },
+      { inline_data: { mime_type: examFile.type || 'application/pdf', data: examBase64 } },
+      { inline_data: { mime_type: answerFile.type || 'application/pdf', data: answerBase64 } }
+    ];
+
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${apiKey}`;
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{ role: 'user', parts }],
+        generationConfig: {
+          responseMimeType: "application/json",
+          responseSchema: schema
+        }
+      })
+    });
+
+    if(!res.ok){
+      const err = await res.text();
+      throw new Error('API 오류 ('+res.status+'): '+err.slice(0,200));
+    }
+
+    const json = await res.json();
+    const text = json.candidates[0].content.parts[0].text;
+    const parsed = JSON.parse(text);
+    extractedQuestionsCache = parsed.questions || [];
+    renderExtractedQuestionsPreview();
+  } catch(e){
+    alert('추출 실패: '+e.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '추출하기';
+  }
 }
 /* AI 문제 생성 - API 키 저장/자동입력 */
   function clearAiRefFile(){
