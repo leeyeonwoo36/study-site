@@ -1933,7 +1933,7 @@ function renderVideos(){
   }).join('') || '<tr><td colspan="4" class="empty-hint">등록된 영상이 없습니다.</td></tr>';
 }
 function renderStudentVideos(){
-  const box = $('t-video-list'); if(!box || !currentStudent) return;
+ const box = $('t-video-list'); if(!box || !currentStudent) return;
   const list = videos.filter(v => adminViewAll || !Array.isArray(v.assignedTo) || v.assignedTo.includes(currentStudent));
   box.innerHTML = list.length ? list.map(v=>`
     <div class="card">
@@ -2410,7 +2410,7 @@ function applyAssignPicker(){
 }
 function renderAssigneeSummary(kind){
   const boxId = {hw:'hw-assignees', exam:'exam-assignees', sch:'sch-assignees', 'sch-edit':'sch-edit-assignees', video:'video-assignees'};
-  const box = $(boxId); if(!box) return;
+  const box = $(boxId[kind]); if(!box) return;   // ← boxId[kind]로 수정
   const cur = draftAssignees[kind];
   if(cur===null){ box.textContent = '대상 학생: 전체'; return; }
   if(!cur.length){ box.innerHTML = '<span style="color:#e0455b;">대상 학생: 선택된 학생 없음</span>'; return; }
