@@ -319,6 +319,7 @@
         <button class="admin-nav" data-tab="a-students" onclick="setAdminTab('a-students')">학생 관리</button>
         <button class="admin-nav" data-tab="a-hw" onclick="setAdminTab('a-hw')">과제 관리</button>
         <button class="admin-nav" data-tab="a-exam" onclick="setAdminTab('a-exam')">시험 관리</button>
+        <button class="admin-nav" data-tab="a-video" onclick="setAdminTab('a-video')">동영상 관리</button>
         <button class="admin-nav" data-tab="a-questions" onclick="setAdminTab('a-questions')">문제 등록</button>
         <button class="admin-nav" data-tab="a-bank" onclick="setAdminTab('a-bank')">문제은행</button>
         <button class="admin-nav" data-tab="a-ai" onclick="setAdminTab('a-ai')">AI 문제 생성</button>
@@ -483,6 +484,32 @@
             <tbody id="exam-table"></tbody></table>
         </div>
       </div>
+      <!-- 동영상 관리 -->
+<div class="tabpanel" id="tab-a-video">
+  <div class="page-head"><div><h1>동영상 관리</h1><p>유튜브에 올린 수업 영상 링크를 등록하고 대상 학생을 지정합니다.</p></div></div>
+  <div class="card">
+    <h3 id="video-form-title">영상 등록</h3>
+    <div class="form-grid">
+      <div><label>제목</label><input type="text" id="video-title" placeholder="예: 3주차 국제기구 강의"></div>
+      <div><label>유튜브 URL</label><input type="text" id="video-url" placeholder="https://www.youtube.com/watch?v=..."></div>
+    </div>
+    <div class="form-grid full">
+      <div><label>설명 (선택)</label><textarea id="video-desc" placeholder="영상에 대한 설명이나 안내사항"></textarea></div>
+    </div>
+    <div class="field-section">
+      <span class="section-label">대상 학생</span>
+      <button class="btn secondary" style="width:100%;" onclick="openAssignPicker('video')">학생 지정</button>
+      <div class="picked-list" id="video-assignees" style="margin-top:8px;">대상 학생: 전체</div>
+    </div>
+    <button class="btn" id="video-submit-btn" style="width:100%; margin-top:16px;" onclick="addVideo()">영상 등록</button>
+    <button class="btn ghost" id="video-cancel-btn" style="width:100%; margin-top:8px; display:none;" onclick="cancelVideoEdit()">수정 취소</button>
+  </div>
+  <div class="card">
+    <h3>등록된 영상</h3>
+    <table><tr><th>제목</th><th>미리보기</th><th>대상</th><th></th></tr>
+      <tbody id="video-table"></tbody></table>
+  </div>
+</div>
 
       <!-- 문제 등록 -->
       <div class="tabpanel" id="tab-a-questions">
@@ -703,6 +730,7 @@
         <button class="student-nav active" data-tab="t-main" onclick="setStudentTab('t-main')">메인</button>
         <button class="student-nav" data-tab="t-hw" onclick="setStudentTab('t-hw')">과제</button>
         <button class="student-nav" data-tab="t-exam" onclick="setStudentTab('t-exam')">시험</button>
+        <button class="student-nav" data-tab="t-video" onclick="setStudentTab('t-video')">수업 영상</button>
         <button class="student-nav" data-tab="t-me" onclick="setStudentTab('t-me')">내 정보</button>
         <button class="student-nav" onclick="logout()" style="margin-top:14px; border-top:1px solid rgba(255,255,255,.18);">로그아웃</button>
       </nav>
@@ -755,6 +783,10 @@
             <tbody id="t-exam-table"></tbody></table>
         </div>
       </div>
+      <div class="tabpanel" id="tab-t-video">
+  <div class="page-head"><div><h1>수업 영상</h1><p>수업 영상을 시청하세요.</p></div></div>
+  <div id="t-video-list"></div>
+</div>
 
       <div class="tabpanel" id="tab-t-me">
         <div class="page-head"><div><h1>내 정보</h1><p>인적사항은 본인이 수정할 수 없으며, 이메일(로그인 ID) 변경은 본인 확인이 필요합니다.</p></div></div>
@@ -1051,6 +1083,7 @@ function setAdminTab(id){
   if(btn) btn.classList.add('active');
   if(id==='a-scores'){ renderScoreSelects(); renderScoreTable('hw'); renderScoreTable('exam'); }
   if(id==='a-attendance') renderAttendance();
+  if(id==='a-video') renderVideos();
     if(id==='a-preview') renderPreviewStudentSelect();
   if(id==='a-bank') renderBank();
   if(id==='a-ai') renderAiSetOptions();
@@ -1096,6 +1129,8 @@ let memoEditIndex = null;
 let currentSolve = null;
 let editOmrTarget = null; // {kind, tid, uid}
 let openedTaskDetailKey = null;
+  let videos = [];
+  let draftAssignees = {hw:null, exam:null, sch:null, 'sch-edit':null, video:null};
 
 /* 구독 관리 — 로그인 후에만 켜고, 계정이 바뀌거나 로그아웃하면 반드시 해제 */
 let unsubs = [];
@@ -1114,7 +1149,7 @@ function ensureScoreSlots(){
   });
 }
 function renderAll(){
-  renderStudents(); renderSchedules(); renderQSetOptions(); renderQuestions();
+  renderStudents(); renderSchedules(); renderQSetOptions(); renderQuestions(); renderVideos(); renderStudentVideos();
   renderTasks(); renderBank(); renderScoreSelects();
   renderScoreTable('hw'); renderScoreTable('exam');
   renderGradingTable(); renderStudentSite();
@@ -1184,6 +1219,11 @@ function startSubscriptions(isAdmin, ownerUid){
     snap.docs.forEach(d => { attendance[d.id] = d.data(); });
     renderAttendance(); renderStudentSchedule();
   });
+  sub('videos', snap => {
+  videos = snap.docs.map(d => ({ vid:d.id, ...d.data() }));
+  videos.sort((a,b)=> (b.createdAt||0) - (a.createdAt||0));
+  renderVideos(); renderStudentVideos();
+});
   sub('questionSets', snap => {
     questionSets = snap.docs.map(d => d.data().name).filter(Boolean);
     renderQSetOptions();
@@ -1227,7 +1267,7 @@ function stopSubscriptions(){
   unsubs.forEach(fn => { try{ fn(); }catch(e){} });
   unsubs = [];
   subsOwner = null;
-  students = []; schedules = []; attendance = {};
+  students = []; schedules = []; attendance = {}; videos = [];
   questionSets = []; questions = [];
   tasks = { hw:[], exam:[] };
   submissions = {}; scores = { hw:{}, exam:{} };
@@ -1816,6 +1856,98 @@ function renderStudentSchedule(){
   }).join('') || '<tr><td colspan="7" class="empty-hint">등록된 일정이 없습니다.</td></tr>';
 }
 
+
+  /* =========================================================
+   동영상 (유튜브)
+   ========================================================= */
+function extractYoutubeId(url){
+  if(!url) return '';
+  const m = url.match(/(?:youtube\.com\/(?:watch\?v=|embed\/|shorts\/)|youtu\.be\/)([A-Za-z0-9_-]{11})/);
+  return m ? m[1] : '';
+}
+let editingVideoId = null;
+
+function addVideo(){
+  const title = $('video-title').value.trim();
+  const url = $('video-url').value.trim();
+  const yid = extractYoutubeId(url);
+  if(!title){ alert('제목을 입력하세요.'); return; }
+  if(!yid){ alert('올바른 유튜브 URL이 아닙니다.'); return; }
+  const assignedTo = draftAssignees['video'];
+  if(Array.isArray(assignedTo) && !assignedTo.length){
+    alert('대상 학생이 없습니다. 학생을 선택하거나 전체 선택을 체크해주세요.'); return;
+  }
+  const data = {
+    title, youtubeId: yid, url,
+    desc: $('video-desc').value.trim(),
+    assignedTo,
+    createdAt: Date.now()
+  };
+  const editId = editingVideoId;
+  $('video-title').value=''; $('video-url').value=''; $('video-desc').value='';
+  draftAssignees['video'] = null; renderAssigneeSummary('video');
+  cancelVideoEdit();
+
+  const { db, collection, doc, setDoc, updateDoc } = window.fb;
+  const p = editId ? updateDoc(doc(db,'videos', editId), data)
+                   : setDoc(doc(collection(db,'videos')), data);
+  p.catch(e=>alert('저장 실패: '+e.message));
+}
+
+function editVideo(vid){
+  const v = videos.find(x=>x.vid===vid); if(!v) return;
+  editingVideoId = vid;
+  $('video-title').value = v.title||'';
+  $('video-url').value = v.url||'';
+  $('video-desc').value = v.desc||'';
+  draftAssignees['video'] = Array.isArray(v.assignedTo) ? v.assignedTo.slice() : null;
+  renderAssigneeSummary('video');
+  $('video-form-title').textContent = '영상 수정';
+  $('video-submit-btn').textContent = '수정 저장';
+  $('video-cancel-btn').style.display = 'block';
+  setAdminTab('a-video');
+}
+function cancelVideoEdit(){
+  editingVideoId = null;
+  $('video-form-title').textContent = '영상 등록';
+  $('video-submit-btn').textContent = '영상 등록';
+  $('video-cancel-btn').style.display = 'none';
+}
+function removeVideo(vid){
+  if(!confirm('이 영상을 삭제할까요?')) return;
+  const { db, doc, deleteDoc } = window.fb;
+  deleteDoc(doc(db,'videos', vid)).catch(e=>alert('삭제 실패: '+e.message));
+}
+function renderVideos(){
+  const tb = $('video-table'); if(!tb) return;
+  tb.innerHTML = videos.map(v=>{
+    const targetLabel = Array.isArray(v.assignedTo) ? `${v.assignedTo.length}명 지정` : '전체';
+    return `<tr>
+      <td>${esc(v.title)}${v.desc?`<div style="font-size:12px; color:var(--muted); margin-top:2px;">${esc(v.desc)}</div>`:''}</td>
+      <td><img src="https://img.youtube.com/vi/${v.youtubeId}/mqdefault.jpg" style="width:110px; border-radius:6px;"></td>
+      <td><span class="badge muted">${esc(targetLabel)}</span></td>
+      <td class="row-actions">
+        <button class="btn small secondary" onclick="editVideo('${v.vid}')">수정</button>
+        <button class="btn small danger" onclick="removeVideo('${v.vid}')">삭제</button>
+      </td>
+    </tr>`;
+  }).join('') || '<tr><td colspan="4" class="empty-hint">등록된 영상이 없습니다.</td></tr>';
+}
+function renderStudentVideos(){
+  const box = $('t-video-list'); if(!box || !currentStudent) return;
+  const list = videos.filter(v => adminViewAll || !Array.isArray(v.assignedTo) || v.assignedTo.includes(currentStudent));
+  box.innerHTML = list.length ? list.map(v=>`
+    <div class="card">
+      <h3 style="margin-bottom:6px;">${esc(v.title)}</h3>
+      ${v.desc?`<p class="note" style="margin-bottom:10px;">${esc(v.desc)}</p>`:''}
+      <div style="position:relative; padding-top:56.25%; border-radius:var(--radius); overflow:hidden;">
+        <iframe src="https://www.youtube.com/embed/${v.youtubeId}"
+          style="position:absolute; top:0; left:0; width:100%; height:100%; border:0;"
+          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+          allowfullscreen></iframe>
+      </div>
+    </div>`).join('') : '<div class="card"><p class="empty-hint">등록된 영상이 없습니다.</p></div>';
+}
 /* =========================================================
    문제 세트 · 문제 등록
    ========================================================= */
@@ -2278,7 +2410,7 @@ function applyAssignPicker(){
   renderAssigneeSummary(assignKind);
 }
 function renderAssigneeSummary(kind){
-  const boxId = {hw:'hw-assignees', exam:'exam-assignees', sch:'sch-assignees', 'sch-edit':'sch-edit-assignees'}[kind];
+  const boxId = {hw:'hw-assignees', exam:'exam-assignees', sch:'sch-assignees', 'sch-edit':'sch-edit-assignees', video:'video-assignees'};
   const box = $(boxId); if(!box) return;
   const cur = draftAssignees[kind];
   if(cur===null){ box.textContent = '대상 학생: 전체'; return; }
