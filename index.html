@@ -495,6 +495,24 @@
           <div id="qset-list"></div>
         </div>
 
+                    <div class="card" id="ai-pdf-extract-card">
+          <h3>PDF로 문제 자동 추출</h3>
+          <p class="note">문제지 PDF와 정답지 PDF를 각각 업로드하면 AI가 물음/보기/선지/정답/해설을 자동으로 추출합니다.</p>
+          <div class="form-grid">
+            <div><label>문제지 PDF</label>
+              <input type="file" id="q-extract-exam-file" accept=".pdf">
+            </div>
+            <div><label>정답지 PDF</label>
+              <input type="file" id="q-extract-answer-file" accept=".pdf">
+            </div>
+          </div>
+          <div class="form-grid">
+            <div><label>소속 세트 (일괄 적용)</label><select id="q-extract-set"></select></div>
+          </div>
+          <button class="btn" id="q-extract-btn" onclick="extractQuestionsFromPdf()">추출하기</button>
+          <div id="q-extract-preview" style="margin-top:14px;"></div>
+        </div>
+
         <div class="card">
           <h3 id="q-form-title">새 문제 등록</h3>
           <div class="form-grid">
