@@ -1843,11 +1843,26 @@ function removeQSet(old){
   deleteDoc(doc(db,'questionSets', old)).catch(e=>alert('삭제 실패: '+e.message));
   questions.filter(q=>q.set===old).forEach(q=>updateDoc(doc(db,'questions', q.qid), {set:''}));
 }
+  async function moveQuestionOrder(qid, dir){
+  const q = questions.find(x=>x.qid===qid); if(!q) return;
+  const sameSet = questions.filter(x=>x.set===q.set).sort((a,b)=>(a.order??0)-(b.order??0));
+  const idx = sameSet.findIndex(x=>x.qid===qid);
+  const swapIdx = idx + dir;
+  if(swapIdx < 0 || swapIdx >= sameSet.length) return;
+  const other = sameSet[swapIdx];
+  const { db, doc, updateDoc } = window.fb;
+  const qOrder = q.order ?? idx;
+  const otherOrder = other.order ?? swapIdx;
+  try {
+    await updateDoc(doc(db,'questions', q.qid), { order: otherOrder });
+    await updateDoc(doc(db,'questions', other.qid), { order: qOrder });
+  } catch(e){ alert('순서 변경 실패: '+e.message); }
+}
 function renderQSetList(){
   const wrap=$('qset-list'); if(!wrap) return;
   wrap.innerHTML = questionSets.length ? questionSets.map((set,si)=>{
-    const qs = questions.filter(q=>q.set===set);
-    const items = qs.length ? qs.map((q,n)=>qsetQuestionHtml(q,n)).join('')
+        const qs = questions.filter(q=>q.set===set).sort((a,b)=>(a.order??0)-(b.order??0));
+        const items = qs.length ? qs.map((q,n)=>qsetQuestionHtml(q,n,qs.length)).join('')
       : '<p class="note">이 세트에 등록된 문제가 없습니다.</p>';
     return `<div class="qset-block" id="qset-block-${si}">
       <div class="qset-head" onclick="document.getElementById('qset-block-${si}').classList.toggle('open')">
@@ -1859,8 +1874,13 @@ function renderQSetList(){
       </div><div class="qset-body">${items}</div></div>`;
   }).join('') : '<p class="note">등록된 세트가 없습니다.</p>';
 }
-function qsetQuestionHtml(q,n){
+function qsetQuestionHtml(q,n,total){
   return `<div class="qset-q"><b>Q${n+1}.</b>
+    <span style="display:inline-flex; gap:4px; margin-left:6px;">
+      <button class="btn small secondary" ${n===0?'disabled':''} onclick="moveQuestionOrder('${q.qid}',-1)">▲</button>
+      <button class="btn small secondary" ${n===total-1?'disabled':''} onclick="moveQuestionOrder('${q.qid}',1)">▼</button>
+      <button class="btn small secondary" onclick="editQuestion('${q.qid}')">수정</button>
+    </span>
     <span class="qset-tag type">${q.type==='mc'?'객관식':'단답형'}</span>${esc(q.body)}
     <span class="qset-tag ans">정답 ${esc(answerLabel(q))}</span>
     ${q.hasPassage? `<div class="passage-box"><div class="ptitle">&lt;보기&gt;</div>${esc(q.passage)}${q.passageImageUrl?`<img src="${q.passageImageUrl}" style="max-width:100%;border-radius:6px;margin-top:6px;">`:''}</div>`:''}
