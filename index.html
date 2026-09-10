@@ -272,6 +272,9 @@
     /* 배지 여백 축소 */
     .badge{padding:2px 6px; font-size:11px;}
   }
+  .qset-q.dragging { opacity: 0.4; }
+.qset-q.drag-over { border-top: 2px solid var(--brand, #2a6); }
+.qset-q { cursor: grab; }
 </style>
 </head>
 <body>
@@ -1843,6 +1846,51 @@ function removeQSet(old){
   deleteDoc(doc(db,'questionSets', old)).catch(e=>alert('삭제 실패: '+e.message));
   questions.filter(q=>q.set===old).forEach(q=>updateDoc(doc(db,'questions', q.qid), {set:''}));
 }
+  let dragQid = null;
+
+function onQDragStart(e){
+  dragQid = e.currentTarget.dataset.qid;
+  e.currentTarget.classList.add('dragging');
+  e.stopPropagation();
+}
+
+function onQDragOver(e){
+  e.preventDefault();
+  e.stopPropagation();
+  const target = e.currentTarget;
+  if(target.dataset.qid === dragQid) return;
+  target.classList.add('drag-over');
+}
+
+function onQDragEnd(e){
+  e.currentTarget.classList.remove('dragging');
+  document.querySelectorAll('.qset-q.drag-over').forEach(el=>el.classList.remove('drag-over'));
+}
+
+async function onQDrop(e){
+  e.preventDefault();
+  e.stopPropagation();
+  const targetQid = e.currentTarget.dataset.qid;
+  e.currentTarget.classList.remove('drag-over');
+  if(!dragQid || dragQid === targetQid) return;
+
+  const dragQ = questions.find(x=>x.qid===dragQid);
+  const targetQ = questions.find(x=>x.qid===targetQid);
+  if(!dragQ || !targetQ || dragQ.set !== targetQ.set) return;
+
+  const sameSet = questions.filter(x=>x.set===dragQ.set).sort((a,b)=>(a.order??0)-(b.order??0));
+  const fromIdx = sameSet.findIndex(x=>x.qid===dragQid);
+  const toIdx = sameSet.findIndex(x=>x.qid===targetQid);
+  sameSet.splice(toIdx, 0, sameSet.splice(fromIdx,1)[0]);
+
+  const { db, doc, updateDoc } = window.fb;
+  try {
+    for(let i=0;i<sameSet.length;i++){
+      await updateDoc(doc(db,'questions', sameSet[i].qid), { order: i });
+    }
+  } catch(err){ alert('순서 변경 실패: '+err.message); }
+  dragQid = null;
+}
   async function moveQuestionOrder(qid, dir){
   const q = questions.find(x=>x.qid===qid); if(!q) return;
   const sameSet = questions.filter(x=>x.set===q.set).sort((a,b)=>(a.order??0)-(b.order??0));
@@ -1875,11 +1923,13 @@ function renderQSetList(){
   }).join('') : '<p class="note">등록된 세트가 없습니다.</p>';
 }
 function qsetQuestionHtml(q,n,total){
-  return `<div class="qset-q"><b>Q${n+1}.</b>
+  return `<div class="qset-q" draggable="true" data-qid="${q.qid}"
+    ondragstart="onQDragStart(event)" ondragover="onQDragOver(event)" ondrop="onQDrop(event)" ondragend="onQDragEnd(event)">
+    <b>Q${n+1}.</b>
     <span style="display:inline-flex; gap:4px; margin-left:6px;">
-      <button class="btn small secondary" ${n===0?'disabled':''} onclick="moveQuestionOrder('${q.qid}',-1)">▲</button>
-      <button class="btn small secondary" ${n===total-1?'disabled':''} onclick="moveQuestionOrder('${q.qid}',1)">▼</button>
-      <button class="btn small secondary" onclick="editQuestion('${q.qid}')">수정</button>
+            <button class="btn small secondary" ${n===0?'disabled':''} onclick="event.stopPropagation();moveQuestionOrder('${q.qid}',-1)">▲</button>
+      <button class="btn small secondary" ${n===total-1?'disabled':''} onclick="event.stopPropagation();moveQuestionOrder('${q.qid}',1)">▼</button>
+      <button class="btn small secondary" onclick="event.stopPropagation();editQuestion('${q.qid}')">수정</button>
     </span>
     <span class="qset-tag type">${q.type==='mc'?'객관식':'단답형'}</span>${esc(q.body)}
     <span class="qset-tag ans">정답 ${esc(answerLabel(q))}</span>
