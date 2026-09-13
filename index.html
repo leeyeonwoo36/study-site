@@ -83,6 +83,10 @@
   .passage-box{border:1px solid var(--border); background:var(--paper); border-radius:var(--radius);
     padding:10px 12px; margin:8px 0 10px; font-size:13px; white-space:pre-wrap;}
   .passage-box .ptitle{font-weight:700; font-size:12px; color:var(--brand); margin-bottom:4px;}
+  .passage-editor{min-height:80px; border:1px solid var(--border); border-radius:var(--radius);
+  padding:9px 10px; background:#fff; font-size:13.5px; line-height:1.6; white-space:pre-wrap;}
+.passage-editor:focus{outline:none; border-color:var(--brand); box-shadow:0 0 0 3px rgba(59,111,246,.12);}
+.passage-editor[placeholder]:empty:before{content:attr(placeholder); color:var(--muted);}
   .omr-choices{display:flex; gap:10px; flex-wrap:wrap;}
   .omr-bubble{display:flex; align-items:center; gap:6px; padding:6px 12px; border:1px solid var(--border);
     border-radius:20px; cursor:pointer; font-size:13px; background:#fff;}
@@ -559,7 +563,15 @@
   <label for="q-has-passage" style="margin:0; font-size:13px; color:var(--ink-soft);">&lt;보기&gt; 사용</label>
 </div>
 <div class="form-grid full" id="q-passage-area" style="display:none;">
-  <div><label>보기 1 내용</label><textarea id="q-passage" placeholder="보기 지문을 입력하세요 (여러 줄 입력 가능)"></textarea></div>
+  <div>
+    <label>보기 1 내용</label>
+    <div style="display:flex; gap:6px; margin-bottom:6px;">
+      <button type="button" class="btn small secondary" onclick="document.execCommand('underline')">밑줄</button>
+      <button type="button" class="btn small ghost" onclick="document.execCommand('removeFormat')">서식 지우기</button>
+    </div>
+    <div id="q-passage" class="passage-editor" contenteditable="true"
+      placeholder="보기 지문을 입력하세요 (여러 줄 입력 가능)"></div>
+  </div>
   <div class="check-line">
     <input type="checkbox" id="q-passage-hide">
     <label for="q-passage-hide" style="margin:0; font-size:13px; color:var(--ink-soft);">&lt;보기&gt; 라벨 숨기기 (제시문만 표시)</label>
@@ -573,7 +585,15 @@
     <label for="q-has-passage-2" style="margin:0; font-size:13px; color:var(--ink-soft);">&lt;보기&gt; 2 추가 (최대 2개)</label>
   </div>
   <div class="form-grid full" id="q-passage-area-2" style="display:none;">
-    <div><label>보기 2 내용</label><textarea id="q-passage-2" placeholder="보기 2 지문을 입력하세요"></textarea></div>
+    <div>
+      <label>보기 2 내용</label>
+      <div style="display:flex; gap:6px; margin-bottom:6px;">
+        <button type="button" class="btn small secondary" onclick="document.execCommand('underline')">밑줄</button>
+        <button type="button" class="btn small ghost" onclick="document.execCommand('removeFormat')">서식 지우기</button>
+      </div>
+      <div id="q-passage-2" class="passage-editor" contenteditable="true"
+        placeholder="보기 2 지문을 입력하세요"></div>
+    </div>
     <div class="check-line">
       <input type="checkbox" id="q-passage-2-hide">
       <label for="q-passage-2-hide" style="margin:0; font-size:13px; color:var(--ink-soft);">&lt;보기&gt; 라벨 숨기기 (제시문만 표시)</label>
@@ -606,11 +626,15 @@
         </div>
 
         <div class="card">
-          <h3>등록된 문제</h3>
-          <table><tr><th>번호</th><th>세트</th><th>유형</th><th>보기</th><th>물음(요약)</th><th>정답</th><th></th></tr>
-            <tbody id="q-table"></tbody></table>
-        </div>
-      </div>
+  <h3>등록된 문제</h3>
+  <div class="form-grid full" style="margin-bottom:10px;">
+    <div><label>세트 필터</label>
+      <select id="q-table-set-filter" onchange="renderQuestions()"></select>
+    </div>
+  </div>
+  <table><tr><th>번호</th><th>세트</th><th>유형</th><th>보기</th><th>물음(요약)</th><th>정답</th><th></th></tr>
+    <tbody id="q-table"></tbody></table>
+</div>
 
       <!-- 문제은행 -->
       <div class="tabpanel" id="tab-a-bank">
@@ -2012,12 +2036,12 @@ function renderQSetOptions(){
     extractEl.innerHTML = '<option value="">미분류</option>' + opts;
     if(prev && extractEl.querySelector('option[value="'+prev+'"]')) extractEl.value=prev;
   }
-  const all = '<option value="">전체</option>' + opts + '<option value="__none__">미분류</option>';
-  ['bank-set-filter','picker-set'].forEach(id=>{
-    const el=$(id); if(!el) return;
-    const prev=el.value; el.innerHTML=all;
-    if(prev && el.querySelector('option[value="'+prev+'"]')) el.value=prev;
-  });
+ const all = '<option value="">전체</option>' + opts + '<option value="__none__">미분류</option>';
+['bank-set-filter','picker-set','q-table-set-filter'].forEach(id=>{
+  const el=$(id); if(!el) return;
+  const prev=el.value; el.innerHTML=all;
+  if(prev && el.querySelector('option[value="'+prev+'"]')) el.value=prev;
+});
   renderQSetList();
 }
 function addQSet(){
@@ -2248,11 +2272,11 @@ async function saveQuestion(){
   if(!body){ alert('물음(문제 지문)을 입력하세요.'); return; }
   const editId = editingQid;
 
-  const hasPassage = $('q-has-passage').checked;
-  const hasPassage2 = hasPassage && $('q-has-passage-2').checked;
-  if(hasPassage && !$('q-passage').value.trim() && !parseTableText($('q-passage-table').value)){
-    alert('<보기> 사용을 선택했으니 보기 내용이나 표를 입력하세요.'); return;
-  }
+ const hasPassage=$('q-has-passage').checked;
+const passageEl = $('q-passage');
+const passageText = passageEl.textContent.trim(); // 빈 값 체크용
+const passage = hasPassage ? passageEl.innerHTML : ''; // 실제 저장은 HTML(밑줄 포함)로
+if(hasPassage && !passageText){ alert('<보기> 사용을 선택했으니 보기 내용을 입력하세요.'); return; }
 
   let choices=[], answer;
   if(type==='mc'){
@@ -2307,7 +2331,7 @@ async function saveQuestion(){
   p.catch(e=>alert('저장 실패: '+e.message));
 }
 function clearQuestionForm(){
-  $('q-body').value=''; $('q-explain').value='';
+  $('q-body').value=''; $('q-explain').value=''; $('q-passage').innerHTML='';
   $('q-passage').value=''; $('q-passage-hide').checked=false; $('q-passage-image').value=''; $('q-passage-table').value='';
   $('q-passage-2').value=''; $('q-passage-2-hide').checked=false; $('q-passage-2-image').value=''; $('q-passage-2-table').value='';
   $('q-has-passage').checked=false; togglePassage();
@@ -2323,7 +2347,7 @@ function editQuestion(qid){
   $('q-body').value=q.body;
   const ps = getPassages(q);
   $('q-has-passage').checked = ps.length>0; togglePassage();
-  $('q-passage').value = ps[0]?.text || '';
+  $('q-passage').innerHTML=q.passage||'';
   $('q-passage-hide').checked = !!(ps[0]?.hideTitle);
   $('q-passage-table').value = tableToText(ps[0]?.table);
   $('q-has-passage-2').checked = ps.length>1; togglePassage2();
@@ -2347,16 +2371,18 @@ function cancelQuestionEdit(){
 }
 function renderQuestions(){
   const tb = $('q-table'); if(!tb) return;
-  tb.innerHTML = questions.map((q,i)=>`
+  const setVal = $('q-table-set-filter') ? $('q-table-set-filter').value : '';
+  const list = filterQuestions(setVal, '', '');
+  tb.innerHTML = list.map((q,i)=>`
     <tr><td>${i+1}</td><td>${q.set? esc(q.set) : '<span class="badge muted">미분류</span>'}</td>
     <td>${q.type==='mc'?'객관식':'단답형'}</td>
-    <td>${getPassages(q).length?'<span class="badge muted">있음</span>':'-'}</td>
+    <td>${q.hasPassage?'<span class="badge muted">있음</span>':'-'}</td>
     <td>${esc(q.body.slice(0,24))}${q.body.length>24?'…':''}</td>
     <td>${esc(answerLabel(q))}</td>
     <td class="row-actions">
       <button class="btn small secondary" onclick="editQuestion('${q.qid}')">수정</button>
       <button class="btn small danger" onclick="removeQuestion('${q.qid}')">삭제</button></td></tr>`).join('')
-    || '<tr><td colspan="7" class="empty-hint">등록된 문제가 없습니다.</td></tr>';
+    || '<tr><td colspan="7" class="empty-hint">조건에 맞는 문제가 없습니다.</td></tr>';
 }
 function removeQuestion(qid){
   if(!confirm('이 문제를 삭제할까요? 이미 등록된 과제·시험에서도 제외됩니다.')) return;
@@ -2501,7 +2527,7 @@ ${backMatter}
 }
 
 function buildPrintQuestionHtml(q, n){
-    const passage = renderPassagePrintHtml(getPassages(q));
+ const passage = q.hasPassage ? `<div class="passage">${q.passage}</div>` : '';
   let body;
   if(q.type==='mc'){
     const choices = (q.choices||[]).map((c,i)=>`<div class="choice">${CIRCLE[i]} ${esc(c)}</div>`).join('');
@@ -2878,7 +2904,7 @@ function fileToBase64(file){
         <div style="display:flex; justify-content:space-between; align-items:start; gap:8px;">
           <div style="flex:1;">
             <p style="margin:0;"><b>[${i+1}] (${q.type==='mc'?'객관식':'단답형'})</b> ${esc(q.body)}</p>
-            ${q.hasPassage ? `<p class="note" style="white-space:pre-wrap; margin:6px 0;">&lt;보기&gt; ${esc(q.passage)}</p>` : ''}
+            ${q.hasPassage ? `<p class="note" style="white-space:pre-wrap; margin:6px 0;">&lt;보기&gt; ${(q.passage)}</p>` : ''}
             ${choicesHtml}
             <p class="note" style="margin:6px 0 0;"><b>해설:</b> ${esc(q.explain)}</p>
           </div>
@@ -3162,7 +3188,7 @@ function renderAiResults(){
           ${q.hasPassage?'<span class="qset-tag ans">보기 포함</span>':''}
         </div>
         <textarea style="min-height:44px;" onchange="aiGenerated[${i}].body=this.value">${esc(q.body)}</textarea>
-        ${q.hasPassage ? `<textarea style="min-height:44px; margin-top:6px;" placeholder="<보기>" onchange="aiGenerated[${i}].passage=this.value">${esc(q.passage)}</textarea>` : ''}
+        ${q.hasPassage ? `<textarea style="min-height:44px; margin-top:6px;" placeholder="<보기>" onchange="aiGenerated[${i}].passage=this.value">${(q.passage)}</textarea>` : ''}
         ${q.type==='mc' ? `
           <div class="form-grid five" style="margin-top:6px;">
             ${[0,1,2,3,4].map(ci=>`<input type="text" value="${esc(q.choices[ci]||'')}" onchange="aiGenerated[${i}].choices[${ci}]=this.value">`).join('')}
