@@ -2045,10 +2045,42 @@ function renameQSet(old){
 }
 function removeQSet(old){
   if(!old || !questionSets.includes(old)){ alert('목록이 갱신되었습니다. 다시 시도해주세요.'); return; }
-  if(!confirm('"'+old+'" 세트를 삭제할까요? 세트에 속한 문제는 삭제되지 않고 "미분류"로 이동합니다.')) return;
+  const count = questions.filter(q=>q.set===old).length;
+  const deleteQuestionsToo = confirm(
+    `"${old}" 세트를 삭제합니다.\n\n` +
+    `이 세트에는 ${count}개의 문제가 있습니다.\n\n` +
+    `[확인]을 누르면 문제도 함께 완전히 삭제됩니다.\n` +
+    `[취소]를 누르면 이 삭제를 취소합니다.`
+  );
+  if(!deleteQuestionsToo) return;
+
+  // 문제를 삭제할지, 미분류로 옮길지 다시 한번 확인
+  const reallyDeleteQuestions = confirm(
+    `정말로 ${count}개의 문제를 완전히 삭제할까요?\n\n` +
+    `[확인] = 세트 + 문제 전부 영구 삭제 (되돌릴 수 없음)\n` +
+    `[취소] = 세트만 삭제하고 문제는 "미분류"로 이동`
+  );
+
   const { db, doc, deleteDoc, updateDoc } = window.fb;
+  const targetQuestions = questions.filter(q=>q.set===old);
+
+  if(reallyDeleteQuestions){
+    // 세트에 속한 문제를 전부 삭제 (과제/시험에서도 함께 제외)
+    targetQuestions.forEach(q=>{
+      deleteDoc(doc(db,'questions', q.qid)).catch(e=>alert('문제 삭제 실패: '+e.message));
+      draftQids.hw = draftQids.hw.filter(x=>x!==q.qid);
+      draftQids.exam = draftQids.exam.filter(x=>x!==q.qid);
+      ['hw','exam'].forEach(k=>tasks[k].forEach(t=>{
+        if((t.qids||[]).includes(q.qid)) updateDoc(doc(db,'tasks', t.tid), {qids:t.qids.filter(x=>x!==q.qid)});
+      }));
+    });
+    renderDraft('hw'); renderDraft('exam');
+  } else {
+    // 기존 동작: 미분류로 이동
+    targetQuestions.forEach(q=>updateDoc(doc(db,'questions', q.qid), {set:''}));
+  }
+
   deleteDoc(doc(db,'questionSets', old)).catch(e=>alert('삭제 실패: '+e.message));
-  questions.filter(q=>q.set===old).forEach(q=>updateDoc(doc(db,'questions', q.qid), {set:''}));
 }
   let dragQid = null;
 
