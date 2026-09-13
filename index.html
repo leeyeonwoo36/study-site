@@ -2761,21 +2761,40 @@ function openPicker(kind){
   renderPicker();
   openModal('picker-modal');
 }
+  let pickerExpanded = new Set(); // 펼쳐진 문항 qid 저장
 function renderPicker(){
   if(!pickerKind) return;
   const arr = filterQuestions($('picker-set').value, '', $('picker-search').value);
   const cur = draftQids[pickerKind] || [];
-  $('picker-list').innerHTML = arr.length ? arr.map(q=>`
+  $('picker-list').innerHTML = arr.length ? arr.map(q=>{
+    const isOpen = pickerExpanded.has(q.qid);
+    const detail = isOpen ? `
+      <div style="margin-top:8px; padding-top:8px; border-top:1px dashed var(--border);">
+        ${q.hasPassage? `<div class="passage-box"><div class="ptitle">&lt;보기&gt;</div>${q.passage}${q.passageImageUrl?`<img src="${q.passageImageUrl}" style="max-width:100%;border-radius:6px;margin-top:6px;">`:''}</div>`:''}
+        ${q.type==='mc'? `<div style="margin-top:4px; color:#4C5875;">${(q.choices||[]).map((c,i)=>CIRCLE[i]+' '+esc(c)).join('<br>')}</div>`:''}
+        <div style="margin-top:6px; font-size:12.5px;"><b>정답:</b> ${esc(answerLabel(q))}</div>
+        ${q.explain? `<div class="exam-explain" style="margin-top:6px;">${esc(q.explain)}</div>`:''}
+      </div>` : '';
+    return `
     <label class="bank-item${cur.includes(q.qid)?' sel':''}">
       <input type="checkbox" value="${q.qid}" ${cur.includes(q.qid)?'checked':''}>
       <div class="bi-body">
         <span class="qset-tag type">${q.type==='mc'?'객관식':'단답형'}</span>
         <span class="qset-tag set">${q.set? esc(q.set):'미분류'}</span>
         ${q.hasPassage?'<span class="qset-tag ans">보기</span>':''}
+        <span class="btn small ghost" style="float:right; padding:2px 8px;" onclick="event.preventDefault(); togglePickerDetail('${q.qid}')">${isOpen?'접기 ▲':'상세보기 ▼'}</span>
         <div style="margin-top:4px;"><b>${esc(q.body)}</b></div>
         <div style="font-size:12px; color:#8993AA; margin-top:2px;">정답: ${esc(answerLabel(q))}</div>
+        ${detail}
       </div>
-    </label>`).join('') : '<p class="empty-hint">조건에 맞는 문제가 없습니다.</p>';
+    </label>`;
+  }).join('') : '<p class="empty-hint">조건에 맞는 문제가 없습니다.</p>';
+}
+
+function togglePickerDetail(qid){
+  if(pickerExpanded.has(qid)) pickerExpanded.delete(qid);
+  else pickerExpanded.add(qid);
+  renderPicker();
 }
 function applyPicker(){
   const boxes = Array.from($('picker-list').querySelectorAll('input[type=checkbox]'));
