@@ -555,13 +555,34 @@
             <textarea id="q-body" placeholder="예: 다음 &lt;보기&gt;의 내용과 가장 관련 깊은 국제기구는?"></textarea></div></div>
 
           <div class="check-line">
-            <input type="checkbox" id="q-has-passage" onchange="togglePassage()">
-            <label for="q-has-passage" style="margin:0; font-size:13px; color:var(--ink-soft);">&lt;보기&gt; 사용</label>
-          </div>
-          <div class="form-grid full" id="q-passage-area" style="display:none;">
-             <div><label>&lt;보기&gt; 내용</label><textarea id="q-passage" placeholder="보기 지문을 입력하세요 (여러 줄 입력 가능)"></textarea></div>
-            <div><label>&lt;보기&gt; 이미지 (선택)</label><input type="file" id="q-passage-image" accept="image/*"></div>
-          </div>
+  <input type="checkbox" id="q-has-passage" onchange="togglePassage()">
+  <label for="q-has-passage" style="margin:0; font-size:13px; color:var(--ink-soft);">&lt;보기&gt; 사용</label>
+</div>
+<div class="form-grid full" id="q-passage-area" style="display:none;">
+  <div><label>보기 1 내용</label><textarea id="q-passage" placeholder="보기 지문을 입력하세요 (여러 줄 입력 가능)"></textarea></div>
+  <div class="check-line">
+    <input type="checkbox" id="q-passage-hide">
+    <label for="q-passage-hide" style="margin:0; font-size:13px; color:var(--ink-soft);">&lt;보기&gt; 라벨 숨기기 (제시문만 표시)</label>
+  </div>
+  <div><label>보기 1 이미지 (선택)</label><input type="file" id="q-passage-image" accept="image/*"></div>
+  <div><label>보기 1 표 삽입 (선택) — 한 줄에 한 행, 셀은 <code>|</code>로 구분</label>
+    <textarea id="q-passage-table" placeholder="예: 구분|A안|B안&#10;장점|빠름|저렴함"></textarea></div>
+
+  <div class="check-line" style="margin-top:6px;">
+    <input type="checkbox" id="q-has-passage-2" onchange="togglePassage2()">
+    <label for="q-has-passage-2" style="margin:0; font-size:13px; color:var(--ink-soft);">&lt;보기&gt; 2 추가 (최대 2개)</label>
+  </div>
+  <div class="form-grid full" id="q-passage-area-2" style="display:none;">
+    <div><label>보기 2 내용</label><textarea id="q-passage-2" placeholder="보기 2 지문을 입력하세요"></textarea></div>
+    <div class="check-line">
+      <input type="checkbox" id="q-passage-2-hide">
+      <label for="q-passage-2-hide" style="margin:0; font-size:13px; color:var(--ink-soft);">&lt;보기&gt; 라벨 숨기기 (제시문만 표시)</label>
+    </div>
+    <div><label>보기 2 이미지 (선택)</label><input type="file" id="q-passage-2-image" accept="image/*"></div>
+    <div><label>보기 2 표 삽입 (선택) — 한 줄에 한 행, 셀은 <code>|</code>로 구분</label>
+      <textarea id="q-passage-2-table" placeholder="예: 구분|A안|B안&#10;장점|빠름|저렴함"></textarea></div>
+  </div>
+</div>
 
           <div id="q-mc-area" class="form-grid five">
             <div><label>① 선지</label><input type="text" id="q-c1"></div>
@@ -2094,9 +2115,41 @@ function qsetQuestionHtml(q,n,total){
     </span>
     <span class="qset-tag type">${q.type==='mc'?'객관식':'단답형'}</span>${esc(q.body)}
     <span class="qset-tag ans">정답 ${esc(answerLabel(q))}</span>
-    ${q.hasPassage? `<div class="passage-box"><div class="ptitle">&lt;보기&gt;</div>${esc(q.passage)}${q.passageImageUrl?`<img src="${q.passageImageUrl}" style="max-width:100%;border-radius:6px;margin-top:6px;">`:''}</div>`:''}
+    ${renderPassageBoxHtml(getPassages(q))}
     ${q.type==='mc'? `<div style="margin-top:4px; color:#4C5875;">${(q.choices||[]).map((c,i)=>CIRCLE[i]+' '+esc(c)).join(' &nbsp; ')}</div>`:''}
     ${q.explain? `<div style="color:#8993AA; font-size:12px; margin-top:4px;">해설: ${esc(q.explain)}</div>`:''}</div>`;
+}
+  function getPassages(q){
+  if(Array.isArray(q.passages)) return q.passages;
+  if(q.hasPassage) return [{text:q.passage||'', imageUrl:q.passageImageUrl||'', hideTitle:false, table:null}]; // 구버전 문서 호환
+  return [];
+}
+function parseTableText(txt){
+  const t = (txt||'').trim();
+  if(!t) return null;
+  return t.split('\n').map(line=>line.split('|').map(c=>c.trim()));
+}
+function tableToText(table){
+  return (table && table.length) ? table.map(row=>row.join('|')).join('\n') : '';
+}
+function renderPassageTableHtml(table){
+  if(!table || !table.length) return '';
+  const rows = table.map(row=>'<tr>'+row.map(c=>`<td style="border:1px solid var(--border); padding:4px 8px;">${esc(c)}</td>`).join('')+'</tr>').join('');
+  return `<table style="border-collapse:collapse; margin-top:8px; font-size:12.5px;">${rows}</table>`;
+}
+function renderPassageBoxHtml(passages){
+  if(!passages || !passages.length) return '';
+  return passages.map((p,i)=>{
+    const title = p.hideTitle ? '' : `<div class="ptitle">&lt;보기&gt;${passages.length>1?(' '+(i+1)):''}</div>`;
+    return `<div class="passage-box">${title}${p.text?esc(p.text):''}${renderPassageTableHtml(p.table)}${p.imageUrl?`<img src="${p.imageUrl}" style="max-width:100%;border-radius:6px;margin-top:6px;">`:''}</div>`;
+  }).join('');
+}
+function renderPassagePrintHtml(passages){
+  if(!passages || !passages.length) return '';
+  return passages.map((p,i)=>{
+    const title = p.hideTitle ? '' : `<b>&lt;보기&gt;${passages.length>1?(' '+(i+1)):''}</b><br>`;
+    return `<div class="passage">${title}${p.text?esc(p.text):''}${renderPassageTableHtml(p.table)}</div>`;
+  }).join('');
 }
 function answerLabel(q){
   if(q.type!=='mc') return q.answer;
@@ -2110,15 +2163,25 @@ function toggleQType(){
   $('q-short-area').style.display = isMc?'none':'grid';
 }
 function togglePassage(){
-  $('q-passage-area').style.display = $('q-has-passage').checked ? 'grid':'none';
+  const on = $('q-has-passage').checked;
+  $('q-passage-area').style.display = on ? 'grid':'none';
+  if(!on){ $('q-has-passage-2').checked=false; togglePassage2(); }
+}
+function togglePassage2(){
+  $('q-passage-area-2').style.display = $('q-has-passage-2').checked ? 'grid':'none';
 }
 async function saveQuestion(){
   const type=$('q-type').value;
   const body=$('q-body').value.trim();
   if(!body){ alert('물음(문제 지문)을 입력하세요.'); return; }
-  const hasPassage=$('q-has-passage').checked;
-  const passage=hasPassage ? $('q-passage').value.trim() : '';
-  if(hasPassage && !passage){ alert('<보기> 사용을 선택했으니 보기 내용을 입력하세요.'); return; }
+  const editId = editingQid;
+
+  const hasPassage = $('q-has-passage').checked;
+  const hasPassage2 = hasPassage && $('q-has-passage-2').checked;
+  if(hasPassage && !$('q-passage').value.trim() && !parseTableText($('q-passage-table').value)){
+    alert('<보기> 사용을 선택했으니 보기 내용이나 표를 입력하세요.'); return;
+  }
+
   let choices=[], answer;
   if(type==='mc'){
     choices=[1,2,3,4,5].map(n=>$('q-c'+n).value.trim());
@@ -2128,18 +2191,43 @@ async function saveQuestion(){
     answer=$('q-answer-short').value.trim();
     if(!answer){ alert('단답형 정답을 입력하세요.'); return; }
   }
-  let passageImageUrl = (editingQid && questions.find(x=>x.qid===editingQid)?.passageImageUrl) || '';
-  const imgFile = $('q-passage-image').files[0];
-  if(imgFile){
-    try { passageImageUrl = await uploadToCloudinary(imgFile); }
-    catch(e){ alert('이미지 업로드 실패: '+e.message); return; }
+
+  const oldPassages = editId ? getPassages(questions.find(x=>x.qid===editId)||{}) : [];
+  const passages = [];
+  if(hasPassage){
+    let img1 = oldPassages[0]?.imageUrl || '';
+    const f1 = $('q-passage-image').files[0];
+    if(f1){
+      try { img1 = await uploadToCloudinary(f1); }
+      catch(e){ alert('보기1 이미지 업로드 실패: '+e.message); return; }
+    }
+    passages.push({
+      text: $('q-passage').value.trim(),
+      hideTitle: $('q-passage-hide').checked,
+      imageUrl: img1,
+      table: parseTableText($('q-passage-table').value)
+    });
+    if(hasPassage2){
+      let img2 = oldPassages[1]?.imageUrl || '';
+      const f2 = $('q-passage-2-image').files[0];
+      if(f2){
+        try { img2 = await uploadToCloudinary(f2); }
+        catch(e){ alert('보기2 이미지 업로드 실패: '+e.message); return; }
+      }
+      passages.push({
+        text: $('q-passage-2').value.trim(),
+        hideTitle: $('q-passage-2-hide').checked,
+        imageUrl: img2,
+        table: parseTableText($('q-passage-2-table').value)
+      });
+    }
   }
-    const sameSetCount = questions.filter(x=>x.set===$('q-set').value).length;
+
+  const sameSetCount = questions.filter(x=>x.set===$('q-set').value).length;
   const existingOrder = editId ? questions.find(x=>x.qid===editId)?.order : undefined;
-  const data={set:$('q-set').value, type, body, hasPassage, passage, passageImageUrl, choices, answer,
+  const data={set:$('q-set').value, type, body, passages, choices, answer,
               order: existingOrder ?? sameSetCount,
               explain:$('q-explain').value.trim()};
-  const editId = editingQid;
   cancelQuestionEdit();
   const { db, doc, collection, setDoc, updateDoc } = window.fb;
   const p = editId ? updateDoc(doc(db,'questions', editId), data)
@@ -2147,8 +2235,11 @@ async function saveQuestion(){
   p.catch(e=>alert('저장 실패: '+e.message));
 }
 function clearQuestionForm(){
-  $('q-body').value=''; $('q-explain').value=''; $('q-passage').value='';
+  $('q-body').value=''; $('q-explain').value='';
+  $('q-passage').value=''; $('q-passage-hide').checked=false; $('q-passage-image').value=''; $('q-passage-table').value='';
+  $('q-passage-2').value=''; $('q-passage-2-hide').checked=false; $('q-passage-2-image').value=''; $('q-passage-2-table').value='';
   $('q-has-passage').checked=false; togglePassage();
+  $('q-has-passage-2').checked=false; togglePassage2();
   [1,2,3,4,5].forEach(n=>$('q-c'+n).value='');
   $('q-answer-short').value=''; $('q-answer-mc').value='1';
 }
@@ -2158,8 +2249,15 @@ function editQuestion(qid){
   $('q-type').value=q.type; toggleQType();
   if(questionSets.includes(q.set)) $('q-set').value=q.set;
   $('q-body').value=q.body;
-  $('q-has-passage').checked=!!q.hasPassage; togglePassage();
-  $('q-passage').value=q.passage||'';
+  const ps = getPassages(q);
+  $('q-has-passage').checked = ps.length>0; togglePassage();
+  $('q-passage').value = ps[0]?.text || '';
+  $('q-passage-hide').checked = !!(ps[0]?.hideTitle);
+  $('q-passage-table').value = tableToText(ps[0]?.table);
+  $('q-has-passage-2').checked = ps.length>1; togglePassage2();
+  $('q-passage-2').value = ps[1]?.text || '';
+  $('q-passage-2-hide').checked = !!(ps[1]?.hideTitle);
+  $('q-passage-2-table').value = tableToText(ps[1]?.table);
   if(q.type==='mc'){ [1,2,3,4,5].forEach(n=>$('q-c'+n).value=(q.choices||[])[n-1]||''); $('q-answer-mc').value=q.answer; }
   else $('q-answer-short').value=q.answer;
   $('q-explain').value=q.explain||'';
@@ -2180,7 +2278,7 @@ function renderQuestions(){
   tb.innerHTML = questions.map((q,i)=>`
     <tr><td>${i+1}</td><td>${q.set? esc(q.set) : '<span class="badge muted">미분류</span>'}</td>
     <td>${q.type==='mc'?'객관식':'단답형'}</td>
-    <td>${q.hasPassage?'<span class="badge muted">있음</span>':'-'}</td>
+    <td>${getPassages(q).length?'<span class="badge muted">있음</span>':'-'}</td>
     <td>${esc(q.body.slice(0,24))}${q.body.length>24?'…':''}</td>
     <td>${esc(answerLabel(q))}</td>
     <td class="row-actions">
@@ -2209,8 +2307,9 @@ function filterQuestions(setVal, typeVal, kw){
     if(setVal==='__none__' && q.set) return false;
     if(setVal && setVal!=='__none__' && q.set!==setVal) return false;
     if(typeVal && q.type!==typeVal) return false;
-    if(k){
-      const hay = (q.body+' '+(q.passage||'')+' '+(q.choices||[]).join(' ')+' '+(q.explain||'')).toLowerCase();
+        if(k){
+      const passageText = getPassages(q).map(p=>p.text||'').join(' ');
+      const hay = (q.body+' '+passageText+' '+(q.choices||[]).join(' ')+' '+(q.explain||'')).toLowerCase();
       if(!hay.includes(k)) return false;
     }
     return true;
@@ -2229,10 +2328,10 @@ function renderBank(){
         <div style="margin-bottom:4px;">
           <span class="qset-tag type">${q.type==='mc'?'객관식':'단답형'}</span>
           <span class="qset-tag set">${q.set? esc(q.set):'미분류'}</span>
-          ${q.hasPassage?'<span class="qset-tag ans">보기 포함</span>':''}
+          ${getPassages(q).length?'<span class="qset-tag ans">보기 포함</span>':''}
         </div>
         <b>${esc(q.body)}</b>
-        ${q.hasPassage? `<div class="passage-box"><div class="ptitle">&lt;보기&gt;</div>${esc(q.passage)}${q.passageImageUrl?`<img src="${q.passageImageUrl}" style="max-width:100%;border-radius:6px;margin-top:6px;">`:''}</div>`:''}
+        ${renderPassageBoxHtml(getPassages(q))}
         ${q.type==='mc'? `<div style="margin-top:4px; color:#4C5875;">${(q.choices||[]).map((c,i)=>CIRCLE[i]+' '+esc(c)).join('<br>')}</div>`:''}
         <div style="margin-top:6px; font-size:12.5px;"><b>정답:</b> ${esc(answerLabel(q))}</div>
         ${q.explain? `<div class="exam-explain" style="margin-top:6px;">${esc(q.explain)}</div>`:''}
@@ -2330,9 +2429,7 @@ ${backMatter}
 }
 
 function buildPrintQuestionHtml(q, n){
-  const passage = q.hasPassage
-    ? `<div class="passage">${esc(q.passage)}${q.passageImageUrl?`<br><img src="${q.passageImageUrl}" style="max-width:100%; margin-top:6px; border-radius:4px;">`:''}</div>`
-    : '';
+    const passage = renderPassagePrintHtml(getPassages(q));
   let body;
   if(q.type==='mc'){
     const choices = (q.choices||[]).map((c,i)=>`<div class="choice">${CIRCLE[i]} ${esc(c)}</div>`).join('');
@@ -2701,8 +2798,8 @@ async function saveExtractedQuestion(i){
   const q = extractedQuestionsCache[i];
   const data = {
     set: $('q-extract-set').value,
-    type: q.type, body: q.body, hasPassage: q.hasPassage,
-    passage: q.passage || '', passageImageUrl: '',
+        type: q.type, body: q.body,
+    passages: q.hasPassage ? [{text:q.passage||'', imageUrl:'', hideTitle:false, table:null}] : [],
     choices: q.type==='mc' ? q.choices : [],
     answer: String(q.answer), explain: q.explain || ''
   };
@@ -2720,8 +2817,8 @@ async function saveAllExtractedQuestions(){
   const set = $('q-extract-set').value;
   for(const q of [...extractedQuestionsCache]){
     const data = {
-      set, type: q.type, body: q.body, hasPassage: q.hasPassage,
-      passage: q.passage || '', passageImageUrl: '',
+            set, type: q.type, body: q.body,
+      passages: q.hasPassage ? [{text:q.passage||'', imageUrl:'', hideTitle:false, table:null}] : [],
       choices: q.type==='mc' ? q.choices : [],
       answer: String(q.answer), explain: q.explain || ''
     };
@@ -2985,8 +3082,8 @@ function saveAiQuestions(){
   if(!picked.length){ alert('저장할 문제를 선택하세요.'); return; }
   const { db, collection, doc, setDoc } = window.fb;
   const jobs = picked.map(q => setDoc(doc(collection(db,'questions')), {
-    set, type: q.type, body: q.body,
-    hasPassage: q.hasPassage, passage: q.passage, passageImageUrl:'',
+        set, type: q.type, body: q.body,
+    passages: q.hasPassage ? [{text:q.passage||'', imageUrl:'', hideTitle:false, table:null}] : [],
     choices: q.type==='mc' ? q.choices : [],
     answer: q.answer, explain: q.explain
   }));
@@ -3387,7 +3484,7 @@ function openStudentSolve(kind,tid){
   $('solve-body').innerHTML = qs.length ? qs.map((q,i)=>`
     <div class="omr-q">
       <div class="qnum">문제 ${i+1}. ${esc(q.body)}</div>
-      ${q.hasPassage? `<div class="passage-box"><div class="ptitle">&lt;보기&gt;</div>${esc(q.passage)}${q.passageImageUrl?`<img src="${q.passageImageUrl}" style="max-width:100%;border-radius:6px;margin-top:6px;">`:''}</div>`:''}
+      ${renderPassageBoxHtml(getPassages(q))}
       ${q.type==='mc'
         ? `<div class="omr-choices">${(q.choices||[]).map((c,ci)=>
             `<label class="omr-bubble" onclick="pickChoice(this)">
@@ -3512,7 +3609,7 @@ function openReview(kind,tid,stuUid,isAdmin){
         ${sub? (ok?'<span class="badge good">정답</span>':'<span class="badge warn">오답</span>')
              : '<span class="badge muted">미제출</span>'}</div>
       <div style="white-space:pre-wrap; font-weight:700;">${esc(q.body)}</div>
-      ${q.hasPassage? `<div class="passage-box"><div class="ptitle">&lt;보기&gt;</div>${esc(q.passage)}${q.passageImageUrl?`<img src="${q.passageImageUrl}" style="max-width:100%;border-radius:6px;margin-top:6px;">`:''}</div>`:''}
+      ${renderPassageBoxHtml(getPassages(q))}
       ${choicesHtml}
       <div class="ans-row"><b>내 답:</b> ${mineLabel} &nbsp;|&nbsp; <b>정답:</b> ${esc(answerLabel(q))}</div>
       ${q.explain? `<div class="exam-explain ${ok?'':'wrong'}"><b>해설</b><br>${esc(q.explain)}</div>`:''}
