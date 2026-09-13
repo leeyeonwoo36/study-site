@@ -979,10 +979,11 @@
       <tr><th>전화번호</th><td id="detail-phone"></td><th>상태</th><td id="detail-approved"></td></tr>
       <tr><th>이메일</th><td colspan="3" id="detail-email"></td></tr>
     </table>
-    <div style="margin-bottom:14px; display:flex; gap:6px; flex-wrap:wrap;">
-      <button class="btn small secondary" onclick="openStudentEditFromDetail()">인적사항 수정</button>
-      <button class="btn small secondary" onclick="resetPw(currentDetailUid)">비밀번호 재설정 메일 보내기</button>
-    </div>
+   <div style="margin-bottom:14px; display:flex; gap:6px; flex-wrap:wrap;">
+  <button class="btn small secondary" onclick="openStudentEditFromDetail()">인적사항 수정</button>
+  <button class="btn small secondary" onclick="resetPw(currentDetailUid)">비밀번호 재설정 메일 보내기</button>
+  <button class="btn small" onclick="openStudentReportSheet(currentDetailUid)">성적표 PDF 출력</button>
+</div>
         <h3>출결 현황</h3>
     <div id="detail-attendance-status" style="margin-bottom:18px;"></div>
    <h3>과제 현황</h3>
@@ -2373,7 +2374,113 @@ function buildAnswerExplainHtml(qs){
     ${items}
   </div>`;
 }
+/* ---------- 학생 성적표 PDF (인쇄) ---------- */
+function buildTrendSvgMarkup(arr){
+  if(!arr || !arr.length) return '<p style="color:#8993AA; font-size:13px;">채점된 시험 성적이 없습니다.</p>';
+  const w=480,h=190,padL=34,padR=20,padT=20,padB=34;
+  const xStep = arr.length>1 ? (w-padL-padR)/(arr.length-1) : 0;
+  const x = i => arr.length>1 ? padL+i*xStep : (w/2);
+  const y = s => padT + (100-Math.max(0,Math.min(100,s)))/100*(h-padT-padB);
+  const pts = arr.map((p,i)=>x(i)+','+y(p.score)).join(' ');
+  const dots = arr.map((p,i)=>`<circle cx="${x(i)}" cy="${y(p.score)}" r="4" fill="#3B6FF6"></circle>
+    <text x="${x(i)}" y="${y(p.score)-10}" font-size="11" text-anchor="middle" fill="#28324A">${p.score}</text>
+    <text x="${x(i)}" y="${h-12}" font-size="10" text-anchor="middle" fill="#8993AA">${esc(p.label)}</text>`).join('');
+  return `<svg viewBox="0 0 ${w} ${h}" style="width:100%; max-width:500px;">
+    <line x1="${padL}" y1="${padT}" x2="${padL}" y2="${h-padB}" stroke="#E3E7F3"></line>
+    <line x1="${padL}" y1="${h-padB}" x2="${w-padR}" y2="${h-padB}" stroke="#E3E7F3"></line>
+    <polyline points="${pts}" fill="none" stroke="#3B6FF6" stroke-width="2.5"></polyline>${dots}</svg>`;
+}
 
+function buildStudentReportHtml(uid){
+  const s = students.find(x=>x.uid===uid);
+  if(!s) return null;
+
+  const visibleSch = schedules.filter(sc => !Array.isArray(sc.assignedTo) || sc.assignedTo.includes(uid));
+  let p=0,l=0,a=0,n=0;
+  visibleSch.forEach(sc=>{
+    const st=(attendance[sc.sid]||{})[uid];
+    const v = st?st.status:null;
+    if(v==='p')p++; else if(v==='l')l++; else if(v==='a')a++; else n++;
+  });
+  const checked = p+l+a;
+  const rate = checked ? Math.round(p/checked*100) : null;
+
+  const hwRows = tasks.hw.filter(t=>!Array.isArray(t.assignedTo)||t.assignedTo.includes(uid)).map(t=>{
+    const rec = (scores.hw[t.tid]||{})[uid] || {score:'',status:'미완료'};
+    return `<tr><td>${esc(t.title)}</td><td>${fmtPeriod(t)}</td><td>${esc(rec.status||'미완료')}</td><td>${esc(rec.score)||'-'}</td></tr>`;
+  }).join('') || '<tr><td colspan="4" style="color:#8993AA;">배정된 과제가 없습니다.</td></tr>';
+
+  const examRows = tasks.exam.filter(t=>!Array.isArray(t.assignedTo)||t.assignedTo.includes(uid)).map(t=>{
+    const rec = (scores.exam[t.tid]||{})[uid] || {score:''};
+    return `<tr><td>${esc(t.title)}</td><td>${fmtPeriod(t)}</td><td>${esc(rec.score)||'-'}</td></tr>`;
+  }).join('') || '<tr><td colspan="3" style="color:#8993AA;">배정된 시험이 없습니다.</td></tr>';
+
+  const trendArr = tasks.exam.map(t=>{
+    const rec = (scores.exam[t.tid]||{})[uid];
+    const pct = rec ? scoreToPercent(rec.score) : null;
+    return pct===null ? null : {label:t.title, score:pct};
+  }).filter(Boolean);
+
+  const today = new Date().toLocaleDateString('ko-KR');
+
+  return `<!DOCTYPE html><html lang="ko"><head><meta charset="UTF-8">
+<title>${esc(s.name)} 학생 성적표</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;700;900&display=swap" rel="stylesheet">
+<style>
+  @page{ size:A4; margin:16mm 14mm; }
+  body{font-family:'Noto Sans KR',-apple-system,sans-serif; color:#111; line-height:1.55; margin:0;}
+  h1{font-size:22px; font-weight:900; margin:0 0 4px;}
+  h2{font-size:15px; font-weight:900; margin:22px 0 8px; padding-bottom:6px; border-bottom:2px solid #111;}
+  .meta{color:#666; font-size:12px; margin-bottom:18px; padding-bottom:14px; border-bottom:2px solid #111;}
+  .info-grid{display:grid; grid-template-columns:repeat(4,1fr); gap:10px;}
+  .info-grid div{font-size:12.5px;}
+  .info-grid b{display:block; color:#666; font-size:11px; font-weight:500; margin-bottom:2px;}
+  table{width:100%; border-collapse:collapse; font-size:12.5px; margin-bottom:6px;}
+  th,td{border:1px solid #ccc; padding:6px 8px; text-align:left;}
+  th{background:#f2f2f2;}
+  .summary-badges span{display:inline-block; margin-right:10px; padding:3px 10px; border-radius:14px; font-size:12px; font-weight:700; background:#eee;}
+  .no-print{text-align:center; margin-bottom:16px;}
+  .no-print button{padding:10px 20px; font-size:14px; cursor:pointer;}
+  @media print{ .no-print{display:none;} }
+</style></head><body>
+<div class="no-print"><button onclick="window.print()">인쇄 / PDF로 저장</button></div>
+
+<h1>${esc(s.name)} 학생 성적표</h1>
+<div class="meta">
+  <div class="info-grid">
+    <div><b>학년</b>${esc(s.grade)||'-'}</div>
+    <div><b>학교</b>${esc(s.school)||'-'}</div>
+    <div><b>전화번호</b>${esc(s.phone)||'-'}</div>
+    <div><b>발급일</b>${today}</div>
+  </div>
+</div>
+
+<h2>출결 현황</h2>
+<div class="summary-badges">
+  <span>출석 ${p}</span><span>지각 ${l}</span><span>결석 ${a}</span><span>미체크 ${n}</span>
+  <span>출석률 ${rate===null?'-':rate+'%'}</span>
+</div>
+
+<h2>과제 현황</h2>
+<table><tr><th>과제명</th><th>기간</th><th>수행여부</th><th>점수</th></tr>${hwRows}</table>
+
+<h2>시험 현황</h2>
+<table><tr><th>시험명</th><th>기간</th><th>점수</th></tr>${examRows}</table>
+
+<h2>시험 성적 추이</h2>
+${buildTrendSvgMarkup(trendArr)}
+
+</body></html>`;
+}
+
+function openStudentReportSheet(uid){
+  const html = buildStudentReportHtml(uid);
+  if(!html){ alert('학생 정보를 찾을 수 없습니다.'); return; }
+  const win = window.open('', '_blank');
+  if(!win){ alert('팝업이 차단되었습니다. 브라우저 팝업 차단을 해제한 뒤 다시 시도해주세요.'); return; }
+  win.document.write(html);
+  win.document.close();
+}
 function openAssignPicker(kind){
   assignKind = kind;
   renderAssignPicker();
