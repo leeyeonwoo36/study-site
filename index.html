@@ -751,6 +751,7 @@
         <button class="student-nav active" data-tab="t-main" onclick="setStudentTab('t-main')">메인</button>
         <button class="student-nav" data-tab="t-hw" onclick="setStudentTab('t-hw')">과제</button>
         <button class="student-nav" data-tab="t-exam" onclick="setStudentTab('t-exam')">시험</button>
+        <button class="student-nav" data-tab="t-wrong" onclick="setStudentTab('t-wrong')">오답노트</button>
         <button class="student-nav" data-tab="t-video" onclick="setStudentTab('t-video')">수업 영상</button>
         <button class="student-nav" data-tab="t-me" onclick="setStudentTab('t-me')">내 정보</button>
         <button class="student-nav" onclick="logout()" style="margin-top:14px; border-top:1px solid rgba(255,255,255,.18);">로그아웃</button>
@@ -804,6 +805,10 @@
             <tbody id="t-exam-table"></tbody></table>
         </div>
       </div>
+      <div class="tabpanel" id="tab-t-wrong">
+  <div class="page-head"><div><h1>오답노트</h1><p>틀린 문제를 원본 그대로, 또는 AI가 만든 변형 문제로 계속 다시 풀어볼 수 있어요.</p></div></div>
+  <div class="card"><div id="wrong-note-list"></div></div>
+</div>
       <div class="tabpanel" id="tab-t-video">
   <div class="page-head"><div><h1>수업 영상</h1><p>수업 영상을 시청하세요.</p></div></div>
   <div id="t-video-list"></div>
@@ -989,7 +994,18 @@
     <div id="review-body"></div>
   </div>
 </div>
-
+<div class="modal-bg" id="wrong-solve-modal">
+  <div class="modal wide">
+    <button class="modal-close" onclick="closeModal('wrong-solve-modal')">✕</button>
+    <h3 id="wrong-solve-title">문제 풀이</h3>
+    <div id="wrong-solve-body"></div>
+    <div id="wrong-solve-result" style="margin-top:10px;"></div>
+    <div style="display:flex; gap:8px; margin-top:12px;">
+      <button class="btn" style="flex:1;" onclick="submitWrongSolve()">채점하기</button>
+      <button class="btn secondary" style="flex:1;" onclick="generateWrongVariant(currentWrongQid, true)">새 변형 문제 받기</button>
+    </div>
+  </div>
+</div>
 <!-- 학생 상세 -->
 <div class="modal-bg" id="student-detail-modal">
   <div class="modal wide">
@@ -1118,6 +1134,7 @@ function setStudentTab(id){
   const btn = document.querySelector('.student-nav[data-tab="'+id+'"]');
   if(btn) btn.classList.add('active');
   if(id==='t-me') fillMyInfo();
+  if(id==='t-wrong') renderWrongNote();
 }
 
 /* =========================================================
@@ -1145,9 +1162,13 @@ let assignKind = null;
 let pickerKind = null;
 let reasonTarget = null;
 let editScheduleSid = null;
-  let editTaskId = {hw:null, exam:null};
+let editTaskId = {hw:null, exam:null};
 let memoEditIndex = null;
 let currentSolve = null;
+let wrongItems = {};          // qid -> {status, kind, taskId, taskTitle, addedAt}
+let currentWrongQid = null;
+let currentWrongIsVariant = false;
+let currentWrongVariantQ = null;
 let editOmrTarget = null; // {kind, tid, uid}
 let openedTaskDetailKey = null;
   let videos = [];
@@ -1229,7 +1250,12 @@ function startSubscriptions(isAdmin, ownerUid){
       renderStudentSite();
     }, err => console.error('내 문서 구독 에러:', err.code)));
   }
-
+if(!isAdmin && currentStudent){
+  unsubs.push(onSnapshot(doc(db,'wrongBank', currentStudent), snap=>{
+    wrongItems = snap.exists() ? (snap.data().items||{}) : {};
+    renderWrongNote();
+  }, err=>console.error('wrongBank 구독 에러:', err.code)));
+}
   sub('schedules', snap => {
     schedules = snap.docs.map(d => ({ sid:d.id, ...d.data() }));
     schedules.sort((a,b)=> String(a.date) < String(b.date) ? -1 : 1);
@@ -1292,6 +1318,7 @@ function stopSubscriptions(){
   questionSets = []; questions = [];
   tasks = { hw:[], exam:[] };
   submissions = {}; scores = { hw:{}, exam:{} };
+    wrongItems = {};   // ← 추가
   draftQids = { hw:[], exam:[] };
 }
 
@@ -2151,6 +2178,19 @@ function renderPassagePrintHtml(passages){
     return `<div class="passage">${title}${p.text?esc(p.text):''}${renderPassageTableHtml(p.table)}</div>`;
   }).join('');
 }
+  function updateWrongBankAfterGrade(targetUid, kind, tid, taskTitle, qs, answers){
+  const { db, doc, setDoc } = window.fb;
+  const payload = {};
+  qs.forEach(q=>{
+    const mine = answers[q.qid] || '';
+    const ok = q.type==='mc' ? mine===String(q.answer) : normalize(mine)===normalize(q.answer);
+    if(!ok) payload['items.'+q.qid] = { status:'open', kind, taskId:tid, taskTitle, addedAt: Date.now() };
+  });
+  if(Object.keys(payload).length){
+    setDoc(doc(db,'wrongBank', targetUid), payload, {merge:true})
+      .catch(e=>console.error('오답노트 저장 실패:', e.message));
+  }
+}
 function answerLabel(q){
   if(q.type!=='mc') return q.answer;
   const i = parseInt(q.answer,10)-1;
@@ -2519,6 +2559,37 @@ function buildStudentReportHtml(uid){
   }).filter(Boolean);
 
   const today = new Date().toLocaleDateString('ko-KR');
+
+  function renderWrongNote(){
+  const box = $('wrong-note-list'); if(!box) return;
+  const entries = Object.entries(wrongItems);
+  if(!entries.length){
+    box.innerHTML = '<p class="empty-hint">아직 등록된 오답이 없습니다. 과제·시험을 풀면 틀린 문제가 자동으로 여기 모입니다.</p>';
+    return;
+  }
+  const open = entries.filter(([,v])=>v.status!=='mastered');
+  const mastered = entries.filter(([,v])=>v.status==='mastered');
+  const row = ([qid,item])=>{
+    const q = questions.find(x=>x.qid===qid);
+    if(!q) return '';
+    return `<div class="bank-item">
+      <div class="bi-body">
+        <span class="qset-tag type">${q.type==='mc'?'객관식':'단답형'}</span>
+        <span class="qset-tag set">${esc(item.taskTitle)}</span>
+        ${item.status==='mastered'?'<span class="badge good">마스터</span>':'<span class="badge warn">복습 필요</span>'}
+        <div style="margin-top:6px;"><b>${esc(q.body)}</b></div>
+        <div style="margin-top:8px; display:flex; gap:6px; flex-wrap:wrap;">
+          <button class="btn small secondary" onclick="openWrongSolve('${qid}', false)">원본 다시 풀기</button>
+          <button class="btn small" onclick="openWrongSolve('${qid}', true)">변형 문제 풀기</button>
+        </div>
+      </div>
+    </div>`;
+  };
+  box.innerHTML =
+    (open.length ? `<h3 style="margin-bottom:8px;">복습 필요 (${open.length})</h3>` + open.map(row).join('')
+                 : '<p class="empty-hint">현재 복습이 필요한 문제가 없습니다. 잘하고 있어요!</p>')
+    + (mastered.length ? `<h3 style="margin:18px 0 8px;">마스터 완료 (${mastered.length})</h3>` + mastered.map(row).join('') : '');
+}
 
   return `<!DOCTYPE html><html lang="ko"><head><meta charset="UTF-8">
 <title>${esc(s.name)} 학생 성적표</title>
@@ -3547,6 +3618,7 @@ async function submitSolve(){
   });
 
   const mode = answered ? 'omr' : 'photo';
+    if(mode==='omr') updateWrongBankAfterGrade(currentStudent, kind, tid, t.title, qs, answers);   // ← 추가
   const subData = {
     studentUid: currentStudent,
     taskId: tid, kind, mode,
@@ -3671,7 +3743,7 @@ function saveOmrEdit(){
     const ok = q.type==='mc' ? val===String(q.answer) : normalize(val)===normalize(q.answer);
     if(ok) correct++;
   });
-
+  updateWrongBankAfterGrade(uid, kind, tid, t.title, qs, answers);   // ← 추가
   const rec = {
     score: correct+'/'+qs.length,
     status: correct===qs.length ? '완료' : (correct>0 ? '일부완료' : '미완료')
@@ -3796,7 +3868,122 @@ function saveScore(kind, u){
     .then(()=>alert('저장되었습니다.'))
     .catch(e=>alert('저장 실패: '+e.message));
 }
+function renderWrongSolveBody(q){
+  $('wrong-solve-body').innerHTML = `
+    <div class="omr-q">
+      <div class="qnum">${esc(q.body)}</div>
+      ${renderPassageBoxHtml(q.passages && q.passages.length ? q.passages : getPassages(q))}
+      ${q.type==='mc'
+        ? `<div class="omr-choices">${(q.choices||[]).map((c,ci)=>
+            `<label class="omr-bubble" onclick="pickChoice(this)">
+              <input type="radio" name="wrong_ans" value="${ci+1}">${CIRCLE[ci]} ${esc(c)}</label>`).join('')}</div>`
+        : `<input type="text" id="wrong_ans_text" placeholder="정답 입력">`}
+    </div>`;
+}
 
+async function openWrongSolve(qid, wantVariant){
+  const q = questions.find(x=>x.qid===qid);
+  if(!q){ alert('문제를 찾을 수 없습니다.'); return; }
+  currentWrongQid = qid;
+  currentWrongIsVariant = wantVariant;
+  currentWrongVariantQ = null;
+  $('wrong-solve-result').innerHTML = '';
+  if(wantVariant){
+    $('wrong-solve-title').textContent = '변형 문제 풀이';
+    $('wrong-solve-body').innerHTML = '<p class="empty-hint">AI가 변형 문제를 만드는 중입니다...</p>';
+    openModal('wrong-solve-modal');
+    await generateWrongVariant(qid, false);
+  } else {
+    $('wrong-solve-title').textContent = '원본 문제 다시 풀기';
+    renderWrongSolveBody(q);
+    openModal('wrong-solve-modal');
+  }
+}
+
+async function generateWrongVariant(qid, isRetry){
+  const q = questions.find(x=>x.qid===qid);
+  if(!q){ alert('문제를 찾을 수 없습니다.'); return; }
+  const apiKey = localStorage.getItem('ai-gemini-apikey');
+  if(!apiKey){ alert('AI 문제 생성 탭에서 Gemini API 키를 먼저 입력해주세요.'); return; }
+  if(isRetry){ $('wrong-solve-result').innerHTML=''; $('wrong-solve-body').innerHTML = '<p class="empty-hint">새 변형 문제를 만드는 중입니다...</p>'; }
+
+  const passagesText = getPassages(q).map(p=>p.text).filter(Boolean).join('\n---\n');
+  const schema = {
+    type:"object",
+    properties:{
+      body:{type:"string"}, hasPassage:{type:"boolean"}, passage:{type:"string"},
+      choices:{type:"array", items:{type:"string"}, minItems:5, maxItems:5},
+      answer:{type:"string"}, explain:{type:"string"}
+    },
+    required:["body","hasPassage","passage","answer","explain"]
+  };
+  const sysPrompt = `너는 한국 고등학교 국제정치 과목 문제를 변형하는 편집자다.
+아래 원본 문제와 같은 개념·난이도를 다루되, 소재·사례·숫자·표현을 바꿔서 "변형 문제" 하나를 만들어라.
+유형(${q.type==='mc'?'5지선다 객관식':'단답형'})은 원본과 동일하게 유지하라.
+- 객관식이면 choices에 선지 5개(번호 표기 없이 내용만), answer는 정답 번호("1"~"5") 문자열.
+- 단답형이면 choices는 무시, answer는 정답 텍스트.
+- hasPassage가 true면 passage에 새 보기 지문, false면 빈 문자열.
+- explain은 2~4문장.
+- 반드시 JSON 스키마로만 응답.
+
+[원본 물음] ${q.body}
+[원본 보기] ${passagesText || '(없음)'}
+[원본 선지] ${(q.choices||[]).join(' / ')}
+[원본 정답] ${q.answer}`;
+
+  try{
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${apiKey}`;
+    const res = await fetch(url, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ contents:[{role:'user', parts:[{text:sysPrompt}]}],
+        generationConfig:{ responseMimeType:"application/json", responseSchema: schema } })
+    });
+    if(!res.ok) throw new Error('API 오류 ('+res.status+')');
+    const data = await res.json();
+    const parsed = JSON.parse(data.candidates[0].content.parts[0].text);
+    currentWrongVariantQ = {
+      type: q.type, body: parsed.body,
+      passages: parsed.hasPassage ? [{text:parsed.passage, imageUrl:'', hideTitle:false, table:null}] : [],
+      choices: q.type==='mc' ? parsed.choices : [],
+      answer: q.type==='mc' ? String(parseInt(parsed.answer,10)||1) : parsed.answer,
+      explain: parsed.explain
+    };
+    renderWrongSolveBody(currentWrongVariantQ);
+  } catch(e){
+    $('wrong-solve-body').innerHTML = `<p class="empty-hint">변형 문제 생성 실패: ${esc(e.message)}</p>`;
+  }
+}
+
+function submitWrongSolve(){
+  const q = currentWrongIsVariant ? currentWrongVariantQ : questions.find(x=>x.qid===currentWrongQid);
+  if(!q){ alert('문제를 불러오지 못했습니다.'); return; }
+  let mine;
+  if(q.type==='mc'){
+    const picked = document.querySelector('input[name="wrong_ans"]:checked');
+    mine = picked ? picked.value : '';
+  } else {
+    mine = $('wrong_ans_text') ? $('wrong_ans_text').value.trim() : '';
+  }
+  if(!mine){ alert('답을 입력해주세요.'); return; }
+  const ok = q.type==='mc' ? mine===String(q.answer) : normalize(mine)===normalize(q.answer);
+  const box = $('wrong-solve-result');
+  if(ok){
+    box.innerHTML = `<div class="exam-explain">정답입니다! ${q.explain?esc(q.explain):''}</div>`;
+    markWrongMastered(currentWrongQid);
+  } else {
+    const ansLabel = q.type==='mc'
+      ? (CIRCLE[parseInt(q.answer,10)-1]||'')+' '+esc((q.choices||[])[parseInt(q.answer,10)-1]||'')
+      : esc(q.answer);
+    box.innerHTML = `<div class="exam-explain wrong">오답입니다. 정답: ${ansLabel}<br>${q.explain?esc(q.explain):''}</div>`;
+  }
+}
+
+function markWrongMastered(qid){
+  if(!currentStudent) return;
+  const { db, doc, setDoc } = window.fb;
+  const payload = {}; payload['items.'+qid+'.status'] = 'mastered';
+  setDoc(doc(db,'wrongBank', currentStudent), payload, {merge:true}).catch(e=>console.error(e.message));
+}
 /* =========================================================
    운영 안내 탭
    ========================================================= */
