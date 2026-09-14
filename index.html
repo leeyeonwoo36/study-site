@@ -2620,37 +2620,6 @@ function buildStudentReportHtml(uid){
 
   const today = new Date().toLocaleDateString('ko-KR');
 
-  function renderWrongNote(){
-  const box = $('wrong-note-list'); if(!box) return;
-  const entries = Object.entries(wrongItems);
-  if(!entries.length){
-    box.innerHTML = '<p class="empty-hint">아직 등록된 오답이 없습니다. 과제·시험을 풀면 틀린 문제가 자동으로 여기 모입니다.</p>';
-    return;
-  }
-  const open = entries.filter(([,v])=>v.status!=='mastered');
-  const mastered = entries.filter(([,v])=>v.status==='mastered');
-  const row = ([qid,item])=>{
-    const q = questions.find(x=>x.qid===qid);
-    if(!q) return '';
-    return `<div class="bank-item">
-      <div class="bi-body">
-        <span class="qset-tag type">${q.type==='mc'?'객관식':'단답형'}</span>
-        <span class="qset-tag set">${esc(item.taskTitle)}</span>
-        ${item.status==='mastered'?'<span class="badge good">마스터</span>':'<span class="badge warn">복습 필요</span>'}
-        <div style="margin-top:6px;"><b>${esc(q.body)}</b></div>
-        <div style="margin-top:8px; display:flex; gap:6px; flex-wrap:wrap;">
-          <button class="btn small secondary" onclick="openWrongSolve('${qid}', false)">원본 다시 풀기</button>
-          <button class="btn small" onclick="openWrongSolve('${qid}', true)">변형 문제 풀기</button>
-        </div>
-      </div>
-    </div>`;
-  };
-  box.innerHTML =
-    (open.length ? `<h3 style="margin-bottom:8px;">복습 필요 (${open.length})</h3>` + open.map(row).join('')
-                 : '<p class="empty-hint">현재 복습이 필요한 문제가 없습니다. 잘하고 있어요!</p>')
-    + (mastered.length ? `<h3 style="margin:18px 0 8px;">마스터 완료 (${mastered.length})</h3>` + mastered.map(row).join('') : '');
-}
-
   return `<!DOCTYPE html><html lang="ko"><head><meta charset="UTF-8">
 <title>${esc(s.name)} 학생 성적표</title>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;700;900&display=swap" rel="stylesheet">
@@ -3603,6 +3572,36 @@ function statusBadge(st){
   if(st==='완료') return '<span class="badge good">완료</span>';
   if(st==='일부완료') return '<span class="badge part">일부완료</span>';
   return '<span class="badge warn">미완료</span>';
+}
+  function renderWrongNote(){
+  const box = $('wrong-note-list'); if(!box) return;
+  const entries = Object.entries(wrongItems);
+  if(!entries.length){
+    box.innerHTML = '<p class="empty-hint">아직 등록된 오답이 없습니다. 과제·시험을 풀면 틀린 문제가 자동으로 여기 모입니다.</p>';
+    return;
+  }
+  const open = entries.filter(([,v])=>v.status!=='mastered');
+  const mastered = entries.filter(([,v])=>v.status==='mastered');
+  const row = ([qid,item])=>{
+    const q = questions.find(x=>x.qid===qid);
+    if(!q) return '';
+    return `<div class="bank-item">
+      <div class="bi-body">
+        <span class="qset-tag type">${q.type==='mc'?'객관식':'단답형'}</span>
+        <span class="qset-tag set">${esc(item.taskTitle)}</span>
+        ${item.status==='mastered'?'<span class="badge good">마스터</span>':'<span class="badge warn">복습 필요</span>'}
+        <div style="margin-top:6px;"><b>${esc(q.body)}</b></div>
+        <div style="margin-top:8px; display:flex; gap:6px; flex-wrap:wrap;">
+          <button class="btn small secondary" onclick="openWrongSolve('${qid}', false)">원본 다시 풀기</button>
+          <button class="btn small" onclick="openWrongSolve('${qid}', true)">변형 문제 풀기</button>
+        </div>
+      </div>
+    </div>`;
+  };
+  box.innerHTML =
+    (open.length ? `<h3 style="margin-bottom:8px;">복습 필요 (${open.length})</h3>` + open.map(row).join('')
+                 : '<p class="empty-hint">현재 복습이 필요한 문제가 없습니다. 잘하고 있어요!</p>')
+    + (mastered.length ? `<h3 style="margin:18px 0 8px;">마스터 완료 (${mastered.length})</h3>` + mastered.map(row).join('') : '');
 }
 function fillMyInfo(){
   const s = students.find(x=>x.uid===currentStudent); if(!s) return;
