@@ -170,7 +170,12 @@
   .att-reason-btn{font-size:11.5px; padding:3px 9px; border-radius:20px; border:1px solid var(--border);
     background:#fff; color:var(--ink-soft); cursor:pointer; margin-left:6px;}
   .att-reason-btn.filled{border-color:var(--warn); color:var(--warn); font-weight:700;}
-
+.chat-bubble{max-width:75%; padding:8px 12px; border-radius:14px; margin-bottom:8px; font-size:13.5px; white-space:pre-wrap; word-break:break-word;}
+.chat-bubble.mine{background:var(--brand); color:#fff; margin-left:auto; border-bottom-right-radius:4px;}
+.chat-bubble.theirs{background:#fff; border:1px solid var(--border); margin-right:auto; border-bottom-left-radius:4px;}
+.chat-bubble .chat-time{display:block; font-size:10.5px; opacity:.7; margin-top:3px;}
+.notice-item{border-left:4px solid var(--brand); background:var(--brand-soft); padding:10px 12px; border-radius:var(--radius); margin-bottom:8px; font-size:13.5px; white-space:pre-wrap;}
+.notice-item .notice-date{display:block; font-size:11px; color:var(--muted); margin-top:4px;}
   .qset-block{border:1px solid var(--border); border-radius:10px; margin-bottom:10px; overflow:hidden; background:#fff;}
   .qset-head{display:flex; align-items:center; justify-content:space-between; gap:8px; padding:11px 14px;
     background:#EAF3FF; cursor:pointer; font-weight:700; font-size:14px;}
@@ -322,6 +327,8 @@
         <button class="admin-nav active" data-tab="a-schedule" onclick="setAdminTab('a-schedule')">수업 일정</button>
         <button class="admin-nav" data-tab="a-attendance" onclick="setAdminTab('a-attendance')">출석 체크</button>
         <button class="admin-nav" data-tab="a-students" onclick="setAdminTab('a-students')">학생 관리</button>
+        <button class="admin-nav" data-tab="a-notice" onclick="setAdminTab('a-notice')">공지사항</button>
+        <button class="admin-nav" data-tab="a-chat" onclick="setAdminTab('a-chat')">학생 채팅</button>
         <button class="admin-nav" data-tab="a-hw" onclick="setAdminTab('a-hw')">과제 관리</button>
         <button class="admin-nav" data-tab="a-exam" onclick="setAdminTab('a-exam')">시험 관리</button>
         <button class="admin-nav" data-tab="a-video" onclick="setAdminTab('a-video')">동영상 관리</button>
@@ -387,7 +394,40 @@
           </table>
         </div>
       </div>
-
+<div class="tabpanel" id="tab-a-notice">
+  <div class="page-head"><div><h1>공지사항</h1><p>학생 메인 화면 상단에 표시됩니다.</p></div></div>
+  <div class="card">
+    <h3 id="notice-form-title">공지 등록</h3>
+    <div class="form-grid full">
+      <div><label>내용</label><textarea id="notice-text" placeholder="예: 이번 주 토요일 수업은 휴강입니다."></textarea></div>
+    </div>
+    <button class="btn" id="notice-submit-btn" style="width:100%;" onclick="addNotice()">공지 등록</button>
+    <button class="btn ghost" id="notice-cancel-btn" style="width:100%; margin-top:8px; display:none;" onclick="cancelNoticeEdit()">수정 취소</button>
+  </div>
+  <div class="card">
+    <h3>등록된 공지</h3>
+    <div id="notice-list"></div>
+  </div>
+</div>
+      <div class="tabpanel" id="tab-a-chat">
+  <div class="page-head"><div><h1>학생 채팅</h1><p>학생과 1:1로 대화할 수 있습니다.</p></div></div>
+  <div class="card">
+    <div class="form-grid full">
+      <div><label>학생 선택</label>
+        <select id="chat-student-select" onchange="openAdminChat(this.value)"></select>
+      </div>
+    </div>
+    <div id="chat-unread-hint"></div>
+  </div>
+  <div class="card" id="chat-window-card" style="display:none;">
+    <h3 id="chat-window-title">채팅</h3>
+    <div id="chat-messages" style="max-height:420px; overflow-y:auto; padding:8px; background:var(--paper); border-radius:var(--radius); margin-bottom:10px;"></div>
+    <div style="display:flex; gap:8px;">
+      <input type="text" id="chat-input" placeholder="메시지를 입력하세요" onkeydown="if(event.key==='Enter')sendAdminChatMessage()" style="flex:1;">
+      <button class="btn" onclick="sendAdminChatMessage()">보내기</button>
+    </div>
+  </div>
+</div>
       <!-- 과제 관리 -->
       <div class="tabpanel" id="tab-a-hw">
         <div class="page-head"><div><h1>과제 관리</h1><p>과제를 등록·삭제하고 문항과 대상 학생을 지정합니다.</p></div></div>
@@ -779,6 +819,7 @@
         <button class="student-nav" data-tab="t-exam" onclick="setStudentTab('t-exam')">시험</button>
         <button class="student-nav" data-tab="t-wrong" onclick="setStudentTab('t-wrong')">오답노트</button>
         <button class="student-nav" data-tab="t-video" onclick="setStudentTab('t-video')">수업 영상</button>
+        <button class="student-nav" data-tab="t-chat" onclick="setStudentTab('t-chat')">관리자와 채팅</button>
         <button class="student-nav" data-tab="t-me" onclick="setStudentTab('t-me')">내 정보</button>
         <button class="student-nav" onclick="logout()" style="margin-top:14px; border-top:1px solid rgba(255,255,255,.18);">로그아웃</button>
       </nav>
@@ -787,7 +828,7 @@
 
            <div class="tabpanel active" id="tab-t-main">
         <div class="page-head"><div><h1 id="stu-greeting">메인</h1><p>오늘 할 일과 나의 학습 현황을 한눈에 확인하세요.</p></div></div>
-
+        <div id="stu-notice-card"></div>
         <div id="stu-deadline-card" class="card" style="border-left:4px solid var(--accent);"></div>
 
         <div class="form-grid">
@@ -839,7 +880,16 @@
   <div class="page-head"><div><h1>수업 영상</h1><p>수업 영상을 시청하세요.</p></div></div>
   <div id="t-video-list"></div>
 </div>
-
+<div class="tabpanel" id="tab-t-chat">
+  <div class="page-head"><div><h1>관리자와 채팅</h1><p>궁금한 점을 자유롭게 남겨주세요.</p></div></div>
+  <div class="card">
+    <div id="stu-chat-messages" style="max-height:420px; overflow-y:auto; padding:8px; background:var(--paper); border-radius:var(--radius); margin-bottom:10px;"></div>
+    <div style="display:flex; gap:8px;">
+      <input type="text" id="stu-chat-input" placeholder="메시지를 입력하세요" onkeydown="if(event.key==='Enter')sendStudentChatMessage()" style="flex:1;">
+      <button class="btn" onclick="sendStudentChatMessage()">보내기</button>
+    </div>
+  </div>
+</div>
       <div class="tabpanel" id="tab-t-me">
         <div class="page-head"><div><h1>내 정보</h1><p>인적사항은 본인이 수정할 수 없으며, 이메일(로그인 ID) 변경은 본인 확인이 필요합니다.</p></div></div>
 
@@ -1164,6 +1214,7 @@ function setAdminTab(id){
   if(id==='a-scores'){ renderScoreSelects(); renderScoreTable('hw'); renderScoreTable('exam'); }
   if(id==='a-attendance') renderAttendance();
   if(id==='a-video') renderVideos();
+  if(id==='a-chat') renderChatStudentSelect();
     if(id==='a-preview') renderPreviewStudentSelect();
   if(id==='a-bank') renderBank();
   if(id==='a-ai') renderAiSetOptions();
@@ -1177,6 +1228,7 @@ function setStudentTab(id){
   if(btn) btn.classList.add('active');
   if(id==='t-me') fillMyInfo();
   if(id==='t-wrong') renderWrongNote();
+  if(id==='t-chat') renderStudentChat();
 }
 
 /* =========================================================
@@ -1214,6 +1266,11 @@ let currentWrongIsVariant = false;
 let currentWrongVariantQ = null;
 let editOmrTarget = null; // {kind, tid, uid}
 let openedTaskDetailKey = null;
+let notices = [];
+let editingNoticeId = null;
+let chatMessages = {};      // chatId -> [messages]
+let currentChatStudentUid = null; // 관리자가 지금 보고 있는 채팅 상대
+let chatUnsubs = {};        // chatId -> unsub 함수 (관리자가 여러 학생 채팅을 열고 닫을 때 정리용)
   let videos = [];
   let draftAssignees = {hw:null, exam:null, sch:null, 'sch-edit':null, video:null};
 
@@ -1238,7 +1295,7 @@ function renderAll(){
   renderStudents(); renderSchedules(); renderQSetOptions(); renderQuestions(); renderVideos(); renderStudentVideos();
   renderTasks(); renderBank(); renderScoreSelects();
   renderScoreTable('hw'); renderScoreTable('exam');
-  renderGradingTable(); renderStudentSite();
+  renderGradingTable(); renderStudentSite(); renderNotices(); renderStudentNotice();
 }
 
 const CLOUDINARY_CLOUD_NAME = 'vuszb14k';
@@ -1283,6 +1340,13 @@ function startSubscriptions(isAdmin, ownerUid){
       renderStudents(); renderAttendance();
       renderScoreTable('hw'); renderScoreTable('exam'); renderGradingTable();
     });
+    if(!isAdmin && currentStudent){
+  unsubs.push(onSnapshot(doc(db,'chats', currentStudent), snap=>{
+    const msgs = snap.exists() ? (snap.data().messages || []) : [];
+    chatMessages[currentStudent] = msgs;
+    renderStudentChat();
+  }, err=>console.error('chat 구독 에러:', err.code)));
+}
   } else if(currentStudent){
     // 학생은 본인 문서만 읽을 수 있으므로 컬렉션이 아니라 문서 하나만 구독
     unsubs.push(onSnapshot(doc(db, 'students', currentStudent), snap => {
@@ -1314,6 +1378,11 @@ if(!isAdmin && currentStudent){
     snap.docs.forEach(d => { attendance[d.id] = d.data(); });
     renderAttendance(); renderStudentSchedule();
   });
+  sub('notices', snap => {
+  notices = snap.docs.map(d => ({ nid:d.id, ...d.data() }));
+  notices.sort((a,b)=> (b.createdAt||0) - (a.createdAt||0));
+  renderNotices(); renderStudentNotice();
+});
   sub('videos', snap => {
   videos = snap.docs.map(d => ({ vid:d.id, ...d.data() }));
   videos.sort((a,b)=> (b.createdAt||0) - (a.createdAt||0));
@@ -1368,6 +1437,9 @@ function stopSubscriptions(){
   submissions = {}; scores = { hw:{}, exam:{} };
     wrongItems = {};   // ← 추가
   draftQids = { hw:[], exam:[] };
+  notices = []; chatMessages = {}; currentChatStudentUid = null;
+Object.values(chatUnsubs).forEach(fn=>{ try{fn();}catch(e){} });
+chatUnsubs = {};
 }
 
 /* =========================================================
@@ -2039,7 +2111,137 @@ function renderStudentSchedule(){
   }).join('') || '<tr><td colspan="7" class="empty-hint">등록된 일정이 없습니다.</td></tr>';
 }
 
+/* =========================================================
+   공지사항
+   ========================================================= */
+function addNotice(){
+  const text = $('notice-text').value.trim();
+  if(!text){ alert('내용을 입력하세요.'); return; }
+  const editId = editingNoticeId;
+  $('notice-text').value = '';
+  cancelNoticeEdit();
+  const { db, collection, doc, setDoc, updateDoc } = window.fb;
+  const data = { text, createdAt: Date.now() };
+  const p = editId ? updateDoc(doc(db,'notices', editId), {text})
+                   : setDoc(doc(collection(db,'notices')), data);
+  p.catch(e=>alert('저장 실패: '+e.message));
+}
+function editNotice(nid){
+  const n = notices.find(x=>x.nid===nid); if(!n) return;
+  editingNoticeId = nid;
+  $('notice-text').value = n.text;
+  $('notice-form-title').textContent = '공지 수정';
+  $('notice-submit-btn').textContent = '수정 저장';
+  $('notice-cancel-btn').style.display = 'block';
+}
+function cancelNoticeEdit(){
+  editingNoticeId = null;
+  $('notice-form-title').textContent = '공지 등록';
+  $('notice-submit-btn').textContent = '공지 등록';
+  $('notice-cancel-btn').style.display = 'none';
+}
+function removeNotice(nid){
+  if(!confirm('이 공지를 삭제할까요?')) return;
+  const { db, doc, deleteDoc } = window.fb;
+  deleteDoc(doc(db,'notices', nid)).catch(e=>alert('삭제 실패: '+e.message));
+}
+function renderNotices(){
+  const box = $('notice-list'); if(!box) return;
+  box.innerHTML = notices.length ? notices.map(n=>{
+    const d = new Date(n.createdAt).toLocaleString('ko-KR');
+    return `<div class="notice-item">
+      ${esc(n.text)}
+      <span class="notice-date">${d}</span>
+      <div style="margin-top:8px;">
+        <button class="btn small secondary" onclick="editNotice('${n.nid}')">수정</button>
+        <button class="btn small danger" onclick="removeNotice('${n.nid}')">삭제</button>
+      </div>
+    </div>`;
+  }).join('') : '<p class="empty-hint">등록된 공지가 없습니다.</p>';
+}
+function renderStudentNotice(){
+  const box = $('stu-notice-card'); if(!box || !currentStudent) return;
+  const latest = notices[0];
+  if(!latest){ box.innerHTML=''; return; }
+  const d = new Date(latest.createdAt).toLocaleString('ko-KR');
+  box.innerHTML = `<div class="notice-item" style="margin-bottom:18px;">
+    <b>공지사항</b><br>${esc(latest.text)}
+    <span class="notice-date">${d}</span>
+  </div>`;
+}
+  /* =========================================================
+   채팅 (관리자 ↔ 학생 1:1)
+   ========================================================= */
+function renderChatStudentSelect(){
+  const sel = $('chat-student-select'); if(!sel) return;
+  const prev = sel.value;
+  const list = students.filter(s=>s.approved);
+  sel.innerHTML = '<option value="">학생을 선택하세요</option>' +
+    list.map(s=>`<option value="${s.uid}">${esc(s.name)} (${esc(s.grade||'')})</option>`).join('');
+  if(prev && sel.querySelector('option[value="'+prev+'"]')) sel.value = prev;
+}
 
+function openAdminChat(uid){
+  currentChatStudentUid = uid;
+  if(!uid){ $('chat-window-card').style.display='none'; return; }
+  $('chat-window-card').style.display = 'block';
+  const s = students.find(x=>x.uid===uid);
+  $('chat-window-title').textContent = (s?s.name:'') + ' 학생과의 대화';
+  $('chat-input').value = '';
+
+  // 이미 구독 중이면 재구독하지 않음
+  if(chatUnsubs[uid]) { renderAdminChatMessages(uid); return; }
+  const { db, doc, onSnapshot } = window.fb;
+  chatUnsubs[uid] = onSnapshot(doc(db,'chats', uid), snap=>{
+    chatMessages[uid] = snap.exists() ? (snap.data().messages || []) : [];
+    if(currentChatStudentUid === uid) renderAdminChatMessages(uid);
+  }, err=>console.error('chat 구독 에러:', err.code));
+}
+
+function renderAdminChatMessages(uid){
+  const box = $('chat-messages'); if(!box) return;
+  const msgs = chatMessages[uid] || [];
+  box.innerHTML = msgs.length ? msgs.map(m=>{
+    const mine = m.from === 'admin';
+    const time = new Date(m.at).toLocaleString('ko-KR', {month:'numeric', day:'numeric', hour:'2-digit', minute:'2-digit'});
+    return `<div class="chat-bubble ${mine?'mine':'theirs'}">${esc(m.text)}<span class="chat-time">${time}</span></div>`;
+  }).join('') : '<p class="empty-hint">대화 내용이 없습니다.</p>';
+  box.scrollTop = box.scrollHeight;
+}
+
+function sendAdminChatMessage(){
+  const uid = currentChatStudentUid;
+  if(!uid){ alert('학생을 먼저 선택하세요.'); return; }
+  const text = $('chat-input').value.trim();
+  if(!text) return;
+  $('chat-input').value = '';
+  const { db, doc, setDoc, arrayUnion } = window.fb;
+  const msg = { from:'admin', text, at: Date.now() };
+  setDoc(doc(db,'chats', uid), { messages: arrayUnion(msg) }, {merge:true})
+    .catch(e=>alert('전송 실패: '+e.message));
+}
+
+function renderStudentChat(){
+  const box = $('stu-chat-messages'); if(!box || !currentStudent) return;
+  const msgs = chatMessages[currentStudent] || [];
+  box.innerHTML = msgs.length ? msgs.map(m=>{
+    const mine = m.from === 'student';
+    const time = new Date(m.at).toLocaleString('ko-KR', {month:'numeric', day:'numeric', hour:'2-digit', minute:'2-digit'});
+    return `<div class="chat-bubble ${mine?'mine':'theirs'}">${esc(m.text)}<span class="chat-time">${time}</span></div>`;
+  }).join('') : '<p class="empty-hint">아직 대화가 없습니다. 궁금한 점을 남겨보세요.</p>';
+  box.scrollTop = box.scrollHeight;
+}
+
+function sendStudentChatMessage(){
+  if(!currentStudent) return;
+  const text = $('stu-chat-input').value.trim();
+  if(!text) return;
+  $('stu-chat-input').value = '';
+  const { db, doc, setDoc, arrayUnion } = window.fb;
+  const msg = { from:'student', text, at: Date.now() };
+  setDoc(doc(db,'chats', currentStudent), { messages: arrayUnion(msg) }, {merge:true})
+    .catch(e=>alert('전송 실패: '+e.message));
+}
   /* =========================================================
    동영상 (유튜브)
    ========================================================= */
@@ -4282,7 +4484,7 @@ import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword,
          sendPasswordResetEmail, onAuthStateChanged, signOut,
          reauthenticateWithCredential, updateEmail, EmailAuthProvider }
   from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-import { getFirestore, collection, doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, deleteField, onSnapshot, query, where }
+import { getFirestore, collection, doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, deleteField, onSnapshot, query, where, arrayUnion }
   from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
 const firebaseConfig = {
@@ -4300,7 +4502,7 @@ const db   = getFirestore(app);
 
 window.fb = {
   db, auth,
-  collection, doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, deleteField, onSnapshot, query, where,   // ← query, where 추가
+  collection, doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, deleteField, onSnapshot, query, where, arrayUnion,
   signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut,
   sendPasswordResetEmail, reauthenticateWithCredential, updateEmail, EmailAuthProvider
 };
