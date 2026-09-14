@@ -1201,6 +1201,7 @@ let openedTaskDetailKey = null;
 
 /* 구독 관리 — 로그인 후에만 켜고, 계정이 바뀌거나 로그아웃하면 반드시 해제 */
 let unsubs = [];
+let sharedAiKey = '';
 let subsOwner = null;   // 현재 구독을 시작한 계정 uid (계정 전환 감지용)
 
 function ensureScoreSlots(){
@@ -1281,6 +1282,10 @@ if(!isAdmin && currentStudent){
     renderWrongNote();
   }, err=>console.error('wrongBank 구독 에러:', err.code)));
 }
+  sub('settings', snap => {
+  const doc0 = snap.docs.find(d=>d.id==='aiConfig');
+  sharedAiKey = doc0 ? (doc0.data().geminiKey||'') : '';
+});
   sub('schedules', snap => {
     schedules = snap.docs.map(d => ({ sid:d.id, ...d.data() }));
     schedules.sort((a,b)=> String(a.date) < String(b.date) ? -1 : 1);
@@ -3069,7 +3074,13 @@ function initAiApiKeyStorage(){
   const saved = localStorage.getItem('ai-gemini-apikey');
   if(saved) input.value = saved;
   input.addEventListener('input', ()=>{
-    localStorage.setItem('ai-gemini-apikey', input.value.trim());
+    const val = input.value.trim();
+    localStorage.setItem('ai-gemini-apikey', val);
+    if(window.fb){
+      const { db, doc, setDoc } = window.fb;
+      setDoc(doc(db,'settings','aiConfig'), { geminiKey: val }, {merge:true})
+        .catch(e=>console.error('키 공유 저장 실패:', e.message));
+    }
   });
 }
   initAiApiKeyStorage();
@@ -4044,8 +4055,8 @@ async function openWrongSolve(qid, wantVariant){
 async function generateWrongVariant(qid, isRetry){
   const q = questions.find(x=>x.qid===qid);
   if(!q){ alert('문제를 찾을 수 없습니다.'); return; }
-  const apiKey = localStorage.getItem('ai-gemini-apikey');
-  if(!apiKey){ alert('AI 문제 생성 탭에서 Gemini API 키를 먼저 입력해주세요.'); return; }
+  const apiKey = localStorage.getItem('ai-gemini-apikey') || sharedAiKey;
+  if(!apiKey){ alert('아직 AI 변형 문제 기능을 위한 키가 설정되지 않았습니다. 관리자에게 문의해주세요.'); return; }
   if(isRetry){ $('wrong-solve-result').innerHTML=''; $('wrong-solve-body').innerHTML = '<p class="empty-hint">새 변형 문제를 만드는 중입니다...</p>'; }
 
   const passagesText = getPassages(q).map(p=>p.text).filter(Boolean).join('\n---\n');
