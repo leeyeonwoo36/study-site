@@ -4515,6 +4515,14 @@ onAuthStateChanged(auth, async user => {
   catch(e){ console.error('자동 로그인 라우팅 실패:', e); }
 });
 
+  window.__state = {
+  get students(){return students}, get questions(){return questions}, get questionSets(){return questionSets},
+  get tasks(){return tasks}, get submissions(){return submissions}, get scores(){return scores},
+  get attendance(){return attendance}, get schedules(){return schedules},
+  get currentStudent(){return currentStudent}, get isAdmin(){return currentUserIsAdmin},
+  get chatMessages(){return chatMessages}   // ← 추가
+};
+
 console.log("✅ Firebase 연결됨");
 </script>
 
