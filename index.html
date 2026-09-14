@@ -983,7 +983,19 @@
     <button class="btn ghost" onclick="closeModal('picker-modal')">닫기</button>
   </div>
 </div>
-
+<!-- 관리자 오답노트 문제 추가 -->
+<div class="modal-bg" id="admin-wrong-picker-modal">
+  <div class="modal wide">
+    <button class="modal-close" onclick="closeModal('admin-wrong-picker-modal')">✕</button>
+    <h3>오답노트에 문제 추가</h3>
+    <div class="form-grid">
+      <div><label>세트 필터</label><select id="admin-wrong-picker-set" onchange="renderAdminWrongPicker()"></select></div>
+      <div><label>검색어</label><input type="text" id="admin-wrong-picker-search" placeholder="물음·보기 검색" oninput="renderAdminWrongPicker()"></div>
+    </div>
+    <div id="admin-wrong-picker-list" style="max-height:44vh; overflow:auto; margin-bottom:12px;"></div>
+    <button class="btn ghost" onclick="closeModal('admin-wrong-picker-modal')">닫기</button>
+  </div>
+</div>
 <!-- 학생 문제 풀이 -->
 <div class="modal-bg" id="solve-modal">
   <div class="modal wide">
@@ -1057,6 +1069,10 @@
 <div id="detail-task-detail" style="margin-bottom:18px;"></div>
     <h3>시험 성적 추이</h3>
     <div id="detail-trend-chart"></div>
+        <h3 style="margin-top:18px;">오답노트</h3>
+    <p class="note">학생이 틀린 문제가 자동으로 쌓입니다. 관리자가 직접 추가하거나 삭제할 수 있습니다.</p>
+    <button class="btn secondary" style="margin-bottom:10px;" onclick="openAdminWrongPicker()">+ 문제 추가</button>
+    <div id="admin-wrong-list" style="margin-bottom:18px;"></div>
     <h3 style="margin-top:18px;">개별 메모</h3>
     <p class="note">Enter로 줄바꿈이 가능합니다. 저장은 아래 버튼을 눌러주세요.</p>
     <textarea id="new-memo-text" placeholder="새 메모 입력 (수업 태도, 상담 내용 등 · 여러 줄 입력 가능)" style="min-height:80px;"></textarea>
@@ -1191,6 +1207,7 @@ let editTaskId = {hw:null, exam:null};
 let memoEditIndex = null;
 let currentSolve = null;
 let wrongItems = {};          // qid -> {status, kind, taskId, taskTitle, addedAt}
+let adminWrongItems = {};   // 현재 상세 모달로 보고 있는 학생의 오답노트
 let currentWrongQid = null;
 let currentWrongIsVariant = false;
 let currentWrongVariantQ = null;
@@ -1560,7 +1577,93 @@ function saveStudentEdit(){
   const { db, doc, updateDoc } = window.fb;
   updateDoc(doc(db,'students', s.uid), data).catch(e=>alert('저장 실패: '+e.message));
 }
+/* =========================================================
+   오답노트 관리 (관리자)
+   ========================================================= */
+function loadAdminWrongNote(uid){
+  const { db, doc, getDoc } = window.fb;
+  $('admin-wrong-list').innerHTML = '<p class="empty-hint">불러오는 중...</p>';
+  getDoc(doc(db,'wrongBank', uid)).then(snap=>{
+    adminWrongItems = snap.exists() ? (snap.data().items || {}) : {};
+    renderAdminWrongNote(uid);
+  }).catch(e=>{
+    $('admin-wrong-list').innerHTML = '<p class="empty-hint">오답노트를 불러오지 못했습니다: '+esc(e.message)+'</p>';
+  });
+}
 
+function renderAdminWrongNote(uid){
+  const box = $('admin-wrong-list'); if(!box) return;
+  const entries = Object.entries(adminWrongItems);
+  if(!entries.length){
+    box.innerHTML = '<p class="empty-hint">등록된 오답이 없습니다.</p>';
+    return;
+  }
+  box.innerHTML = entries.map(([qid,item])=>{
+    const q = questions.find(x=>x.qid===qid);
+    const bodyText = q ? q.body : '(삭제된 문제)';
+    return `<div class="bank-item">
+      <div class="bi-body">
+        <span class="qset-tag type">${q ? (q.type==='mc'?'객관식':'단답형') : '?'}</span>
+        <span class="qset-tag set">${esc(item.taskTitle||'수동 추가')}</span>
+        ${item.status==='mastered'?'<span class="badge good">마스터</span>':'<span class="badge warn">복습 필요</span>'}
+        <div style="margin-top:6px;"><b>${esc(bodyText)}</b></div>
+        <div style="margin-top:8px;">
+          <button class="btn small danger" onclick="removeAdminWrongItem('${uid}','${qid}')">삭제</button>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function removeAdminWrongItem(uid, qid){
+  if(!confirm('이 문제를 오답노트에서 삭제할까요?')) return;
+  const { db, doc, updateDoc, deleteField } = window.fb;
+  const payload = {}; payload['items.'+qid] = deleteField();
+  updateDoc(doc(db,'wrongBank', uid), payload)
+    .then(()=>{
+      delete adminWrongItems[qid];
+      renderAdminWrongNote(uid);
+    })
+    .catch(e=>alert('삭제 실패: '+e.message));
+}
+
+function openAdminWrongPicker(){
+  $('admin-wrong-picker-search').value = '';
+  renderAdminWrongPicker();
+  openModal('admin-wrong-picker-modal');
+}
+
+function renderAdminWrongPicker(){
+  const arr = filterQuestions($('admin-wrong-picker-set').value, '', $('admin-wrong-picker-search').value);
+  $('admin-wrong-picker-list').innerHTML = arr.length ? arr.map(q=>{
+    const already = !!adminWrongItems[q.qid];
+    return `<div class="bank-item${already?' sel':''}">
+      <div class="bi-body">
+        <span class="qset-tag type">${q.type==='mc'?'객관식':'단답형'}</span>
+        <span class="qset-tag set">${q.set? esc(q.set):'미분류'}</span>
+        <div style="margin-top:4px;"><b>${esc(q.body)}</b></div>
+        <div style="margin-top:8px;">
+          <button class="btn small ${already?'ghost':''}" ${already?'disabled':''} onclick="addAdminWrongItem('${q.qid}')">${already?'이미 추가됨':'오답노트에 추가'}</button>
+        </div>
+      </div>
+    </div>`;
+  }).join('') : '<p class="empty-hint">조건에 맞는 문제가 없습니다.</p>';
+}
+
+function addAdminWrongItem(qid){
+  if(!currentDetailUid) return;
+  const q = questions.find(x=>x.qid===qid); if(!q) return;
+  const { db, doc, setDoc } = window.fb;
+  const payload = {};
+  payload['items.'+qid] = { status:'open', kind:'manual', taskId:'', taskTitle:'관리자 추가', addedAt: Date.now() };
+  setDoc(doc(db,'wrongBank', currentDetailUid), payload, {merge:true})
+    .then(()=>{
+      adminWrongItems[qid] = payload['items.'+qid];
+      renderAdminWrongNote(currentDetailUid);
+      renderAdminWrongPicker();
+    })
+    .catch(e=>alert('추가 실패: '+e.message));
+}
 /* ---------- 학생 상세 · 메모 ---------- */
 function openStudentDetail(u){
   currentDetailUid = u;
@@ -1576,6 +1679,7 @@ function openStudentDetail(u){
   renderStudentTaskStatus(u);
   renderStudentAttendanceStatus(u);
   renderMemos();
+  loadAdminWrongNote(u);   // ← 추가
   openModal('student-detail-modal');
 }
 function saveMemos(memos){
@@ -2042,8 +2146,8 @@ function renderQSetOptions(){
     extractEl.innerHTML = '<option value="">미분류</option>' + opts;
     if(prev && extractEl.querySelector('option[value="'+prev+'"]')) extractEl.value=prev;
   }
- const all = '<option value="">전체</option>' + opts + '<option value="__none__">미분류</option>';
-['bank-set-filter','picker-set','q-table-set-filter'].forEach(id=>{
+const all = '<option value="">전체</option>' + opts + '<option value="__none__">미분류</option>';
+['bank-set-filter','picker-set','q-table-set-filter','admin-wrong-picker-set'].forEach(id=>{
   const el=$(id); if(!el) return;
   const prev=el.value; el.innerHTML=all;
   if(prev && el.querySelector('option[value="'+prev+'"]')) el.value=prev;
