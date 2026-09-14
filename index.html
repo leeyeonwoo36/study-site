@@ -3209,6 +3209,18 @@ const schema = {
     btn.textContent = '추출하기';
   }
 }
+  function initAiApiKeyStorage(){
+  const input = $('ai-apikey');
+  if(!input) return;
+  const saved = localStorage.getItem('ai-gemini-apikey');
+  if(saved) input.value = saved;
+  input.addEventListener('input', ()=>{
+    localStorage.setItem('ai-gemini-apikey', input.value.trim());
+  });
+}
+initAiApiKeyStorage();
+async function generateAiQuestions(){
+  ...
   initAiApiKeyStorage();
 async function generateAiQuestions(){
   const apiKey = $('ai-apikey').value.trim();
