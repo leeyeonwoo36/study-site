@@ -3631,29 +3631,6 @@ function renderWrongNote(){
                  : '<p class="empty-hint">현재 복습이 필요한 문제가 없습니다. 잘하고 있어요!</p>')
     + (mastered.length ? `<h3 style="margin:18px 0 8px;">마스터 완료 (${mastered.length})</h3>` + mastered.map(row).join('') : '');
 }
-  const open = entries.filter(([,v])=>v.status!=='mastered');
-  const mastered = entries.filter(([,v])=>v.status==='mastered');
-  const row = ([qid,item])=>{
-    const q = questions.find(x=>x.qid===qid);
-    if(!q) return '';
-    return `<div class="bank-item">
-      <div class="bi-body">
-        <span class="qset-tag type">${q.type==='mc'?'객관식':'단답형'}</span>
-        <span class="qset-tag set">${esc(item.taskTitle)}</span>
-        ${item.status==='mastered'?'<span class="badge good">마스터</span>':'<span class="badge warn">복습 필요</span>'}
-        <div style="margin-top:6px;"><b>${esc(q.body)}</b></div>
-        <div style="margin-top:8px; display:flex; gap:6px; flex-wrap:wrap;">
-          <button class="btn small secondary" onclick="openWrongSolve('${qid}', false)">원본 다시 풀기</button>
-          <button class="btn small" onclick="openWrongSolve('${qid}', true)">변형 문제 풀기</button>
-        </div>
-      </div>
-    </div>`;
-  };
-  box.innerHTML =
-    (open.length ? `<h3 style="margin-bottom:8px;">복습 필요 (${open.length})</h3>` + open.map(row).join('')
-                 : '<p class="empty-hint">현재 복습이 필요한 문제가 없습니다. 잘하고 있어요!</p>')
-    + (mastered.length ? `<h3 style="margin:18px 0 8px;">마스터 완료 (${mastered.length})</h3>` + mastered.map(row).join('') : '');
-}
 function fillMyInfo(){
   const s = students.find(x=>x.uid===currentStudent); if(!s) return;
   $('me-name').value = s.name||'';
