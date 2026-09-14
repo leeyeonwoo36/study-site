@@ -2890,7 +2890,9 @@ function applyPicker(){
 function addSetToDraft(kind){
   const sel = kind==='hw' ? $('hw-qset') : $('ex-qset');
   if(!questionSets.length || !sel.value){ alert('등록된 문제 세트가 없습니다. 먼저 세트를 만들어주세요.'); return; }
-  const add = questions.filter(q=>q.set===sel.value).map(q=>q.qid);
+  const add = questions.filter(q=>q.set===sel.value)
+    .sort((a,b)=>(a.order??0)-(b.order??0))   // ← 추가: 세트 내 순서대로 정렬
+    .map(q=>q.qid);
   if(!add.length){ alert('선택한 세트에 등록된 문제가 없습니다.'); return; }
   add.forEach(q=>{ if(!draftQids[kind].includes(q)) draftQids[kind].push(q); });
   renderDraft(kind);
