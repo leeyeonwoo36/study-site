@@ -2459,7 +2459,7 @@ function editQuestion(qid){
   $('q-body').value=q.body;
   const ps = getPassages(q);
   $('q-has-passage').checked = ps.length>0; togglePassage();
-  $('q-passage').innerHTML=q.passage||'';
+  $('q-passage').innerHTML = ps[0]?.text || '';
   $('q-passage-hide').checked = !!(ps[0]?.hideTitle);
   $('q-passage-table').value = tableToText(ps[0]?.table);
   $('q-has-passage-2').checked = ps.length>1; togglePassage2();
