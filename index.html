@@ -2237,14 +2237,14 @@ function renderPassagePrintHtml(passages){
 }
   function updateWrongBankAfterGrade(targetUid, kind, tid, taskTitle, qs, answers){
   const { db, doc, setDoc } = window.fb;
-  const payload = {};
+  const items = {};
   qs.forEach(q=>{
     const mine = answers[q.qid] || '';
     const ok = q.type==='mc' ? mine===String(q.answer) : normalize(mine)===normalize(q.answer);
-    if(!ok) payload['items.'+q.qid] = { status:'open', kind, taskId:tid, taskTitle, addedAt: Date.now() };
+    if(!ok) items[q.qid] = { status:'open', kind, taskId:tid, taskTitle, addedAt: Date.now() };
   });
-  if(Object.keys(payload).length){
-    setDoc(doc(db,'wrongBank', targetUid), payload, {merge:true})
+  if(Object.keys(items).length){
+    setDoc(doc(db,'wrongBank', targetUid), { items }, {merge:true})
       .catch(e=>console.error('오답노트 저장 실패:', e.message));
   }
 }
@@ -4082,8 +4082,8 @@ function submitWrongSolve(){
 function markWrongMastered(qid){
   if(!currentStudent) return;
   const { db, doc, setDoc } = window.fb;
-  const payload = {}; payload['items.'+qid+'.status'] = 'mastered';
-  setDoc(doc(db,'wrongBank', currentStudent), payload, {merge:true}).catch(e=>console.error(e.message));
+  setDoc(doc(db,'wrongBank', currentStudent), { items: { [qid]: { status: 'mastered' } } }, {merge:true})
+    .catch(e=>console.error(e.message));
 }
 /* =========================================================
    운영 안내 탭
