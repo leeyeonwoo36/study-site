@@ -3048,9 +3048,11 @@ function removeExtractedQuestion(i){
 
 async function saveExtractedQuestion(i){
   const q = extractedQuestionsCache[i];
+  const set = $('q-extract-set').value;
+  const order = questions.filter(x=>x.set===set).length;   // ← 추가
   const data = {
-    set: $('q-extract-set').value,
-        type: q.type, body: q.body,
+    set, order,   // ← order 추가
+    type: q.type, body: q.body,
     passages: q.hasPassage ? [{text:q.passage||'', imageUrl:'', hideTitle:false, table:null}] : [],
     choices: q.type==='mc' ? q.choices : [],
     answer: String(q.answer), explain: q.explain || ''
@@ -3067,14 +3069,16 @@ async function saveAllExtractedQuestions(){
   if(!confirm(extractedQuestionsCache.length+'개 문제를 모두 저장할까요?')) return;
   const { db, doc, collection, setDoc } = window.fb;
   const set = $('q-extract-set').value;
+  let order = questions.filter(x=>x.set===set).length;   // ← 추가: 현재 세트의 마지막 순서부터 시작
   for(const q of [...extractedQuestionsCache]){
     const data = {
-            set, type: q.type, body: q.body,
+      set, order,   // ← order 추가
+      type: q.type, body: q.body,
       passages: q.hasPassage ? [{text:q.passage||'', imageUrl:'', hideTitle:false, table:null}] : [],
       choices: q.type==='mc' ? q.choices : [],
       answer: String(q.answer), explain: q.explain || ''
     };
-    try { await setDoc(doc(collection(db,'questions')), data); }
+    try { await setDoc(doc(collection(db,'questions')), data); order++; }   // ← order 증가
     catch(e){ alert('저장 실패: '+e.message); return; }
   }
   extractedQuestionsCache = [];
@@ -3339,8 +3343,10 @@ function saveAiQuestions(){
   const picked = aiGenerated.filter(q=>q.include);
   if(!picked.length){ alert('저장할 문제를 선택하세요.'); return; }
   const { db, collection, doc, setDoc } = window.fb;
-  const jobs = picked.map(q => setDoc(doc(collection(db,'questions')), {
-        set, type: q.type, body: q.body,
+  let order = questions.filter(x=>x.set===set).length;   // ← 추가
+  const jobs = picked.map((q, idx) => setDoc(doc(collection(db,'questions')), {
+        set, order: order + idx,   // ← order 추가 (선택된 순서 그대로)
+        type: q.type, body: q.body,
     passages: q.hasPassage ? [{text:q.passage||'', imageUrl:'', hideTitle:false, table:null}] : [],
     choices: q.type==='mc' ? q.choices : [],
     answer: q.answer, explain: q.explain
