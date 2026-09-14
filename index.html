@@ -2225,7 +2225,7 @@ function renderPassageBoxHtml(passages){
   if(!passages || !passages.length) return '';
   return passages.map((p,i)=>{
     const title = p.hideTitle ? '' : `<div class="ptitle">&lt;보기&gt;${passages.length>1?(' '+(i+1)):''}</div>`;
-    return `<div class="passage-box">${title}${p.text?esc(p.text):''}${renderPassageTableHtml(p.table)}${p.imageUrl?`<img src="${p.imageUrl}" style="max-width:100%;border-radius:6px;margin-top:6px;">`:''}</div>`;
+    return `<div class="passage-box">${title}${p.text||''}${renderPassageTableHtml(p.table)}${p.imageUrl?`<img src="${p.imageUrl}" style="max-width:100%;border-radius:6px;margin-top:6px;">`:''}</div>`;
   }).join('');
 }
 function renderPassagePrintHtml(passages){
@@ -2289,6 +2289,8 @@ if(hasPassage && !passageText){ alert('<보기> 사용을 선택했으니 보기
     if(!answer){ alert('단답형 정답을 입력하세요.'); return; }
   }
 
+    const hasPassage2 = $('q-has-passage-2').checked;   // ← 빠져있던 선언 추가
+
   const oldPassages = editId ? getPassages(questions.find(x=>x.qid===editId)||{}) : [];
   const passages = [];
   if(hasPassage){
@@ -2299,7 +2301,7 @@ if(hasPassage && !passageText){ alert('<보기> 사용을 선택했으니 보기
       catch(e){ alert('보기1 이미지 업로드 실패: '+e.message); return; }
     }
     passages.push({
-      text: $('q-passage').value.trim(),
+      text: $('q-passage').innerHTML,          // ← .value → .innerHTML (밑줄 태그 보존)
       hideTitle: $('q-passage-hide').checked,
       imageUrl: img1,
       table: parseTableText($('q-passage-table').value)
@@ -2312,14 +2314,13 @@ if(hasPassage && !passageText){ alert('<보기> 사용을 선택했으니 보기
         catch(e){ alert('보기2 이미지 업로드 실패: '+e.message); return; }
       }
       passages.push({
-        text: $('q-passage-2').value.trim(),
+        text: $('q-passage-2').innerHTML,       // ← .value → .innerHTML
         hideTitle: $('q-passage-2-hide').checked,
         imageUrl: img2,
         table: parseTableText($('q-passage-2-table').value)
       });
     }
   }
-
   const sameSetCount = questions.filter(x=>x.set===$('q-set').value).length;
   const existingOrder = editId ? questions.find(x=>x.qid===editId)?.order : undefined;
   const data={set:$('q-set').value, type, body, passages, choices, answer,
