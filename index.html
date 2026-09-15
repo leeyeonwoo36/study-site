@@ -1351,6 +1351,7 @@ if(!isAdmin && currentStudent){
     questions = snap.docs.map(d => ({ qid:d.id, ...d.data() }));
     renderQuestions(); renderQSetList(); renderBank();
     renderDraft('hw'); renderDraft('exam');
+    renderWrongNote();
   });
   sub('tasks', snap => {
     const all = snap.docs.map(d => ({ tid:d.id, ...d.data() }));
@@ -1424,6 +1425,7 @@ async function doSignup(){
   if(!name || !email || !pw){ alert('이름, 이메일, 비밀번호를 모두 입력하세요.'); return; }
   if(pw.length < 6){ alert('비밀번호는 6자리 이상이어야 합니다.'); return; }
   if(!window.fb){ alert('Firebase가 아직 로드되지 않았습니다. 잠시 후 다시 시도해주세요.'); return; }
+  window.signupInProgress = true;
   try {
     const { auth, createUserWithEmailAndPassword, signOut, db, doc, setDoc } = window.fb;
     const cred = await createUserWithEmailAndPassword(auth, email, pw);
@@ -1446,6 +1448,9 @@ async function doSignup(){
     else if(e.code === 'auth/weak-password') alert('비밀번호가 너무 약합니다. 6자리 이상 입력하세요.');
     else if(e.code === 'auth/invalid-email') alert('올바른 이메일 형식이 아닙니다.');
     else alert('회원가입 중 오류가 발생했습니다: ' + e.code);
+  }
+  finally {
+    window.signupInProgress = false;       // ✅ 추가
   }
 }
 
@@ -1490,7 +1495,6 @@ async function doLogin(){
   try {
     const cred = await window.fb.signInWithEmailAndPassword(window.fb.auth, id, pw);
     $('login-pw').value = '';
-    await routeAfterAuth(cred.user);
   } catch(e) {
     console.log('로그인 실패:', e.code);
     if(e.code === 'auth/invalid-credential' || e.code === 'auth/wrong-password'
@@ -1618,26 +1622,27 @@ function loadAdminWrongNote(uid){
 
 function renderAdminWrongNote(uid){
   const box = $('admin-wrong-list'); if(!box) return;
-  const entries = Object.entries(adminWrongItems);
+  const entries = Object.entries(adminWrongItems).filter(([qid])=>questions.some(x=>x.qid===qid));
   if(!entries.length){
     box.innerHTML = '<p class="empty-hint">등록된 오답이 없습니다.</p>';
     return;
   }
-  box.innerHTML = entries.map(([qid,item])=>{
-    const q = questions.find(x=>x.qid===qid);
-    const bodyText = q ? q.body : '(삭제된 문제)';
-    return `<div class="bank-item">
-      <div class="bi-body">
-        <span class="qset-tag type">${q ? (q.type==='mc'?'객관식':'단답형') : '?'}</span>
-        <span class="qset-tag set">${esc(item.taskTitle||'수동 추가')}</span>
-        ${item.status==='mastered'?'<span class="badge good">마스터</span>':'<span class="badge warn">복습 필요</span>'}
-        <div style="margin-top:6px;"><b>${esc(bodyText)}</b></div>
-        <div style="margin-top:8px;">
-          <button class="btn small danger" onclick="removeAdminWrongItem('${uid}','${qid}')">삭제</button>
+  const openCnt = entries.filter(([,v])=>v.status!=='mastered').length;
+  box.innerHTML = `<p class="note">복습 필요 ${openCnt}개 · 마스터 ${entries.length-openCnt}개</p>` +
+    entries.map(([qid,item])=>{
+      const q = questions.find(x=>x.qid===qid);
+      return `<div class="bank-item">
+        <div class="bi-body">
+          <span class="qset-tag type">${q.type==='mc'?'객관식':'단답형'}</span>
+          <span class="qset-tag set">${esc(item.taskTitle||'수동 추가')}</span>
+          ${item.status==='mastered'?'<span class="badge good">마스터</span>':'<span class="badge warn">복습 필요</span>'}
+          <div style="margin-top:6px;"><b>${esc(q.body)}</b></div>
+          <div style="margin-top:8px;">
+            <button class="btn small danger" onclick="removeAdminWrongItem('${uid}','${qid}')">삭제</button>
+          </div>
         </div>
-      </div>
-    </div>`;
-  }).join('');
+      </div>`;
+    }).join('');
 }
 
 function removeAdminWrongItem(uid, qid){
@@ -1679,11 +1684,10 @@ function addAdminWrongItem(qid){
   if(!currentDetailUid) return;
   const q = questions.find(x=>x.qid===qid); if(!q) return;
   const { db, doc, setDoc } = window.fb;
-  const payload = {};
-  payload['items.'+qid] = { status:'open', kind:'manual', taskId:'', taskTitle:'관리자 추가', addedAt: Date.now() };
-  setDoc(doc(db,'wrongBank', currentDetailUid), payload, {merge:true})
+  const item = { status:'open', kind:'manual', taskId:'', taskTitle:'관리자 추가', addedAt: Date.now() };
+  setDoc(doc(db,'wrongBank', currentDetailUid), { items: { [qid]: item } }, {merge:true})  // ✅
     .then(()=>{
-      adminWrongItems[qid] = payload['items.'+qid];
+      adminWrongItems[qid] = item;
       renderAdminWrongNote(currentDetailUid);
       renderAdminWrongPicker();
     })
@@ -1788,9 +1792,18 @@ function renderStudentTaskStatus(u){
   const row = (kind, t) => {
     if(Array.isArray(t.assignedTo) && !t.assignedTo.includes(u)) return '';
     const sub = submissions[t.tid+'|'+u];
-    const status = sub
-      ? `<span class="badge good">채점 완료 (${sub.correct}/${sub.total})</span>`
-      : '<span class="badge warn">미제출</span>';
+    const rec = (scores[kind][t.tid]||{})[u] || {};
+    let status;
+    if(!sub){
+      status = '<span class="badge warn">미제출</span>';
+    } else if(sub.mode==='photo'){
+      status = isPhotoPending(kind, t.tid, u)
+        ? '<span class="badge part">사진 제출 (채점중)</span>'
+        : `<span class="badge good">채점 완료 (${esc(rec.score)})</span>`;
+    } else {
+      status = `<span class="badge good">채점 완료 (${sub.correct}/${sub.total})</span>`;
+    }
+    status += lateBadge(sub);
     return `<div class="bank-item" style="cursor:pointer;" onclick="showStudentTaskDetail('${kind}','${t.tid}','${u}')">
       <div class="bi-body"><b>${esc(t.title)}</b>
         <div style="margin-top:4px;">${status}</div>
@@ -1851,8 +1864,22 @@ function buildTaskDetailHtml(kind, tid, u){
     return `<p class="note">아직 제출하지 않았습니다. · 완료 여부: <span class="badge warn">미완료</span></p>`;
   }
 
+  // ✅ 사진 제출
+  if(sub.mode==='photo'){
+    const rec = (scores[kind][tid]||{})[u] || {};
+    const pending = isPhotoPending(kind, tid, u);
+    const photos = (sub.photos||[]).map(p=>
+      `<a href="${p.url}" target="_blank"><img src="${p.url}" alt="${esc(p.name)}"></a>`).join('');
+    return `<p class="note">
+      제출일시 ${esc(sub.date)}${lateBadge(sub)} · 사진 제출 ·
+      ${pending ? '<span class="badge part">채점중</span> <span style="font-size:12px;">(성적 관리 탭에서 점수를 입력하면 채점 완료됩니다)</span>'
+                : `<span class="badge good">채점 완료 (${esc(rec.score)})</span>`}
+    </p>
+    ${photos ? `<div class="thumb-row">${photos}</div>` : ''}`;
+  }
+
   const head = `<p class="note">
-    제출일시 ${esc(sub.date)} · 점수 <b>${sub.correct}/${sub.total}</b>
+    제출일시 ${esc(sub.date)}${lateBadge(sub)} · 점수 <b>${sub.correct}/${sub.total}</b>
     · 완료 여부: ${sub.correct===sub.total ? '<span class="badge good">완료</span>'
                   : sub.correct>0 ? '<span class="badge part">일부완료</span>'
                   : '<span class="badge warn">미완료</span>'}
@@ -2140,9 +2167,16 @@ function renderVideos(){
     </tr>`;
   }).join('') || '<tr><td colspan="4" class="empty-hint">등록된 영상이 없습니다.</td></tr>';
 }
+let lastStudentVideoKey = '';
 function renderStudentVideos(){
- const box = $('t-video-list'); if(!box || !currentStudent) return;
+  const box = $('t-video-list'); if(!box || !currentStudent) return;
   const list = videos.filter(v => adminViewAll || !Array.isArray(v.assignedTo) || v.assignedTo.includes(currentStudent));
+
+  // 영상 목록이 그대로면 다시 그리지 않음 (재생 끊김 방지)
+  const key = currentStudent + '::' + list.map(v=>[v.vid, v.youtubeId, v.title, v.desc||''].join('|')).join(',');
+  if(key === lastStudentVideoKey && box.innerHTML) return;
+  lastStudentVideoKey = key;
+
   box.innerHTML = list.length ? list.map(v=>`
     <div class="card">
       <h3 style="margin-bottom:6px;">${esc(v.title)}</h3>
@@ -2204,38 +2238,39 @@ function renameQSet(old){
 }
 function removeQSet(old){
   if(!old || !questionSets.includes(old)){ alert('목록이 갱신되었습니다. 다시 시도해주세요.'); return; }
-  const count = questions.filter(q=>q.set===old).length;
-  const deleteQuestionsToo = confirm(
-    `"${old}" 세트를 삭제합니다.\n\n` +
-    `이 세트에는 ${count}개의 문제가 있습니다.\n\n` +
-    `[확인]을 누르면 문제도 함께 완전히 삭제됩니다.\n` +
-    `[취소]를 누르면 이 삭제를 취소합니다.`
-  );
-  if(!deleteQuestionsToo) return;
+  const targetQuestions = questions.filter(q=>q.set===old);
+  const count = targetQuestions.length;
 
-  // 문제를 삭제할지, 미분류로 옮길지 다시 한번 확인
-  const reallyDeleteQuestions = confirm(
+  if(!confirm(
+    `"${old}" 세트를 삭제합니다.\n\n이 세트에는 ${count}개의 문제가 있습니다.\n\n` +
+    `[확인]을 누르면 다음 단계로 넘어갑니다.\n[취소]를 누르면 삭제를 취소합니다.`
+  )) return;
+
+  const reallyDeleteQuestions = count>0 && confirm(
     `정말로 ${count}개의 문제를 완전히 삭제할까요?\n\n` +
-    `[확인] = 세트 + 문제 전부 영구 삭제 (되돌릴 수 없음)\n` +
+    `[확인] = 세트 + 문제 전부 영구 삭제 (과제·시험·오답노트에서도 제외, 되돌릴 수 없음)\n` +
     `[취소] = 세트만 삭제하고 문제는 "미분류"로 이동`
   );
 
   const { db, doc, deleteDoc, updateDoc } = window.fb;
-  const targetQuestions = questions.filter(q=>q.set===old);
 
   if(reallyDeleteQuestions){
-    // 세트에 속한 문제를 전부 삭제 (과제/시험에서도 함께 제외)
+    const delIds = new Set(targetQuestions.map(q=>q.qid));
     targetQuestions.forEach(q=>{
       deleteDoc(doc(db,'questions', q.qid)).catch(e=>alert('문제 삭제 실패: '+e.message));
-      draftQids.hw = draftQids.hw.filter(x=>x!==q.qid);
-      draftQids.exam = draftQids.exam.filter(x=>x!==q.qid);
-      ['hw','exam'].forEach(k=>tasks[k].forEach(t=>{
-        if((t.qids||[]).includes(q.qid)) updateDoc(doc(db,'tasks', t.tid), {qids:t.qids.filter(x=>x!==q.qid)});
-      }));
     });
+    draftQids.hw   = draftQids.hw.filter(x=>!delIds.has(x));
+    draftQids.exam = draftQids.exam.filter(x=>!delIds.has(x));
+    pdfSelectedQids = pdfSelectedQids.filter(x=>!delIds.has(x));
+    ['hw','exam'].forEach(k=>tasks[k].forEach(t=>{
+      const qids = t.qids || [];
+      if(qids.some(x=>delIds.has(x))){
+        updateDoc(doc(db,'tasks', t.tid), { qids: qids.filter(x=>!delIds.has(x)) });
+      }
+    }));
     renderDraft('hw'); renderDraft('exam');
+    cleanWrongBankItems(id => delIds.has(id));   // ✅ 오답노트 정리
   } else {
-    // 기존 동작: 미분류로 이동
     targetQuestions.forEach(q=>updateDoc(doc(db,'questions', q.qid), {set:''}));
   }
 
@@ -2253,8 +2288,11 @@ function onQDragOver(e){
   e.preventDefault();
   e.stopPropagation();
   const target = e.currentTarget;
-  if(target.dataset.qid === dragQid) return;
-  target.classList.add('drag-over');
+  // 지금 가리키는 곳 말고는 파란 줄 제거
+  document.querySelectorAll('.qset-q.drag-over').forEach(el=>{
+    if(el!==target) el.classList.remove('drag-over');
+  });
+  if(target.dataset.qid !== dragQid) target.classList.add('drag-over');
 }
 
 function onQDragEnd(e){
@@ -2266,25 +2304,26 @@ async function onQDrop(e){
   e.preventDefault();
   e.stopPropagation();
   const targetQid = e.currentTarget.dataset.qid;
-  e.currentTarget.classList.remove('drag-over');
-  if(!dragQid || dragQid === targetQid) return;
+  document.querySelectorAll('.qset-q.drag-over').forEach(el=>el.classList.remove('drag-over'));
+  const fromQid = dragQid;
+  dragQid = null;   // ✅ 어떤 경우든 먼저 초기화
+  if(!fromQid || fromQid === targetQid) return;
 
-  const dragQ = questions.find(x=>x.qid===dragQid);
+  const dragQ = questions.find(x=>x.qid===fromQid);
   const targetQ = questions.find(x=>x.qid===targetQid);
   if(!dragQ || !targetQ || dragQ.set !== targetQ.set) return;
 
   const sameSet = questions.filter(x=>x.set===dragQ.set).sort((a,b)=>(a.order??0)-(b.order??0));
-  const fromIdx = sameSet.findIndex(x=>x.qid===dragQid);
+  const fromIdx = sameSet.findIndex(x=>x.qid===fromQid);
   const toIdx = sameSet.findIndex(x=>x.qid===targetQid);
   sameSet.splice(toIdx, 0, sameSet.splice(fromIdx,1)[0]);
 
   const { db, doc, updateDoc } = window.fb;
   try {
-    for(let i=0;i<sameSet.length;i++){
-      await updateDoc(doc(db,'questions', sameSet[i].qid), { order: i });
-    }
+    await Promise.all(sameSet.map((q,i)=>
+      (q.order===i) ? null : updateDoc(doc(db,'questions', q.qid), { order: i })
+    ));
   } catch(err){ alert('순서 변경 실패: '+err.message); }
-  dragQid = null;
 }
   async function moveQuestionOrder(qid, dir){
   const q = questions.find(x=>x.qid===qid); if(!q) return;
@@ -2473,18 +2512,43 @@ function renderPassagePrintHtml(passages){
     return `<div class="passage">${title}${p.text?esc(p.text):''}${renderPassageTableHtml(p.table)}</div>`;
   }).join('');
 }
-  function updateWrongBankAfterGrade(targetUid, kind, tid, taskTitle, qs, answers){
-  const { db, doc, setDoc } = window.fb;
-  const items = {};
+  async function updateWrongBankAfterGrade(targetUid, kind, tid, taskTitle, qs, answers, isEdit=false){
+  const { db, doc, getDoc, setDoc, updateDoc, deleteField } = window.fb;
+  const ref = doc(db,'wrongBank', targetUid);
+
+  // 관리자 수정일 때만 기존 오답노트를 읽어서 비교
+  let existing = {};
+  if(isEdit){
+    try{
+      const snap = await getDoc(ref);
+      existing = snap.exists() ? (snap.data().items || {}) : {};
+    }catch(e){ console.error('오답노트 읽기 실패:', e.message); }
+  }
+
+  const add = {};   // 새로 넣거나 갱신할 오답
+  const del = {};   // 정답으로 바뀌어서 뺄 문항
+
   qs.forEach(q=>{
     const mine = answers[q.qid] || '';
     const ok = q.type==='mc' ? mine===String(q.answer) : normalize(mine)===normalize(q.answer);
-    if(!ok) items[q.qid] = { status:'open', kind, taskId:tid, taskTitle, addedAt: Date.now() };
+    const prev = existing[q.qid];
+
+    if(!ok){
+      if(isEdit && prev){
+        if(prev.status==='mastered') return;              // 이미 마스터한 문항은 그대로 둠
+        if(prev.taskId && prev.taskId!==tid) return;      // 다른 과제에서 들어온 오답은 건드리지 않음
+      }
+      add[q.qid] = { status:'open', kind, taskId:tid, taskTitle,
+                     addedAt: (prev && prev.addedAt) || Date.now() };
+    } else if(isEdit && prev && prev.taskId===tid){
+      del['items.'+q.qid] = deleteField();                // 이 과제 때문에 들어간 오답만 제거
+    }
   });
-  if(Object.keys(items).length){
-    setDoc(doc(db,'wrongBank', targetUid), { items }, {merge:true})
-      .catch(e=>console.error('오답노트 저장 실패:', e.message));
-  }
+
+  try{
+    if(Object.keys(add).length) await setDoc(ref, { items: add }, {merge:true});
+    if(Object.keys(del).length) await updateDoc(ref, del);
+  }catch(e){ console.error('오답노트 저장 실패:', e.message); }
 }
 function answerLabel(q){
   if(q.type!=='mc') return q.answer;
@@ -2529,7 +2593,8 @@ async function saveQuestion(){
     if(!answer){ alert('단답형 정답을 입력하세요.'); return; }
   }
 
-  const oldPassages = editId ? getPassages(questions.find(x=>x.qid===editId)||{}) : [];
+  const oldQ = editId ? questions.find(x=>x.qid===editId) : null;
+  const oldPassages = oldQ ? getPassages(oldQ) : [];
   const passages = [];
 
   if(hasPassage){
@@ -2554,18 +2619,27 @@ async function saveQuestion(){
         catch(e){ alert('보기2 이미지 업로드 실패: '+e.message); return; }
       }
       passages.push({
-        text: $('q-passage-2').innerHTML,                         // ✅ 보기 2 내용
-        hideTitle: $('q-passage-2-hide').checked,                 // ✅ 보기 2 라벨 숨김
-        imageUrl: img2,                                           // ✅ 보기 2 이미지
-        table: tableToFs(getTableEditorData('q-passage-2-table')) // ✅ 보기 2 표
+        text: $('q-passage-2').innerHTML,
+        hideTitle: $('q-passage-2-hide').checked,
+        imageUrl: img2,
+        table: tableToFs(getTableEditorData('q-passage-2-table'))
       });
     }
   }
 
-  const sameSetCount = questions.filter(x=>x.set===$('q-set').value).length;
-  const existingOrder = editId ? questions.find(x=>x.qid===editId)?.order : undefined;
-  const data={set:$('q-set').value, type, body, passages, choices, answer,
-              order: existingOrder ?? sameSetCount,
+  /* ✅ 순서 번호 결정
+     - 같은 세트에서 수정: 기존 순서 유지
+     - 새 문제 또는 다른 세트로 이동: 그 세트의 맨 뒤로 */
+  const newSet = $('q-set').value;
+  let order;
+  if(oldQ && oldQ.set===newSet && oldQ.order!=null){
+    order = oldQ.order;
+  } else {
+    const others = questions.filter(x=>x.set===newSet && x.qid!==editId);
+    order = others.reduce((m,x)=>Math.max(m, x.order ?? -1), -1) + 1;
+  }
+
+  const data={set:newSet, type, body, passages, choices, answer, order,
               explain:$('q-explain').value.trim()};
   cancelQuestionEdit();
   const { db, doc, collection, setDoc, updateDoc } = window.fb;
@@ -2627,29 +2701,55 @@ function renderQuestions(){
   const tb = $('q-table'); if(!tb) return;
   const setVal = $('q-table-set-filter') ? $('q-table-set-filter').value : '';
   const list = filterQuestions(setVal, '', '');
-  tb.innerHTML = list.map((q,i)=>`
+  tb.innerHTML = list.map((q,i)=>{
+    const ps = getPassages(q);
+    const passageCell = ps.length
+      ? `<span class="badge muted">${ps.length>1 ? '보기 '+ps.length+'개' : '있음'}</span>`
+      : '-';
+    return `
     <tr><td>${i+1}</td><td>${q.set? esc(q.set) : '<span class="badge muted">미분류</span>'}</td>
     <td>${q.type==='mc'?'객관식':'단답형'}</td>
-    <td>${q.hasPassage?'<span class="badge muted">있음</span>':'-'}</td>
+    <td>${passageCell}</td>
     <td>${esc(q.body.slice(0,24))}${q.body.length>24?'…':''}</td>
     <td>${esc(answerLabel(q))}</td>
     <td class="row-actions">
       <button class="btn small secondary" onclick="editQuestion('${q.qid}')">수정</button>
-      <button class="btn small danger" onclick="removeQuestion('${q.qid}')">삭제</button></td></tr>`).join('')
-    || '<tr><td colspan="7" class="empty-hint">조건에 맞는 문제가 없습니다.</td></tr>';
+      <button class="btn small danger" onclick="removeQuestion('${q.qid}')">삭제</button></td></tr>`;
+  }).join('') || '<tr><td colspan="7" class="empty-hint">조건에 맞는 문제가 없습니다.</td></tr>';
+}
+  /* 모든 학생의 오답노트에서 조건에 맞는 항목 삭제 */
+async function cleanWrongBankItems(shouldRemove){
+  const { db, doc, getDoc, updateDoc, deleteField } = window.fb;
+  for(const s of students){
+    try{
+      const ref = doc(db,'wrongBank', s.uid);
+      const snap = await getDoc(ref);
+      if(!snap.exists()) continue;
+      const items = snap.data().items || {};
+      const payload = {};
+      Object.entries(items).forEach(([qid,item])=>{
+        if(shouldRemove(qid, item||{})) payload['items.'+qid] = deleteField();
+      });
+      if(Object.keys(payload).length) await updateDoc(ref, payload);
+    }catch(e){ console.error('오답노트 정리 실패 ('+s.uid+'):', e.message); }
+  }
+  if(currentDetailUid) loadAdminWrongNote(currentDetailUid);   // 학생 상세 창 새로고침
 }
 function removeQuestion(qid){
-  if(!confirm('이 문제를 삭제할까요? 이미 등록된 과제·시험에서도 제외됩니다.')) return;
+  if(!confirm('이 문제를 삭제할까요? 이미 등록된 과제·시험과 학생 오답노트에서도 제외됩니다.')) return;
   draftQids.hw = draftQids.hw.filter(x=>x!==qid);
   draftQids.exam = draftQids.exam.filter(x=>x!==qid);
+  pdfSelectedQids = pdfSelectedQids.filter(x=>x!==qid);
   renderDraft('hw'); renderDraft('exam');
+
   const { db, doc, deleteDoc, updateDoc } = window.fb;
   deleteDoc(doc(db,'questions', qid)).catch(e=>alert('삭제 실패: '+e.message));
   ['hw','exam'].forEach(k=>tasks[k].forEach(t=>{
     if((t.qids||[]).includes(qid)) updateDoc(doc(db,'tasks', t.tid), {qids:t.qids.filter(x=>x!==qid)});
   }));
+  cleanWrongBankItems(id => id===qid);   // ✅ 오답노트 정리
 }
-
+function clearAiRefFile(){ $('ai-ref-file').value = ''; }
 /* =========================================================
    문제은행
    ========================================================= */
@@ -2669,10 +2769,16 @@ function filterQuestions(setVal, typeVal, kw){
 }
 function renderBank(){
   const list = $('bank-list'); if(!list) return;
+
+  // 삭제된 문제는 선택 목록에서 제거
+  pdfSelectedQids = pdfSelectedQids.filter(id=>questions.some(q=>q.qid===id));
+
   const arr = filterQuestions($('bank-set-filter').value, $('bank-type-filter').value, $('bank-search').value);
-  updateBankSelectAllState(arr);                                          // ← 추가
+  updateBankSelectAllState(arr);
+  renderPdfBar();   // ✅ 선택 개수 배지 갱신
+
   $('bank-count').textContent = `전체 ${questions.length}문제 중 ${arr.length}문제 표시 중 · 과제/시험 등록 화면의 "문제 골라 담기"에서 낱개 선택이 가능합니다.`;
-    list.innerHTML = arr.length ? arr.map(q=>`
+  list.innerHTML = arr.length ? arr.map(q=>`
     <div class="bank-item">
       <input type="checkbox" onchange="togglePdfPick('${q.qid}', this.checked)"
         ${pdfSelectedQids.includes(q.qid)?'checked':''} style="margin-top:3px; width:16px; height:16px; flex-shrink:0;">
@@ -2729,7 +2835,16 @@ function renderPdfBar(){
 function openQuestionSheet(withAnswers){
   if(!pdfSelectedQids.length){ alert('먼저 문제은행에서 문제를 선택하세요.'); return; }
   const qs = pdfSelectedQids.map(id=>questions.find(x=>x.qid===id)).filter(Boolean);
-  const title = prompt('문제지 제목을 입력하세요.', '문제지') || '문제지';
+  if(!qs.length){ alert('선택한 문제를 찾을 수 없습니다.'); return; }
+
+  const input = prompt('문제지 제목을 입력하세요.', '문제지');
+  if(input === null) return;                       // ✅ 취소 → 아무것도 안 함
+  const title = input.trim() || '문제지';
+
+  // 팝업 차단을 피하려고 입력 직후 바로 창을 연다
+  const win = window.open('', '_blank');
+  if(!win){ alert('팝업이 차단되었습니다. 브라우저 팝업 차단을 해제한 뒤 다시 시도해주세요.'); return; }
+
   const body = qs.map((q,i)=>buildPrintQuestionHtml(q,i+1)).join('');
   const backMatter = withAnswers ? buildQuickAnswerHtml(qs) + buildAnswerExplainHtml(qs) : '';
 
@@ -2774,14 +2889,20 @@ function openQuestionSheet(withAnswers){
 ${backMatter}
 </body></html>`;
 
-  const win = window.open('', '_blank');
-  if(!win){ alert('팝업이 차단되었습니다. 브라우저 팝업 차단을 해제한 뒤 다시 시도해주세요.'); return; }
   win.document.write(html);
   win.document.close();
 }
 
 function buildPrintQuestionHtml(q, n){
- const passage = q.hasPassage ? `<div class="passage">${q.passage}</div>` : '';
+  const ps = getPassages(q);
+  const passage = ps.map((p,i)=>{
+    const title = p.hideTitle ? '' : `<b>&lt;보기&gt;${ps.length>1 ? ' '+(i+1) : ''}</b><br>`;
+    const img = p.imageUrl
+      ? `<img src="${p.imageUrl}" style="display:block; max-width:100%; margin-top:6px;">`
+      : '';
+    return `<div class="passage">${title}${p.text||''}${renderPassageTableHtml(p.table)}${img}</div>`;
+  }).join('');
+
   let body;
   if(q.type==='mc'){
     const choices = (q.choices||[]).map((c,i)=>`<div class="choice">${CIRCLE[i]} ${esc(c)}</div>`).join('');
@@ -2799,7 +2920,12 @@ function buildQuickAnswerHtml(qs){
   for(let i=0; i<qs.length; i+=cellsPerRow){
     const chunk = qs.slice(i, i+cellsPerRow);
     const numRow = chunk.map((q,j)=>`<th>${i+j+1}</th>`).join('');
-    const ansRow = chunk.map(q=>`<td>${esc(answerLabel(q).split(' ')[0] || answerLabel(q))}</td>`).join('');
+    const ansRow = chunk.map(q=>{
+      const a = q.type==='mc'
+        ? (CIRCLE[parseInt(q.answer,10)-1] || q.answer)   // 객관식: ① 같은 번호만
+        : q.answer;                                        // 단답형: 전체
+      return `<td>${esc(a)}</td>`;
+    }).join('');
     rows += `<tr>${numRow}</tr><tr>${ansRow}</tr>`;
   }
   return `<div class="back-page">
@@ -2978,8 +3104,11 @@ function renderAssigneeSummary(kind){
 }
 
 /* ---------- 문제 골라 담기 ---------- */
+let pickerTemp = new Set();   // 모달 안에서 임시로 체크한 문제
 function openPicker(kind){
   pickerKind = kind;
+  pickerTemp = new Set(draftQids[kind] || []);
+  pickerExpanded = new Set();
   $('picker-search').value='';
   renderPicker();
   openModal('picker-modal');
@@ -2988,23 +3117,26 @@ function openPicker(kind){
 function renderPicker(){
   if(!pickerKind) return;
   const arr = filterQuestions($('picker-set').value, '', $('picker-search').value);
-  const cur = draftQids[pickerKind] || [];
   $('picker-list').innerHTML = arr.length ? arr.map(q=>{
+    const ps = getPassages(q);
+    const picked = pickerTemp.has(q.qid);
     const isOpen = pickerExpanded.has(q.qid);
     const detail = isOpen ? `
-      <div style="margin-top:8px; padding-top:8px; border-top:1px dashed var(--border);">
-        ${q.hasPassage? `<div class="passage-box"><div class="ptitle">&lt;보기&gt;</div>${q.passage}${q.passageImageUrl?`<img src="${q.passageImageUrl}" style="max-width:100%;border-radius:6px;margin-top:6px;">`:''}</div>`:''}
+      <div style="margin-top:8px; padding-top:8px; border-top:1px dashed var(--border);"
+           onclick="event.preventDefault();">
+        ${renderPassageBoxHtml(ps)}
         ${q.type==='mc'? `<div style="margin-top:4px; color:#4C5875;">${(q.choices||[]).map((c,i)=>CIRCLE[i]+' '+esc(c)).join('<br>')}</div>`:''}
         <div style="margin-top:6px; font-size:12.5px;"><b>정답:</b> ${esc(answerLabel(q))}</div>
         ${q.explain? `<div class="exam-explain" style="margin-top:6px;">${esc(q.explain)}</div>`:''}
       </div>` : '';
     return `
-    <label class="bank-item${cur.includes(q.qid)?' sel':''}">
-      <input type="checkbox" value="${q.qid}" ${cur.includes(q.qid)?'checked':''}>
+    <label class="bank-item${picked?' sel':''}">
+      <input type="checkbox" value="${q.qid}" ${picked?'checked':''}
+        onchange="pickerToggle('${q.qid}', this.checked, this)">
       <div class="bi-body">
         <span class="qset-tag type">${q.type==='mc'?'객관식':'단답형'}</span>
         <span class="qset-tag set">${q.set? esc(q.set):'미분류'}</span>
-        ${q.hasPassage?'<span class="qset-tag ans">보기</span>':''}
+        ${ps.length?'<span class="qset-tag ans">보기</span>':''}
         <span class="btn small ghost" style="float:right; padding:2px 8px;" onclick="event.preventDefault(); togglePickerDetail('${q.qid}')">${isOpen?'접기 ▲':'상세보기 ▼'}</span>
         <div style="margin-top:4px;"><b>${esc(q.body)}</b></div>
         <div style="font-size:12px; color:#8993AA; margin-top:2px;">정답: ${esc(answerLabel(q))}</div>
@@ -3014,18 +3146,23 @@ function renderPicker(){
   }).join('') : '<p class="empty-hint">조건에 맞는 문제가 없습니다.</p>';
 }
 
+function pickerToggle(qid, checked, el){
+  if(checked) pickerTemp.add(qid); else pickerTemp.delete(qid);
+  const item = el.closest('.bank-item');
+  if(item) item.classList.toggle('sel', checked);
+}
 function togglePickerDetail(qid){
   if(pickerExpanded.has(qid)) pickerExpanded.delete(qid);
   else pickerExpanded.add(qid);
   renderPicker();
 }
 function applyPicker(){
-  const boxes = Array.from($('picker-list').querySelectorAll('input[type=checkbox]'));
-  const checked = boxes.filter(c=>c.checked).map(c=>c.value);
-  const unchecked = boxes.filter(c=>!c.checked).map(c=>c.value);
-  let cur = draftQids[pickerKind].filter(q=>!unchecked.includes(q));
-  checked.forEach(q=>{ if(!cur.includes(q)) cur.push(q); });
-  draftQids[pickerKind]=cur;
+  // 기존에 담긴 순서는 유지하고, 새로 체크한 문제는 뒤에 붙임
+  const cur = draftQids[pickerKind].filter(q=>pickerTemp.has(q));
+  pickerTemp.forEach(q=>{
+    if(!cur.includes(q) && questions.some(x=>x.qid===q)) cur.push(q);
+  });
+  draftQids[pickerKind] = cur;
   closeModal('picker-modal');
   renderDraft(pickerKind);
 }
@@ -3054,7 +3191,7 @@ function renderDraft(kind){
       const detail = isOpen ? `
         <div style="margin:6px 0 6px 34px; padding:8px 10px; background:var(--paper); border:1px solid var(--border); border-radius:var(--radius);">
           <div style="font-weight:700; margin-bottom:6px;">${esc(q.body)}</div>
-          ${q.hasPassage? `<div class="passage-box"><div class="ptitle">&lt;보기&gt;</div>${q.passage}${q.passageImageUrl?`<img src="${q.passageImageUrl}" style="max-width:100%;border-radius:6px;margin-top:6px;">`:''}</div>`:''}
+          ${renderPassageBoxHtml(getPassages(q))}
           ${q.type==='mc'? `<div style="margin-top:4px; color:#4C5875;">${(q.choices||[]).map((c,i2)=>CIRCLE[i2]+' '+esc(c)).join('<br>')}</div>`:''}
           <div style="margin-top:6px; font-size:12.5px;"><b>정답:</b> ${esc(answerLabel(q))}</div>
           ${q.explain? `<div class="exam-explain" style="margin-top:6px;">${esc(q.explain)}</div>`:''}
@@ -3191,20 +3328,33 @@ function removeExtractedQuestion(i){
   renderExtractedQuestionsPreview();
 }
 
+/* 세트 안에서 다음 순서 번호 (가장 큰 번호 + 1) */
+function nextOrderInSet(set){
+  return questions.filter(x=>x.set===set).reduce((m,x)=>Math.max(m, x.order ?? -1), -1) + 1;
+}
+
+/* 추출된 문제 → Firestore 저장 형태 */
+function extractedToQuestionData(q, set, order){
+  const hasImg = !!q.extractedImageUrl;
+  const passages = (q.hasPassage || hasImg) ? [{
+    text: q.hasPassage ? (q.passage||'') : '',
+    imageUrl: q.extractedImageUrl || '',
+    hideTitle: !q.hasPassage,          // 그림만 있으면 <보기> 라벨 숨김
+    table: null
+  }] : [];
+  return {
+    set, order, type: q.type, body: q.body, passages,
+    choices: q.type==='mc' ? (q.choices||[]) : [],
+    answer: String(q.answer), explain: q.explain || ''
+  };
+}
+
 async function saveExtractedQuestion(i){
   const q = extractedQuestionsCache[i];
   const set = $('q-extract-set').value;
-  const order = questions.filter(x=>x.set===set).length;   // ← 추가
-  const data = {
-    set, order,   // ← order 추가
-    type: q.type, body: q.body,
-    passages: q.hasPassage ? [{text:q.passage||'', imageUrl:q.extractedImageUrl||'', hideTitle:false, table:null}] : [],
-    choices: q.type==='mc' ? q.choices : [],
-    answer: String(q.answer), explain: q.explain || ''
-  };
   const { db, doc, collection, setDoc } = window.fb;
   try {
-    await setDoc(doc(collection(db,'questions')), data);
+    await setDoc(doc(collection(db,'questions')), extractedToQuestionData(q, set, nextOrderInSet(set)));
     extractedQuestionsCache.splice(i,1);
     renderExtractedQuestionsPreview();
   } catch(e){ alert('저장 실패: '+e.message); }
@@ -3214,19 +3364,18 @@ async function saveAllExtractedQuestions(){
   if(!confirm(extractedQuestionsCache.length+'개 문제를 모두 저장할까요?')) return;
   const { db, doc, collection, setDoc } = window.fb;
   const set = $('q-extract-set').value;
-  let order = questions.filter(x=>x.set===set).length;   // ← 추가: 현재 세트의 마지막 순서부터 시작
+  let order = nextOrderInSet(set);
   for(const q of [...extractedQuestionsCache]){
-    const data = {
-      set, order,   // ← order 추가
-      type: q.type, body: q.body,
-      passages: q.hasPassage ? [{text:q.passage||'', imageUrl:q.extractedImageUrl||'', hideTitle:false, table:null}] : [],
-      choices: q.type==='mc' ? q.choices : [],
-      answer: String(q.answer), explain: q.explain || ''
-    };
-    try { await setDoc(doc(collection(db,'questions')), data); order++; }   // ← order 증가
-    catch(e){ alert('저장 실패: '+e.message); return; }
+    try {
+      await setDoc(doc(collection(db,'questions')), extractedToQuestionData(q, set, order));
+      order++;
+      extractedQuestionsCache.shift();   // 저장된 것만 목록에서 제거 → 중간에 실패해도 중복 저장 안 됨
+    } catch(e){
+      alert('저장 실패: '+e.message);
+      renderExtractedQuestionsPreview();
+      return;
+    }
   }
-  extractedQuestionsCache = [];
   renderExtractedQuestionsPreview();
 }
 
@@ -3361,8 +3510,7 @@ async function generateAiQuestions(){
   const prompt = $('ai-prompt').value.trim();
   const count = parseInt($('ai-count').value, 10) || 5;
   const type = $('ai-type').value;
-  const difficultyElement = document.getElementById('difficulty');
-  const difficulty = difficultyElement ? difficultyElement.value : 'medium';
+  const difficulty = $('ai-difficulty').value;
   const refFile = $('ai-ref-file').files[0];
 
   let difficultyInstruction = '보통 난이도로 문제를 생성해줘.';
@@ -3609,8 +3757,8 @@ function cancelTaskEdit(kind){
   const existing = editId ? tasks[kind].find(x=>x.tid===editId) : null;
 
   const pdfFile = $(prefix+'-pdf').files[0];
-  let pdfUrl = existing ? existing.pdfUrl : null;
-  let pdfName = existing ? existing.pdfName : '';
+  let pdfUrl  = existing?.pdfUrl  ?? null;
+  let pdfName = existing?.pdfName ?? '';
   if(pdfFile){
     try { pdfName = pdfFile.name; pdfUrl = await uploadToCloudinary(pdfFile); }
     catch(e){ alert('PDF 업로드 실패: '+e.message); return; }
@@ -3641,17 +3789,23 @@ function cancelTaskEdit(kind){
   }
 }
 function removeTask(kind,tid){
-  if(!confirm('삭제할까요? 관련 성적·제출 기록도 함께 삭제됩니다.')) return;
+  const t = tasks[kind].find(x=>x.tid===tid);
+  if(!confirm(`"${t?t.title:''}"을(를) 삭제할까요?\n관련 성적·제출 기록과, 이 ${kind==='hw'?'과제':'시험'}에서 생긴 오답노트 항목도 함께 삭제됩니다.`)) return;
   const { db, doc, deleteDoc } = window.fb;
   deleteDoc(doc(db,'tasks',tid)).catch(e=>alert('삭제 실패: '+e.message));
   deleteDoc(doc(db,'scores', kind+'__'+tid)).catch(()=>{});
-  // 제출 기록도 함께 정리 (없으면 조용히 무시)
   students.forEach(s=>{
     deleteDoc(doc(db,'submissions', tid+'|'+s.uid)).catch(()=>{});
   });
+  cleanWrongBankItems((qid, item) => item.taskId===tid);   // ✅ 이 과제에서 생긴 오답만 정리
 }
-function submitCount(tid){
-  return students.filter(s=>submissions[tid+'|'+s.uid]).length;
+/* 과제·시험의 실제 대상 학생 (승인된 학생 중 배정된 학생만) */
+function taskTargetStudents(t){
+  return students.filter(s => s.approved &&
+    (!Array.isArray(t.assignedTo) || t.assignedTo.includes(s.uid)));
+}
+function submitCount(t){
+  return taskTargetStudents(t).filter(s => submissions[t.tid+'|'+s.uid]).length;
 }
 function pdfCell(t){
   if(!t.pdfName) return '<span style="color:#8993AA;">없음</span>';
@@ -3700,13 +3854,13 @@ function exitStudentPreview(){
 function renderTasks(){
   const hwt = $('hw-table'), ext = $('exam-table'); if(!hwt||!ext) return;
   const row = (kind,t) => {
-    const targetCount = Array.isArray(t.assignedTo) ? t.assignedTo.length : students.filter(s=>s.approved).length;
-    const targetLabel = Array.isArray(t.assignedTo) ? `${t.assignedTo.length}명 지정` : '전체';
+    const targetCount = taskTargetStudents(t).length;
+    const targetLabel = Array.isArray(t.assignedTo) ? `${targetCount}명 지정` : '전체';
     return `
     <tr><td>${esc(t.title)}</td><td>${fmtPeriod(t)}</td><td>${(t.qids||[]).length}문항</td>
     <td>${pdfCell(t)}</td>
     <td><span class="badge muted" style="cursor:pointer;" onclick="showAssignedStudents('${kind}','${t.tid}')">${esc(targetLabel)}</span></td>
-    <td><span class="badge muted">제출 ${submitCount(t.tid)}/${targetCount}</span></td>
+    <td><span class="badge muted">제출 ${submitCount(t)}/${targetCount}</span></td>
     <td class="row-actions">
       <button class="btn small secondary" onclick="startTaskEdit('${kind}','${t.tid}')">수정</button>
       <button class="btn small danger" onclick="removeTask('${kind}','${t.tid}')">삭제</button>
@@ -3786,49 +3940,73 @@ function ddayBadge(dueStr){
 
 function renderStudentDashboard(s){
   if(!currentStudent) return;
+  const now = new Date();
 
   // 인사
   const g = $('stu-greeting');
-  if(g) g.textContent = `안녕하세요, ${s.name}님`;
+  if(g) g.textContent = adminViewAll ? '관리자 전체 보기' : `안녕하세요, ${s.name}님`;
 
-  // 내게 배정된 과제·시험만
-  const myHw   = tasks.hw.filter(t=>!Array.isArray(t.assignedTo)||t.assignedTo.includes(currentStudent));
-  const myExam = tasks.exam.filter(t=>!Array.isArray(t.assignedTo)||t.assignedTo.includes(currentStudent));
+  const myHw   = tasks.hw.filter(isAssignedToMe);
+  const myExam = tasks.exam.filter(isAssignedToMe);
+  const mySch  = adminViewAll ? schedules.slice()
+    : schedules.filter(sc=>!Array.isArray(sc.assignedTo)||sc.assignedTo.includes(currentStudent));
 
-  /* ── 마감 임박 카드 ── */
+  // 과제 완료 여부: 학생은 본인 제출, 관리자는 대상 학생 전원 제출
+  const unsubmittedCount = t => adminViewAll
+    ? taskTargetStudents(t).filter(st=>!submissions[t.tid+'|'+st.uid]).length
+    : (submissions[t.tid+'|'+currentStudent] ? 0 : 1);
+  const isOverdue = t => !!(t.due && !isNaN(new Date(t.due)) && new Date(t.due) < now);
+
+  /* ── 가장 급한 할 일 ── */
   const box = $('stu-deadline-card');
   if(box){
     const pending = [...myHw.map(t=>({t,kind:'hw'})), ...myExam.map(t=>({t,kind:'exam'}))]
-      .filter(x=> !submissions[x.t.tid+'|'+currentStudent])   // 미제출만
-      .map(x=> ({...x, d: dday(x.t.due)}))
-      .filter(x=> x.d===null || x.d>=0)                        // 지난 건 제외
-      .sort((a,b)=> (a.d===null?9999:a.d) - (b.d===null?9999:b.d));
+      .filter(x=> unsubmittedCount(x.t) > 0)
+      .filter(x=> adminViewAll || !x.t.startAt || new Date(x.t.startAt) <= now)   // 시작 전 과제 제외
+      .map(x=> ({...x, overdue: isOverdue(x.t),
+                 ts: x.t.due && !isNaN(new Date(x.t.due)) ? new Date(x.t.due).getTime() : Infinity}))
+      .sort((a,b)=> a.ts - b.ts);   // 마감 지난 것 → 임박한 것 → 마감 미정 순
+
     if(pending.length){
       const x = pending[0];
-      box.innerHTML = `<div style="font-size:12.5px; color:var(--muted); margin-bottom:4px;">가장 급한 할 일</div>
-        <div style="font-size:16px; font-weight:900;">${esc(x.t.title)} ${ddayBadge(x.t.due)}</div>
+      const overdueCount = pending.filter(p=>p.overdue).length;
+      const badge = x.overdue ? '<span class="badge warn">마감 지남</span>' : ddayBadge(x.t.due);
+      const sub = adminViewAll
+        ? `미제출 학생 ${unsubmittedCount(x.t)}명`
+        : (x.overdue ? '지금 제출하면 <b>지각 제출</b>로 기록됩니다' : '');
+      const others = pending.length>1
+        ? ` · 그 외 미제출 ${pending.length-1}건${overdueCount>(x.overdue?1:0) ? ` (마감 지남 ${overdueCount-(x.overdue?1:0)}건)` : ''}`
+        : '';
+      box.innerHTML = `<div style="font-size:12.5px; color:var(--muted); margin-bottom:4px;">
+          ${adminViewAll ? '제출이 가장 급한 항목' : '가장 급한 할 일'}</div>
+        <div style="font-size:16px; font-weight:900;">${esc(x.t.title)} ${badge}</div>
         <div style="font-size:12.5px; color:var(--ink-soft); margin-top:4px;">
-          ${x.kind==='hw'?'과제':'시험'} · 마감 ${x.t.due? fmtDue(x.t.due):'미정'}
-          ${pending.length>1?` · 그 외 미제출 ${pending.length-1}건`:''}
-        </div>`;
+          ${x.kind==='hw'?'과제':'시험'} · 마감 ${x.t.due? fmtDue(x.t.due):'미정'}${others}
+        </div>
+        ${sub ? `<div style="font-size:12.5px; color:var(--accent); margin-top:4px;">${sub}</div>` : ''}`;
     } else {
-      box.innerHTML = `<div style="font-weight:700; color:var(--good);">제출하지 않은 과제·시험이 없습니다. 잘하고 있어요!</div>`;
+      box.innerHTML = `<div style="font-weight:700; color:var(--good);">
+        ${adminViewAll ? '미제출 항목이 없습니다.' : '제출하지 않은 과제·시험이 없습니다. 잘하고 있어요!'}</div>`;
     }
   }
 
   /* ── 출석 요약 ── */
   const attBox = $('stu-attendance-summary');
   if(attBox){
-    const mySch = schedules.filter(sc=>!Array.isArray(sc.assignedTo)||sc.assignedTo.includes(currentStudent));
     let p=0,l=0,a=0,n=0;
     mySch.forEach(sc=>{
-      const st=(attendance[sc.sid]||{})[currentStudent];
-      const v = st?st.status:null;
-      if(v==='p')p++; else if(v==='l')l++; else if(v==='a')a++; else n++;
+      const who = adminViewAll
+        ? students.filter(st=>st.approved && (!Array.isArray(sc.assignedTo)||sc.assignedTo.includes(st.uid))).map(st=>st.uid)
+        : [currentStudent];
+      who.forEach(u=>{
+        const v = ((attendance[sc.sid]||{})[u]||{}).status;
+        if(v==='p')p++; else if(v==='l')l++; else if(v==='a')a++; else n++;
+      });
     });
     const checked = p+l+a;
     const rate = checked? Math.round(p/checked*100) : null;
     attBox.innerHTML = `
+      ${adminViewAll ? '<div style="font-size:12px; color:var(--muted); margin-bottom:6px;">전체 학생 · 전체 회차 합산</div>' : ''}
       <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:8px;">
         <span class="badge good">출석 ${p}</span>
         <span class="badge part">지각 ${l}</span>
@@ -3844,12 +4022,23 @@ function renderStudentDashboard(s){
   const progBox = $('stu-progress-summary');
   if(progBox){
     const all = [...myHw, ...myExam];
-    const done = all.filter(t=>submissions[t.tid+'|'+currentStudent]).length;
-    const total = all.length;
+    let done=0, total=0;
+    all.forEach(t=>{
+      if(adminViewAll){
+        const targets = taskTargetStudents(t);
+        total += targets.length;
+        done  += targets.filter(st=>submissions[t.tid+'|'+st.uid]).length;
+      } else {
+        total++;
+        if(submissions[t.tid+'|'+currentStudent]) done++;
+      }
+    });
     const pct = total? Math.round(done/total*100) : 0;
     progBox.innerHTML = `
       <div style="font-size:13px; color:var(--ink-soft); margin-bottom:8px;">
-        전체 ${total}개 중 <b style="color:var(--brand);">${done}개</b> 제출 완료
+        ${adminViewAll
+          ? `전체 제출 대상 ${total}건 중 <b style="color:var(--brand);">${done}건</b> 제출 완료`
+          : `전체 ${total}개 중 <b style="color:var(--brand);">${done}개</b> 제출 완료`}
       </div>
       <div style="background:var(--paper-line); border-radius:20px; height:14px; overflow:hidden;">
         <div style="background:var(--brand); height:100%; width:${pct}%; transition:width .3s;"></div>
@@ -3857,8 +4046,14 @@ function renderStudentDashboard(s){
       <div style="text-align:right; font-size:12px; color:var(--muted); margin-top:4px;">${pct}%</div>`;
   }
 
-  /* ── 성적 추이 (관리자용 함수 재사용) ── */
+  /* ── 성적 추이 (관리자는 시험별 평균) ── */
   const arr = myExam.map(t=>{
+    if(adminViewAll){
+      const pcts = taskTargetStudents(t)
+        .map(st=>{ const rec=(scores.exam[t.tid]||{})[st.uid]; return rec ? scoreToPercent(rec.score) : null; })
+        .filter(v=>v!==null);
+      return pcts.length ? {label:t.title+' (평균)', score:Math.round(pcts.reduce((x,y)=>x+y,0)/pcts.length)} : null;
+    }
     const rec = (scores.exam[t.tid]||{})[currentStudent];
     const pctScore = rec ? scoreToPercent(rec.score) : null;
     return pctScore===null ? null : {label:t.title, score:pctScore};
@@ -3874,33 +4069,52 @@ function renderStudentTasks(kind){
   tb.innerHTML = tasks[kind].filter(isAssignedToMe).map(t=>{
     const sub = submissions[t.tid+'|'+currentStudent];
     const rec = (scores[kind][t.tid]||{})[currentStudent] || {};
-        let status, btn;
-        const notStarted = !adminViewAll && t.startAt && new Date(t.startAt) > new Date();
-     if(!sub){
+    let status, btn;
+    const notStarted = !adminViewAll && t.startAt && new Date(t.startAt) > new Date();
+
+    if(!sub){
       if(notStarted){
         status = '<span class="badge muted">시작 전</span>';
         btn = `<button class="btn small ghost" disabled title="${esc(fmtDue(t.startAt))}부터 풀 수 있습니다">풀기</button>`;
       } else {
-        status = '<span class="badge warn">미제출</span>';
-        btn = `<button class="btn small" onclick="openStudentSolve('${kind}','${t.tid}')">풀기</button>`;
+        const overdue = dday(t.due)!==null && t.due && new Date(t.due) < new Date();
+        status = overdue ? '<span class="badge warn">미제출 (마감 지남)</span>'
+                         : '<span class="badge warn">미제출</span>';
+        btn = `<button class="btn small" onclick="openStudentSolve('${kind}','${t.tid}')">${overdue?'지각 제출':'풀기'}</button>`;
       }
     } else if(sub.mode==='photo'){
-      status = rec.score ? `<span class="badge good">채점 완료 (${esc(rec.score)})</span>`
-                         : '<span class="badge part">사진 제출 · 채점 대기</span>';
+      status = isPhotoPending(kind, t.tid, currentStudent)
+        ? '<span class="badge part">제출 완료 (채점중)</span>'
+        : `<span class="badge good">채점 완료 (${esc(rec.score)})</span>`;
+      status += lateBadge(sub);
       btn = `<button class="btn small secondary" onclick="openReview('${kind}','${t.tid}','${currentStudent}',false)">제출 내용 보기</button>`;
     } else {
-      status = `<span class="badge good">채점 완료 (${sub.correct}/${sub.total})</span>`;
+      status = `<span class="badge good">채점 완료 (${sub.correct}/${sub.total})</span>` + lateBadge(sub);
       btn = `<button class="btn small secondary" onclick="openReview('${kind}','${t.tid}','${currentStudent}',false)">결과·해설 보기</button>`;
     }
+
     const doneCell = kind==='hw' ? `<td>${statusBadge(rec.status||'미완료')}</td>` : '';
-        const dbadge = sub ? '' : ' ' + ddayBadge(t.due);
+    const dbadge = sub ? '' : ' ' + ddayBadge(t.due);
     return `<tr><td>${esc(t.title)}${dbadge}</td><td>${fmtPeriod(t)}</td><td>${pdfCell(t)}</td>${doneCell}
       <td>${status}</td><td>${btn}</td></tr>`;
   }).join('') || `<tr><td colspan="${kind==='hw'?6:5}" class="empty-hint">등록된 항목이 없습니다.</td></tr>`;
 }
+  /* 지각 제출 여부 */
+function isLateSub(sub){ return !!(sub && sub.late); }
+function lateBadge(sub){
+  return isLateSub(sub) ? ' <span class="badge warn">지각 제출</span>' : '';
+}
+/* 사진 제출인데 아직 관리자가 점수를 안 넣은 상태 */
+function isPhotoPending(kind, tid, uid){
+  const sub = submissions[tid+'|'+uid];
+  if(!sub || sub.mode!=='photo') return false;
+  const rec = (scores[kind][tid]||{})[uid];
+  return !(rec && String(rec.score||'').trim());
+}
 function statusBadge(st){
   if(st==='완료') return '<span class="badge good">완료</span>';
   if(st==='일부완료') return '<span class="badge part">일부완료</span>';
+  if(st==='채점중') return '<span class="badge muted">채점중</span>';
   return '<span class="badge warn">미완료</span>';
 }
 let wrongNoteExpanded = new Set();
@@ -3911,7 +4125,8 @@ function toggleWrongNoteDetail(qid){
 }
 function renderWrongNote(){
   const box = $('wrong-note-list'); if(!box) return;
-  const entries = Object.entries(wrongItems);
+  // ✅ 삭제된 문제는 제외하고 계산
+  const entries = Object.entries(wrongItems).filter(([qid])=>questions.some(x=>x.qid===qid));
   if(!entries.length){
     box.innerHTML = '<p class="empty-hint">아직 등록된 오답이 없습니다. 과제·시험을 풀면 틀린 문제가 자동으로 여기 모입니다.</p>';
     return;
@@ -3922,7 +4137,7 @@ function renderWrongNote(){
     const q = questions.find(x=>x.qid===qid);
     if(!q) return '';
     const isOpen = wrongNoteExpanded.has(qid);
-       const detail = isOpen ? `
+    const detail = isOpen ? `
       <div style="margin-top:8px; padding-top:8px; border-top:1px dashed var(--border);">
         ${renderPassageBoxHtml(getPassages(q))}
         ${q.type==='mc'? `<div style="margin-top:4px; color:#4C5875;">${(q.choices||[]).map((c,ci)=>CIRCLE[ci]+' '+esc(c)).join('<br>')}</div>`:''}
@@ -3931,7 +4146,7 @@ function renderWrongNote(){
     return `<div class="bank-item">
       <div class="bi-body">
         <span class="qset-tag type">${q.type==='mc'?'객관식':'단답형'}</span>
-        <span class="qset-tag set">${esc(item.taskTitle)}</span>
+        <span class="qset-tag set">${esc(item.taskTitle||'')}</span>
         ${item.status==='mastered'?'<span class="badge good">마스터</span>':'<span class="badge warn">복습 필요</span>'}
         <div style="margin-top:6px; cursor:pointer;" onclick="toggleWrongNoteDetail('${qid}')">
           <b>${esc(q.body)}</b> <span style="color:var(--muted); font-size:12px;">${isOpen?'▲ 접기':'▼ 상세보기'}</span>
@@ -4020,8 +4235,10 @@ function pickChoice(el){
 function normalize(s){ return String(s||'').replace(/\s+/g,'').toLowerCase(); }
 async function submitSolve(){
   if(!currentSolve) return;
+  if(previewingStudent){ alert('미리보기 중에는 제출·기록되지 않습니다.'); return; }
   const kind = currentSolve.kind, tid = currentSolve.tid;
   const t = tasks[kind].find(x=>x.tid===tid);
+  if(!t){ alert('과제/시험을 찾을 수 없습니다.'); return; }
   const qs = (t.qids||[]).map(q=>questions.find(x=>x.qid===q)).filter(Boolean);
   const photoFiles = Array.from($('solve-photos').files || []);
 
@@ -4042,7 +4259,15 @@ async function submitSolve(){
     alert('답안을 입력하거나 사진을 첨부해주세요.');
     return;
   }
-  if(!confirm('제출하면 답안을 수정할 수 없습니다. 제출할까요?')) return;
+
+  // ✅ 지각 여부 판단
+  const now = new Date();
+  const dueDate = t.due ? new Date(t.due) : null;
+  const late = !!(dueDate && !isNaN(dueDate) && now > dueDate);
+
+  const confirmMsg = (late ? '⚠️ 마감일시가 지났습니다. 지각 제출로 기록됩니다.\n\n' : '')
+    + '제출하면 답안을 수정할 수 없습니다. 제출할까요?';
+  if(!confirm(confirmMsg)) return;
 
   let photos = [];
   if(photoFiles.length){
@@ -4065,17 +4290,20 @@ async function submitSolve(){
   });
 
   const mode = answered ? 'omr' : 'photo';
-    if(mode==='omr') updateWrongBankAfterGrade(currentStudent, kind, tid, t.title, qs, answers);   // ← 추가
+  if(mode==='omr') updateWrongBankAfterGrade(currentStudent, kind, tid, t.title, qs, answers);
+
   const subData = {
     studentUid: currentStudent,
     taskId: tid, kind, mode,
     answers, photos, total:qs.length, correct,
-    date:new Date().toLocaleString('ko-KR')
+    late,                                   // ✅ 지각 여부
+    submittedAt: now.getTime(),             // ✅ 제출 시각
+    date: now.toLocaleString('ko-KR')
   };
   const rec = mode==='omr'
     ? { score: correct+'/'+qs.length,
         status: correct===qs.length ? '완료' : (correct>0 ? '일부완료' : '미완료') }
-    : { score: '', status: '일부완료' };  // 사진 제출은 관리자가 성적 관리에서 직접 채점
+    : { score: '', status: '채점중' };      // ✅ 사진 제출은 관리자 확인 전까지 채점중
 
   closeModal('solve-modal');
   currentSolve=null;
@@ -4084,9 +4312,11 @@ async function submitSolve(){
   const scorePayload = {}; scorePayload[currentStudent] = rec;
   setDoc(doc(db,'submissions', tid+'|'+currentStudent), subData)
     .then(()=> setDoc(doc(db,'scores', kind+'__'+tid), scorePayload, {merge:true}))
-    .then(()=> alert(mode==='omr'
-      ? `제출되었습니다. 자동 채점 결과 ${correct}/${qs.length}입니다.`
-      : '사진이 제출되었습니다. 관리자가 확인 후 채점합니다.'))
+    .then(()=> alert(
+      (mode==='omr'
+        ? `제출되었습니다. 자동 채점 결과 ${correct}/${qs.length}입니다.`
+        : '사진이 제출되었습니다. 관리자가 확인한 뒤 점수가 반영됩니다.')
+      + (late ? '\n(지각 제출로 기록되었습니다)' : '')))
     .catch(e=>{ console.error(e); alert('제출 실패: '+e.message); });
 }
 /* ---------- 결과 · 해설 ---------- */
@@ -4095,46 +4325,68 @@ function openReview(kind,tid,stuUid,isAdmin){
   if(!t){ alert('해당 과제/시험을 찾을 수 없습니다. 목록이 갱신되었을 수 있어요. 다시 시도해주세요.'); return; }
   const s = students.find(x=>x.uid===stuUid);
   const sub = submissions[tid+'|'+stuUid];
+  const rec = (scores[kind][tid]||{})[stuUid] || {};
+  const isPhoto = !!(sub && sub.mode==='photo');
+  const pending = isPhoto && isPhotoPending(kind, tid, stuUid);
+  const hideKey = pending && !isAdmin;   // 채점 전 사진 제출 → 학생에게 정답·해설 숨김
+
   $('review-title').textContent = t.title + ' · ' + (s?s.name:'') + (isAdmin?' (관리자 확인)':'');
   const qs = (t.qids||[]).map(q=>questions.find(x=>x.qid===q)).filter(Boolean);
-    let head;
+
+  let head;
   if(!sub){
     head = '<p class="note">아직 제출하지 않았습니다.</p>';
-  } else if(sub.mode==='photo'){
-    head = `<p class="note">제출일시 ${esc(sub.date)} · 사진 제출 · 관리자 수동 채점이 필요합니다.</p>`;
+  } else if(isPhoto){
+    head = pending
+      ? `<p class="note">제출일시 ${esc(sub.date)}${lateBadge(sub)} · 사진 제출 · <span class="badge part">채점중</span><br>
+         ${isAdmin ? '성적 관리 탭에서 점수를 입력하면 채점 완료로 바뀝니다.'
+                   : '관리자가 확인한 뒤 점수와 정답·해설이 공개됩니다.'}</p>`
+      : `<p class="note">제출일시 ${esc(sub.date)}${lateBadge(sub)} · 사진 제출 · 점수 <b>${esc(rec.score)}</b></p>`;
   } else {
-    head = `<p class="note">제출일시 ${esc(sub.date)} · 자동채점 <b>${sub.correct}/${sub.total}</b> · 제출한 답안은 수정할 수 없습니다.</p>`;
+    head = `<p class="note">제출일시 ${esc(sub.date)}${lateBadge(sub)} · 자동채점 <b>${sub.correct}/${sub.total}</b> · 제출한 답안은 수정할 수 없습니다.</p>`;
   }
+
   const photoHtml = (sub && sub.photos && sub.photos.length)
     ? `<div class="card"><h3>첨부 사진</h3><div class="thumb-row">${
         sub.photos.map(p=>`<a href="${p.url}" target="_blank"><img src="${p.url}" alt="${esc(p.name)}"></a>`).join('')
       }</div></div>`
     : '';
-  const body = qs.map((q,i)=>{
+
+  const body = hideKey ? '' : (qs.map((q,i)=>{
     const mine = sub ? ((sub.answers||{})[q.qid]||'') : '';
     const ok = q.type==='mc' ? mine===String(q.answer) : normalize(mine)===normalize(q.answer);
     const mineLabel = q.type==='mc'
       ? (mine ? (CIRCLE[parseInt(mine,10)-1]||'')+' '+esc((q.choices||[])[parseInt(mine,10)-1]||'') : '무응답')
       : (mine ? esc(mine) : '무응답');
+
+    let resultBadge;
+    if(!sub) resultBadge = '<span class="badge muted">미제출</span>';
+    else if(isPhoto) resultBadge = '<span class="badge muted">사진 채점</span>';
+    else resultBadge = ok ? '<span class="badge good">정답</span>' : '<span class="badge warn">오답</span>';
+
     const choicesHtml = q.type==='mc' ? (q.choices||[]).map((c,ci)=>{
       const isAns = String(ci+1)===String(q.answer);
-      const isMineWrong = String(ci+1)===mine && !ok;
+      const isMineWrong = !isPhoto && String(ci+1)===mine && !ok;
       return `<div class="choice-line ${isAns?'correct':''} ${isMineWrong?'mine-wrong':''}">
         ${CIRCLE[ci]} ${esc(c)} ${isAns?'<span class="badge good" style="margin-left:6px;">정답</span>':''}
         ${isMineWrong?'<span class="badge warn" style="margin-left:6px;">내 선택</span>':''}</div>`;
     }).join('') : '';
+
+    const ansRow = isPhoto
+      ? `<div class="ans-row"><b>정답:</b> ${esc(answerLabel(q))}</div>`
+      : `<div class="ans-row"><b>내 답:</b> ${mineLabel} &nbsp;|&nbsp; <b>정답:</b> ${esc(answerLabel(q))}</div>`;
+
     return `<div class="review-q">
-      <div class="rhead"><b>문제 ${i+1}</b>
-        ${sub? (ok?'<span class="badge good">정답</span>':'<span class="badge warn">오답</span>')
-             : '<span class="badge muted">미제출</span>'}</div>
+      <div class="rhead"><b>문제 ${i+1}</b>${resultBadge}</div>
       <div style="white-space:pre-wrap; font-weight:700;">${esc(q.body)}</div>
       ${renderPassageBoxHtml(getPassages(q))}
       ${choicesHtml}
-      <div class="ans-row"><b>내 답:</b> ${mineLabel} &nbsp;|&nbsp; <b>정답:</b> ${esc(answerLabel(q))}</div>
-      ${q.explain? `<div class="exam-explain ${ok?'':'wrong'}"><b>해설</b><br>${esc(q.explain)}</div>`:''}
+      ${ansRow}
+      ${q.explain? `<div class="exam-explain ${(ok||isPhoto)?'':'wrong'}"><b>해설</b><br>${esc(q.explain)}</div>`:''}
     </div>`;
-  }).join('') || '<p class="empty-hint">등록된 문항이 없습니다.</p>';
-   const canEdit = isAdmin && sub && sub.mode==='omr' && qs.length>0;
+  }).join('') || '<p class="empty-hint">등록된 문항이 없습니다.</p>');
+
+  const canEdit = isAdmin && sub && sub.mode==='omr' && qs.length>0;
   $('review-omr-edit-btn').innerHTML = canEdit
     ? `<button class="btn secondary" style="width:100%; margin-bottom:14px;" onclick="openOmrEdit('${kind}','${tid}','${stuUid}')">학생 답안 수정</button>`
     : '';
@@ -4169,7 +4421,7 @@ function openReview(kind,tid,stuUid,isAdmin){
   openModal('edit-omr-modal');
 }
 
-function saveOmrEdit(){
+async function saveOmrEdit(){
   if(!editOmrTarget) return;
   const {kind, tid, uid} = editOmrTarget;
   const t = tasks[kind].find(x=>x.tid===tid); if(!t) return;
@@ -4190,30 +4442,35 @@ function saveOmrEdit(){
     const ok = q.type==='mc' ? val===String(q.answer) : normalize(val)===normalize(q.answer);
     if(ok) correct++;
   });
-  updateWrongBankAfterGrade(uid, kind, tid, t.title, qs, answers);   // ← 추가
+
   const rec = {
     score: correct+'/'+qs.length,
     status: correct===qs.length ? '완료' : (correct>0 ? '일부완료' : '미완료')
   };
   const { db, doc, updateDoc, setDoc } = window.fb;
   const scorePayload = {}; scorePayload[uid] = rec;
-  updateDoc(doc(db,'submissions', tid+'|'+uid), { answers, correct })
-    .then(()=> setDoc(doc(db,'scores', kind+'__'+tid), scorePayload, {merge:true}))
-    .then(()=>{
-      alert(`저장되었습니다. 수정된 점수: ${correct}/${qs.length}`);
-      closeModal('edit-omr-modal');
-      editOmrTarget = null;
-    })
-    .catch(e=>alert('저장 실패: '+e.message));
-}
 
+  try{
+    await updateDoc(doc(db,'submissions', tid+'|'+uid), { answers, correct });
+    await setDoc(doc(db,'scores', kind+'__'+tid), scorePayload, {merge:true});
+    await updateWrongBankAfterGrade(uid, kind, tid, t.title, qs, answers, true);  // ✅ 수정 모드
+
+    // 학생 상세 창이 열려 있으면 오답노트 목록 새로고침
+    if(currentDetailUid===uid) loadAdminWrongNote(uid);
+
+    alert(`저장되었습니다. 수정된 점수: ${correct}/${qs.length}`);
+    closeModal('edit-omr-modal');
+    editOmrTarget = null;
+  }catch(e){
+    alert('저장 실패: '+e.message);
+  }
+}
 /* =========================================================
    채점 확인 (관리자)
    ========================================================= */
 function renderGradingTable(){
   const tb = $('grading-table'); if(!tb) return;
 
-  // 과제/시험 선택 드롭다운을 "구분" 필터에 맞춰 채운다
   const kindFilter = $('grading-kind-filter').value;
   const taskSel = $('grading-task-filter');
   const prevTask = taskSel.value;
@@ -4224,7 +4481,7 @@ function renderGradingTable(){
   if(prevTask && taskSel.querySelector('option[value="'+prevTask+'"]')) taskSel.value = prevTask;
 
   const statusFilter = $('grading-status-filter').value;
-  const taskFilter = taskSel.value; // "kind|tid" 형태 또는 ""
+  const taskFilter = taskSel.value;
 
   const rows = [];
   ['hw','exam'].forEach(kind=>{
@@ -4234,7 +4491,7 @@ function renderGradingTable(){
       students.filter(s=>s.approved && (!Array.isArray(t.assignedTo) || t.assignedTo.includes(s.uid))).forEach(s=>{
         const sub = submissions[t.tid+'|'+s.uid];
         const rec = (scores[kind][t.tid]||{})[s.uid];
-        const needsGrading = sub && sub.mode==='photo' && !(rec && rec.score);
+        const needsGrading = isPhotoPending(kind, t.tid, s.uid);
 
         if(statusFilter==='submitted' && !sub) return;
         if(statusFilter==='pending' && sub) return;
@@ -4247,13 +4504,16 @@ function renderGradingTable(){
           btn='<button class="btn small secondary" disabled>결과 보기</button>';
         } else if(sub.mode==='photo'){
           mode='<span class="badge muted">사진 업로드</span>';
-          status= needsGrading ? '<span class="badge part">수동채점 필요</span>' : `<span class="badge good">채점 완료 (${esc(rec.score)})</span>`;
+          status = needsGrading
+            ? '<span class="badge part">제출 완료 (채점중)</span>'
+            : `<span class="badge good">채점 완료 (${esc(rec.score)})</span>`;
           btn=`<button class="btn small secondary" onclick="openReview('${kind}','${t.tid}','${s.uid}',true)">제출 보기</button>`;
         } else {
           mode='<span class="badge muted">온라인 OMR</span>';
           status=`<span class="badge good">자동채점 완료 (${sub.correct}/${sub.total})</span>`;
           btn=`<button class="btn small secondary" onclick="openReview('${kind}','${t.tid}','${s.uid}',true)">결과 보기</button>`;
         }
+        status += lateBadge(sub);
         const kindLabel = kind==='hw' ? '<span class="badge muted">과제</span>' : '<span class="badge muted">시험</span>';
         rows.push(`<tr><td>${esc(s.name)}</td><td>${kindLabel} ${esc(t.title)}</td><td>${mode}</td><td>${status}</td><td>${btn}</td></tr>`);
       });
@@ -4277,7 +4537,7 @@ function renderScoreTable(kind){
   const sel = $(kind==='hw'?'score-hw-select':'score-exam-select');
   const tb  = $(kind==='hw'?'score-hw-table':'score-exam-table');
   if(!sel||!tb) return;
-  if(document.activeElement && tb.contains(document.activeElement)) return; // 입력 중이면 재렌더 스킵
+  if(document.activeElement && tb.contains(document.activeElement)) return;
   const tid = sel.value;
   const colspan = kind==='hw'?5:4;
   if(!tid){ tb.innerHTML=`<tr><td colspan="${colspan}" class="empty-hint">등록된 항목이 없습니다.</td></tr>`; return; }
@@ -4286,13 +4546,17 @@ function renderScoreTable(kind){
   const targetStudents = (t && Array.isArray(t.assignedTo))
     ? students.filter(s=>t.assignedTo.includes(s.uid))
     : students.filter(s=>s.approved);
+
   tb.innerHTML = targetStudents.map(s=>{
     const rec = (scores[kind][tid]||{})[s.uid] || {score:'',status:'미완료'};
+    const sub = submissions[tid+'|'+s.uid];
+    const flags = (isPhotoPending(kind, tid, s.uid) ? ' <span class="badge part">사진 채점 대기</span>' : '')
+                + lateBadge(sub);
     const statusCell = kind==='hw' ? `<td>
       <select id="ss-${kind}-${s.uid}" style="width:110px;">
-        ${['미완료','일부완료','완료'].map(o=>`<option ${rec.status===o?'selected':''}>${o}</option>`).join('')}
+        ${['미완료','채점중','일부완료','완료'].map(o=>`<option ${rec.status===o?'selected':''}>${o}</option>`).join('')}
       </select></td>` : '';
-    return `<tr><td>${esc(s.name)}</td><td>${esc(s.phone)}</td>${statusCell}
+    return `<tr><td>${esc(s.name)}${flags}</td><td>${esc(s.phone)}</td>${statusCell}
       <td><input type="text" id="si-${kind}-${s.uid}" value="${esc(rec.score)}"
           placeholder="예: 4/5 또는 82" style="width:110px; display:inline-block;"></td>
       <td><button class="btn small" onclick="saveScore('${kind}','${s.uid}')">저장</button></td></tr>`;
@@ -4301,16 +4565,19 @@ function renderScoreTable(kind){
 function saveScore(kind, u){
   const tid = $(kind==='hw'?'score-hw-select':'score-exam-select').value;
   if(!tid) return;
-  const rec = { score: $('si-'+kind+'-'+u).value.trim(), status: '미완료' };
+  const score = $('si-'+kind+'-'+u).value.trim();
+  const prev = (scores[kind][tid]||{})[u];
+  let status;
   if(kind==='hw'){
     const ss = $('ss-'+kind+'-'+u);
-    if(ss) rec.status = ss.value;
+    status = ss ? ss.value : '미완료';
   } else {
-    const prev = (scores[kind][tid]||{})[u];
-    rec.status = prev && prev.status ? prev.status : '미완료';
+    status = prev && prev.status ? prev.status : '미완료';
   }
+  if(score && status==='채점중') status = '완료';   // ✅ 점수 입력 = 채점 완료
+
   const { db, doc, setDoc } = window.fb;
-  const payload = {}; payload[u] = rec;
+  const payload = {}; payload[u] = { score, status };
   setDoc(doc(db,'scores', kind+'__'+tid), payload, {merge:true})
     .then(()=>alert('저장되었습니다.'))
     .catch(e=>alert('저장 실패: '+e.message));
@@ -4319,7 +4586,7 @@ function renderWrongSolveBody(q){
   $('wrong-solve-body').innerHTML = `
     <div class="omr-q">
       <div class="qnum">${esc(q.body)}</div>
-      ${renderPassageBoxHtml(q.passages && q.passages.length ? q.passages : getPassages(q))}
+      ${renderPassageBoxHtml(getPassages(q))}
       ${q.type==='mc'
         ? `<div class="omr-choices">${(q.choices||[]).map((c,ci)=>
             `<label class="omr-bubble" onclick="pickChoice(this)">
@@ -4426,6 +4693,7 @@ function submitWrongSolve(){
 }
 
 function markWrongMastered(qid){
+  if(previewingStudent){ alert('미리보기 중에는 제출·기록되지 않습니다.'); return; }
   if(!currentStudent) return;
   const { db, doc, setDoc } = window.fb;
   setDoc(doc(db,'wrongBank', currentStudent), { items: { [qid]: { status: 'mastered' } } }, {merge:true})
@@ -4472,8 +4740,10 @@ function renderFirebaseGuide(){
    초기화
    ========================================================= */
 function init(){
-  renderAll();
+   renderAll();
   renderDraft('hw'); renderDraft('exam');
+  renderTableEditor('q-passage-table');     // ✅
+  renderTableEditor('q-passage-2-table');   // ✅
   renderFirebaseGuide();
   switchSite('login');
 }
@@ -4521,6 +4791,7 @@ window.fb = {
 
 /* 새로고침해도 로그인 유지 — 라우팅은 routeAfterAuth() 하나로 통일 */
 onAuthStateChanged(auth, async user => {
+  if(window.signupInProgress) return;
   if(!user){ window.handleSignedOut(); return; }
   console.log("로그인 유지 중:", user.uid);
   try { await window.routeAfterAuth(user); }
