@@ -553,10 +553,15 @@
           </div>
           <div class="form-grid">
             <div><label>소속 세트 (일괄 적용)</label><select id="q-extract-set"></select></div>
+          <div class="check-line">
+  <input type="checkbox" id="q-extract-refine">
+  <label for="q-extract-refine" style="margin:0;">그림 정밀 자르기 (그림마다 AI를 한 번 더 사용)</label>
+</div>
           </div>
           <button class="btn" id="q-extract-btn" onclick="extractQuestionsFromPdf()">추출하기</button>
           <div id="q-extract-preview" style="margin-top:14px;"></div>
         </div>
+        
 
         <div class="card">
           <h3 id="q-form-title">새 문제 등록</h3>
@@ -3553,7 +3558,7 @@ async function callGemini({ apiKey, parts, schema, onModelChange, timeoutMs = 12
             throw Object.assign(new Error(`API 오류 (${res.status}): ${errText.slice(0,200)}`), { fatal: true });
           }
           errors.push(`${model}: ${res.status}`);
-          if(res.status === 404) break;                 // 모델 이름이 없음 → 바로 다음 모델
+          if(res.status === 404 || res.status === 429) break;   // 한도 초과는 재시도해도 안 됨
           if(attempt === 0){ await sleep(1500 + Math.random()*1000); continue; }
           break;                                        // 두 번 실패 → 다음 모델
         }
@@ -3939,9 +3944,11 @@ function canvasToBase64(canvas, maxSide = 1600){
 
 /* 2단계 정밀 자르기: 대략 영역을 넓게 잘라 AI에게 다시 보여주고 정확한 테두리를 받음 */
 async function refineFigureCrop(apiKey, pageCanvas, roughBox, q){
-  const roughRect = box2dToRect(pageCanvas, roughBox, 0.35);   // 35% 여유
-  if(!roughRect) return null;
-  const rough = cropRect(pageCanvas, roughRect);
+  if(!$('q-extract-refine').checked){
+    const r = box2dToRect(pageCanvas, roughBox, 0.06);
+    return r ? trimCanvasWhitespace(cropRect(pageCanvas, r)) : null;
+  }
+  const roughRect = box2dToRect(pageCanvas, roughBox, 0.35);
 
   const schema = {
     type: 'object',
