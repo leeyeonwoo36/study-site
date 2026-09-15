@@ -1042,6 +1042,7 @@
     <button class="modal-close" onclick="closeModal('solve-modal')">✕</button>
     <h3 id="solve-title">온라인 OMR 풀이</h3>
     <p class="note">제출 후에는 답안을 수정할 수 없습니다.</p>
+        <div id="solve-draft-status" style="font-size:12px; color:var(--muted); margin:-6px 0 10px; min-height:16px;"></div>
        <div id="solve-body"></div>
            <div class="field-section">
       <span class="section-label">손으로 푼 답안 사진 첨부 (선택)</span>
@@ -4835,11 +4836,100 @@ function resetSolvePhotos(){
   solvePhotoFiles = [];
   renderSolvePhotoPreview();
 }
+/* ---------- 풀이 임시 저장 (브라우저에 보관) ---------- */
+let solveDraftTimer = null;
+
+function solveDraftKey(tid){ return 'solveDraft:' + currentStudent + ':' + tid; }
+
+function collectSolveAnswers(qs){
+  const answers = {};
+  qs.forEach(q=>{
+    if(q.type==='mc'){
+      const picked = document.querySelector('input[name="ans_'+q.qid+'"]:checked');
+      answers[q.qid] = picked ? picked.value : '';
+    } else {
+      const el = $('ans_'+q.qid);
+      answers[q.qid] = el ? el.value.trim() : '';
+    }
+  });
+  return answers;
+}
+
+function restoreSolveAnswers(qs, answers){
+  qs.forEach(q=>{
+    const v = answers[q.qid];
+    if(!v) return;
+    if(q.type==='mc'){
+      const input = document.querySelector('input[name="ans_'+q.qid+'"][value="'+v+'"]');
+      if(input){
+        input.checked = true;
+        input.closest('.omr-choices').querySelectorAll('.omr-bubble').forEach(b=>b.classList.remove('picked'));
+        input.closest('.omr-bubble').classList.add('picked');
+      }
+    } else {
+      const el = $('ans_'+q.qid);
+      if(el) el.value = v;
+    }
+  });
+}
+
+function loadSolveDraft(tid){
+  try{ return JSON.parse(localStorage.getItem(solveDraftKey(tid)) || 'null'); }
+  catch(e){ return null; }
+}
+function clearSolveDraft(tid){
+  try{ localStorage.removeItem(solveDraftKey(tid)); }catch(e){}
+}
+
+function showSolveDraftStatus(savedAt, restored){
+  const el = $('solve-draft-status'); if(!el) return;
+  if(previewingStudent){ el.textContent = '미리보기 중에는 임시 저장되지 않습니다.'; return; }
+  if(!savedAt){ el.textContent = '답을 고르면 자동으로 임시 저장됩니다.'; return; }
+  const t = new Date(savedAt).toLocaleTimeString('ko-KR', {hour:'2-digit', minute:'2-digit'});
+  el.innerHTML = restored
+    ? `💾 <b>${t}</b>에 풀던 답을 불러왔습니다. (첨부 파일은 다시 올려주세요)`
+    : `💾 ${t} 임시 저장됨`;
+}
+
+function saveSolveDraftNow(){
+  if(!currentSolve || previewingStudent) return;
+  const t = tasks[currentSolve.kind].find(x=>x.tid===currentSolve.tid); if(!t) return;
+  const qs = (t.qids||[]).map(q=>questions.find(x=>x.qid===q)).filter(Boolean);
+  const answers = collectSolveAnswers(qs);
+  const hasAny = Object.values(answers).some(Boolean);
+  try{
+    if(hasAny){
+      const savedAt = Date.now();
+      localStorage.setItem(solveDraftKey(currentSolve.tid), JSON.stringify({ answers, savedAt }));
+      showSolveDraftStatus(savedAt, false);
+    } else {
+      clearSolveDraft(currentSolve.tid);
+      showSolveDraftStatus(null);
+    }
+  }catch(e){
+    const el = $('solve-draft-status');
+    if(el) el.textContent = '⚠️ 이 브라우저에서는 임시 저장을 쓸 수 없습니다.';
+  }
+}
+
+function scheduleSolveDraftSave(){
+  clearTimeout(solveDraftTimer);
+  solveDraftTimer = setTimeout(saveSolveDraftNow, 400);
+}
+
+function initSolveDraftHandlers(){
+  const body = $('solve-body'); if(!body) return;
+  ['input','change','click'].forEach(ev => body.addEventListener(ev, scheduleSolveDraftSave));
+}
 /* ---------- 풀이 ---------- */
 function openStudentSolve(kind,tid){
   const t = tasks[kind].find(x=>x.tid===tid);
   if(!t){ alert('해당 과제/시험을 찾을 수 없습니다. 목록이 갱신되었을 수 있어요. 다시 시도해주세요.'); return; }
-  if(submissions[tid+'|'+currentStudent]){ openReview(kind,tid,currentStudent,false); return; }
+  if(submissions[tid+'|'+currentStudent]){
+    clearSolveDraft(tid);
+    openReview(kind,tid,currentStudent,false);
+    return;
+  }
   if(!adminViewAll && t.startAt && new Date(t.startAt) > new Date()){
     alert(fmtDue(t.startAt) + '부터 풀 수 있습니다.');
     return;
@@ -4857,7 +4947,16 @@ function openStudentSolve(kind,tid){
               <input type="radio" name="ans_${q.qid}" value="${ci+1}">${CIRCLE[ci]} ${esc(c)}</label>`).join('')}</div>`
         : `<input type="text" id="ans_${q.qid}" placeholder="정답 입력">`}
     </div>`).join('') : '<p class="empty-hint">등록된 문항이 없습니다. PDF를 내려받아 풀고 아래에 사진을 첨부해 제출해주세요.</p>';
-  resetSolvePhotos();   // ✅ 이전에 고른 사진 초기화
+  resetSolvePhotos();
+
+  // ✅ 임시 저장본 불러오기
+  const draft = previewingStudent ? null : loadSolveDraft(tid);
+  if(draft && draft.answers){
+    restoreSolveAnswers(qs, draft.answers);
+    showSolveDraftStatus(draft.savedAt, true);
+  } else {
+    showSolveDraftStatus(null);
+  }
   openModal('solve-modal');
 }
 function pickChoice(el){
@@ -4873,44 +4972,36 @@ async function submitSolve(){
   const t = tasks[kind].find(x=>x.tid===tid);
   if(!t){ alert('과제/시험을 찾을 수 없습니다.'); return; }
   const qs = (t.qids||[]).map(q=>questions.find(x=>x.qid===q)).filter(Boolean);
-    const photoFiles = solvePhotoFiles.slice();
+  const photoFiles = solvePhotoFiles.slice();
 
-  const answers = {};
-  let answered = 0;
-  qs.forEach(q=>{
-    if(q.type==='mc'){
-      const picked = document.querySelector('input[name="ans_'+q.qid+'"]:checked');
-      answers[q.qid] = picked ? picked.value : '';
-    } else {
-      const el = $('ans_'+q.qid);
-      answers[q.qid] = el ? el.value.trim() : '';
-    }
-    if(answers[q.qid]) answered++;
-  });
+  saveSolveDraftNow();                       // ✅ 제출 직전 상태도 저장 (실패 대비)
+  const answers = collectSolveAnswers(qs);
+  const answered = Object.values(answers).filter(Boolean).length;
 
   if(!answered && !photoFiles.length){
-    alert('답안을 입력하거나 사진을 첨부해주세요.');
+    alert('답안을 입력하거나 파일을 첨부해주세요.');
     return;
   }
 
-  // ✅ 지각 여부 판단
   const now = new Date();
   const dueDate = t.due ? new Date(t.due) : null;
   const late = !!(dueDate && !isNaN(dueDate) && now > dueDate);
 
+  const unanswered = qs.length - answered;
   const confirmMsg = (late ? '⚠️ 마감일시가 지났습니다. 지각 제출로 기록됩니다.\n\n' : '')
+    + (answered && unanswered>0 ? `아직 답하지 않은 문제가 ${unanswered}개 있습니다.\n\n` : '')
     + '제출하면 답안을 수정할 수 없습니다. 제출할까요?';
   if(!confirm(confirmMsg)) return;
 
   let photos = [];
   if(photoFiles.length){
     try{
-        for(const f of photoFiles){
+      for(const f of photoFiles){
         const url = await uploadToCloudinary(f);
         photos.push({ name: f.name, url, type: isPdfFile(f) ? 'pdf' : 'image' });
       }
     }catch(e){
-      alert('사진 업로드 실패: '+e.message);
+      alert('파일 업로드 실패: '+e.message+'\n\n풀던 답은 임시 저장되어 있습니다.');
       return;
     }
   }
@@ -4923,34 +5014,41 @@ async function submitSolve(){
   });
 
   const mode = answered ? 'omr' : 'photo';
-  if(mode==='omr') updateWrongBankAfterGrade(currentStudent, kind, tid, t.title, qs, answers);
-
   const subData = {
     studentUid: currentStudent,
     taskId: tid, kind, mode,
     answers, photos, total:qs.length, correct,
-    late,                                   // ✅ 지각 여부
-    submittedAt: now.getTime(),             // ✅ 제출 시각
+    late,
+    submittedAt: now.getTime(),
     date: now.toLocaleString('ko-KR')
   };
   const rec = mode==='omr'
     ? { score: correct+'/'+qs.length,
         status: correct===qs.length ? '완료' : (correct>0 ? '일부완료' : '미완료') }
-    : { score: '', status: '채점중' };      // ✅ 사진 제출은 관리자 확인 전까지 채점중
-
-  closeModal('solve-modal');
-  currentSolve=null;
+    : { score: '', status: '채점중' };
 
   const { db, doc, setDoc } = window.fb;
   const scorePayload = {}; scorePayload[currentStudent] = rec;
-  setDoc(doc(db,'submissions', tid+'|'+currentStudent), subData)
-    .then(()=> setDoc(doc(db,'scores', kind+'__'+tid), scorePayload, {merge:true}))
-    .then(()=> alert(
+  const studentUid = currentStudent;
+
+  try{
+    // 제출물 → 점수 → 오답노트 순서 (보안 규칙이 제출물 존재를 확인함)
+    await setDoc(doc(db,'submissions', tid+'|'+studentUid), subData);
+    await setDoc(doc(db,'scores', kind+'__'+tid), scorePayload, {merge:true});
+    if(mode==='omr') await updateWrongBankAfterGrade(studentUid, kind, tid, t.title, qs, answers);
+
+    clearSolveDraft(tid);                    // ✅ 제출 성공 시에만 임시 저장본 삭제
+    closeModal('solve-modal');
+    currentSolve = null;
+    alert(
       (mode==='omr'
         ? `제출되었습니다. 자동 채점 결과 ${correct}/${qs.length}입니다.`
-        : '사진이 제출되었습니다. 관리자가 확인한 뒤 점수가 반영됩니다.')
-      + (late ? '\n(지각 제출로 기록되었습니다)' : '')))
-    .catch(e=>{ console.error(e); alert('제출 실패: '+e.message); });
+        : '파일이 제출되었습니다. 관리자가 확인한 뒤 점수가 반영됩니다.')
+      + (late ? '\n(지각 제출로 기록되었습니다)' : ''));
+  }catch(e){
+    console.error(e);
+    alert('제출 실패: '+e.message+'\n\n풀던 답은 임시 저장되어 있으니 잠시 후 다시 시도해주세요.');
+  }
 }
 /* ---------- 결과 · 해설 ---------- */
 function openReview(kind,tid,stuUid,isAdmin){
@@ -5374,7 +5472,8 @@ function init(){
   renderDraft('hw'); renderDraft('exam');
   renderTableEditor('q-passage-table');
   renderTableEditor('q-passage-2-table');
-  initImagePasteHandlers();     // ✅ 붙여넣기 연결
+  initImagePasteHandlers();
+  initSolveDraftHandlers();     // ✅ 임시 저장 연결
   renderFirebaseGuide();
   switchSite('login');
 }
