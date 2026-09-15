@@ -1886,25 +1886,23 @@ function buildTaskDetailHtml(kind, tid, u){
     return `<p class="note">아직 제출하지 않았습니다. · 완료 여부: <span class="badge warn">미완료</span></p>`;
   }
 
-  // ✅ 사진 제출
+  // 사진·PDF 제출
   if(sub.mode==='photo'){
     const rec = (scores[kind][tid]||{})[u] || {};
     const pending = isPhotoPending(kind, tid, u);
-    ${photos ? `<div class="thumb-row">${photos}</div>` : ''}`;
-    return `<p class="note">
-      제출일시 ${esc(sub.date)}${lateBadge(sub)} · 사진 제출 ·
-      ${pending ? '<span class="badge part">채점중</span> <span style="font-size:12px;">(성적 관리 탭에서 점수를 입력하면 채점 완료됩니다)</span>'
-                : `<span class="badge good">채점 완료 (${esc(rec.score)})</span>`}
-    </p>
-    ${photos ? `<div class="thumb-row">${photos}</div>` : ''}`;
+    const files = renderAttachmentThumbs(sub.photos||[]);
+    const statusHtml = pending
+      ? '<span class="badge part">채점중</span> <span style="font-size:12px;">(성적 관리 탭에서 점수를 입력하면 채점 완료됩니다)</span>'
+      : `<span class="badge good">채점 완료 (${esc(rec.score)})</span>`;
+    return `<p class="note">제출일시 ${esc(sub.date)}${lateBadge(sub)} · 파일 제출 · ${statusHtml}</p>` + files;
   }
 
-  const head = `<p class="note">
-    제출일시 ${esc(sub.date)}${lateBadge(sub)} · 점수 <b>${sub.correct}/${sub.total}</b>
-    · 완료 여부: ${sub.correct===sub.total ? '<span class="badge good">완료</span>'
-                  : sub.correct>0 ? '<span class="badge part">일부완료</span>'
-                  : '<span class="badge warn">미완료</span>'}
-  </p>`;
+  let doneBadge;
+  if(sub.correct===sub.total) doneBadge = '<span class="badge good">완료</span>';
+  else if(sub.correct>0)      doneBadge = '<span class="badge part">일부완료</span>';
+  else                        doneBadge = '<span class="badge warn">미완료</span>';
+
+  const head = `<p class="note">제출일시 ${esc(sub.date)}${lateBadge(sub)} · 점수 <b>${sub.correct}/${sub.total}</b> · 완료 여부: ${doneBadge}</p>`;
 
   const cells = qs.map((q,i)=>{
     const mine = (sub.answers||{})[q.qid]||'';
