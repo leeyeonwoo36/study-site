@@ -3422,9 +3422,9 @@ function renderExtractedQuestionsPreview(){
   }
   const warnHtml = extractWarnings.length
     ? `<div class="note" style="background:var(--warn-soft); border-color:var(--warn); color:#8a5a00;">
-         ⚠️ 원본과 순서가 다를 수 있습니다. 저장 전에 확인해주세요.<br>${extractWarnings.map(esc).join('<br>')}
+         ⚠️ 저장 전에 확인해주세요.<br>${extractWarnings.map(esc).join('<br>')}
        </div>`
-    : `<div class="note">원본 문번 순서로 정렬했습니다. <b>전체 저장</b>을 누르면 이 순서 그대로 세트에 저장됩니다.</div>`;
+    : `<div class="note">원본 순서로 정렬했습니다. <b>전체 저장</b>을 누르면 이 순서 그대로 세트에 저장됩니다.</div>`;
 
   const rows = extractedQuestionsCache.map((q,i)=>{
     const choicesHtml = q.type==='mc'
@@ -3433,13 +3433,18 @@ function renderExtractedQuestionsPreview(){
     const numLabel = q.number!=null
       ? `<span class="badge muted">원본 ${q.number}번</span>`
       : `<span class="badge warn">문번 미확인</span>`;
+    const pageLabel = q.questionPage!=null
+      ? ` <span class="badge muted">${q.questionPage}쪽</span>` : '';
+    const imgNote = (q.hasImage && !q.extractedImageUrl)
+      ? `<p class="note" style="margin:6px 0; background:var(--accent-soft); border-color:var(--accent);">그림이 있는 문제지만 추출에 실패했습니다.</p>` : '';
     return `
       <div class="card" style="margin-bottom:10px; background:rgba(0,0,0,0.02);">
         <div style="display:flex; justify-content:space-between; align-items:start; gap:8px;">
           <div style="flex:1;">
-            <p style="margin:0;">${numLabel} <b>(${q.type==='mc'?'객관식':'단답형'})</b> ${esc(q.body)}</p>
+            <p style="margin:0;">${numLabel}${pageLabel} <b>(${q.type==='mc'?'객관식':'단답형'})</b> ${esc(q.body)}</p>
             ${q.hasPassage ? `<div class="passage-box">${q.passage}</div>` : ''}
-            ${q.extractedImageUrl ? `<img src="${q.extractedImageUrl}" style="max-width:200px; border-radius:6px; margin:6px 0; display:block;">` : ''}
+            ${q.extractedImageUrl ? `<img src="${q.extractedImageUrl}" style="max-width:320px; border:1px solid var(--border); border-radius:6px; margin:6px 0; display:block;">` : ''}
+            ${imgNote}
             ${choicesHtml}
             <p class="note" style="margin:6px 0 0;"><b>해설:</b> ${esc(q.explain)}</p>
           </div>
@@ -3517,37 +3522,147 @@ async function saveAllExtractedQuestions(){
 }
 
 let extractedQuestionsCache = [];
-/* 추출 결과를 원본 문번 순서로 정렬 + 누락·중복 검사 */
+/* 추출 결과 정렬
+   - 문번 중복 없음: 문번 순
+   - 문번 중복 있음: 페이지 순 → 같은 페이지 안에서 문번 순 */
 function sortExtractedByNumber(list){
-  const withIdx = list.map((q,i)=>{
+  const rows = list.map((q, i) => {
     const n = parseInt(q.number, 10);
-    return { q, i, n: (isNaN(n) || n<=0) ? null : n };
+    const p = parseInt(q.questionPage, 10);
+    return { q, i, n: (isNaN(n) || n <= 0) ? null : n, p: (isNaN(p) || p <= 0) ? null : p };
   });
 
-  // 문번 있는 것은 문번 순, 없는 것은 AI가 준 순서대로 뒤에 (안정 정렬)
-  withIdx.sort((a,b)=>{
-    if(a.n!==null && b.n!==null) return a.n - b.n || a.i - b.i;
-    if(a.n!==null) return -1;
-    if(b.n!==null) return 1;
+  const nums = rows.map(r => r.n).filter(n => n !== null);
+  const dup = [...new Set(nums.filter((n, i) => nums.indexOf(n) !== i))];
+  const hasDup = dup.length > 0;
+
+  const byNull = (a, b) => (a === null) - (b === null);   // null은 뒤로
+  rows.sort((a, b) => {
+    if(hasDup){
+      if(a.p !== b.p) return byNull(a.p, b.p) || a.p - b.p;
+      if(a.n !== null && b.n !== null && a.n !== b.n) return a.n - b.n;
+      return a.i - b.i;
+    }
+    if(a.n !== b.n) return byNull(a.n, b.n) || a.n - b.n;
+    if(a.p !== b.p) return byNull(a.p, b.p) || a.p - b.p;
     return a.i - b.i;
   });
 
-  const nums = withIdx.map(x=>x.n).filter(n=>n!==null);
   const warnings = [];
-  const noNum = withIdx.filter(x=>x.n===null).length;
-  if(noNum) warnings.push(`문번을 인식하지 못한 문제 ${noNum}개 (맨 뒤에 배치)`);
+  const noNum = rows.filter(r => r.n === null).length;
+  if(noNum) warnings.push(`문번을 인식하지 못한 문제 ${noNum}개`);
 
-  const dup = [...new Set(nums.filter((n,i)=>nums.indexOf(n)!==i))];
-  if(dup.length) warnings.push(`중복된 문번: ${dup.join(', ')}번`);
-
-  if(nums.length){
+  if(hasDup){
+    warnings.push(`겹치는 문번(${dup.join(', ')}번)이 있어 페이지 순서 → 문번 순서로 정렬했습니다.`);
+    if(rows.some(r => r.p === null)) warnings.push('페이지를 인식하지 못한 문제는 맨 뒤에 배치했습니다.');
+  } else if(nums.length){
     const min = Math.min(...nums), max = Math.max(...nums);
     const set = new Set(nums), missing = [];
-    for(let k=min; k<=max; k++) if(!set.has(k)) missing.push(k);
+    for(let k = min; k <= max; k++) if(!set.has(k)) missing.push(k);
     if(missing.length) warnings.push(`빠진 문번: ${missing.join(', ')}번`);
   }
 
-  return { list: withIdx.map(x=>({ ...x.q, number: x.n })), warnings };
+  return { list: rows.map(r => ({ ...r.q, number: r.n, questionPage: r.p })), warnings };
+}
+  /* =========================================================
+   PDF 그림 추출 (정밀 자르기)
+   ========================================================= */
+const clamp01 = v => Math.max(0, Math.min(1, v));
+
+/* box_2d [ymin, xmin, ymax, xmax] (0~1000) → 캔버스 픽셀 영역. padRatio만큼 사방으로 넓힘 */
+function box2dToRect(canvas, box, padRatio = 0){
+  if(!Array.isArray(box) || box.length !== 4) return null;
+  let [y0, x0, y1, x1] = box.map(n => Number(n) / 1000);
+  if([y0,x0,y1,x1].some(v => isNaN(v))) return null;
+  if(y0 > y1) [y0, y1] = [y1, y0];
+  if(x0 > x1) [x0, x1] = [x1, x0];
+  const ph = (y1 - y0) * padRatio, pw = (x1 - x0) * padRatio;
+  y0 = clamp01(y0 - ph); y1 = clamp01(y1 + ph);
+  x0 = clamp01(x0 - pw); x1 = clamp01(x1 + pw);
+  const rect = {
+    sx: Math.round(x0 * canvas.width),  sy: Math.round(y0 * canvas.height),
+    sw: Math.round((x1 - x0) * canvas.width), sh: Math.round((y1 - y0) * canvas.height)
+  };
+  return (rect.sw < 12 || rect.sh < 12) ? null : rect;
+}
+
+function cropRect(canvas, r){
+  const out = document.createElement('canvas');
+  out.width = r.sw; out.height = r.sh;
+  out.getContext('2d').drawImage(canvas, r.sx, r.sy, r.sw, r.sh, 0, 0, r.sw, r.sh);
+  return out;
+}
+
+/* 흰 여백 자동 제거 */
+function trimCanvasWhitespace(canvas, margin = 10){
+  const ctx = canvas.getContext('2d');
+  const { width: w, height: h } = canvas;
+  const data = ctx.getImageData(0, 0, w, h).data;
+  let top = h, left = w, bottom = -1, right = -1;
+  for(let y = 0; y < h; y++){
+    for(let x = 0; x < w; x++){
+      const i = (y * w + x) * 4;
+      const lum = 0.299*data[i] + 0.587*data[i+1] + 0.114*data[i+2];
+      if(data[i+3] > 10 && lum < 238){
+        if(y < top) top = y;       if(y > bottom) bottom = y;
+        if(x < left) left = x;     if(x > right) right = x;
+      }
+    }
+  }
+  if(bottom < 0) return canvas;   // 전부 흰색이면 그대로
+  const sx = Math.max(0, left - margin), sy = Math.max(0, top - margin);
+  const ex = Math.min(w, right + margin + 1), ey = Math.min(h, bottom + margin + 1);
+  return cropRect(canvas, { sx, sy, sw: ex - sx, sh: ey - sy });
+}
+
+/* AI 전송용 base64 (너무 크면 축소) */
+function canvasToBase64(canvas, maxSide = 1600){
+  let src = canvas;
+  const scale = Math.min(1, maxSide / Math.max(canvas.width, canvas.height));
+  if(scale < 1){
+    src = document.createElement('canvas');
+    src.width = Math.round(canvas.width * scale);
+    src.height = Math.round(canvas.height * scale);
+    src.getContext('2d').drawImage(canvas, 0, 0, src.width, src.height);
+  }
+  return src.toDataURL('image/jpeg', 0.92).split(',')[1];
+}
+
+/* 2단계 정밀 자르기: 대략 영역을 넓게 잘라 AI에게 다시 보여주고 정확한 테두리를 받음 */
+async function refineFigureCrop(apiKey, pageCanvas, roughBox, q){
+  const roughRect = box2dToRect(pageCanvas, roughBox, 0.35);   // 35% 여유
+  if(!roughRect) return null;
+  const rough = cropRect(pageCanvas, roughRect);
+
+  const schema = {
+    type: 'object',
+    properties: {
+      found:  { type: 'boolean' },
+      box_2d: { type: 'array', items: { type: 'integer' }, minItems: 4, maxItems: 4 }
+    },
+    required: ['found']
+  };
+  const prompt = `이 이미지는 시험지의 일부를 잘라낸 것이다.
+${q.number ? q.number+'번 문제의 ' : ''}<보기>에 들어 있는 그림(사진·그래프·지도·삽화·도식) 영역 하나를 찾아라.
+그림 설명: ${q.imageDesc || '(없음)'}
+- 그림 자체와 그림에 딸린 제목·범례·축 이름·출처 표기는 포함하라.
+- 문제 물음 문장, 선지, 다른 문항의 그림, 페이지 테두리는 포함하지 마라.
+- box_2d는 이 잘라낸 이미지 기준 [ymin, xmin, ymax, xmax]이며 각 값은 0~1000 정수다.
+- 그림이 없으면 found를 false로 하라.`;
+
+  try{
+    const { parsed } = await callGemini({
+      apiKey, schema, timeoutMs: 45000,
+      parts: [{ text: prompt }, { inline_data: { mime_type: 'image/jpeg', data: canvasToBase64(rough) } }]
+    });
+    const fineRect = parsed.found ? box2dToRect(rough, parsed.box_2d, 0.02) : null;
+    if(fineRect) return trimCanvasWhitespace(cropRect(rough, fineRect));
+  }catch(e){
+    console.warn('그림 정밀 자르기 실패, 1차 영역 사용:', e.message);
+  }
+  // 대체: 1차 영역에 약간 여유를 두고 자름
+  const fallback = box2dToRect(pageCanvas, roughBox, 0.06);
+  return fallback ? trimCanvasWhitespace(cropRect(pageCanvas, fallback)) : null;
 }
 async function extractQuestionsFromPdf(){
   const apiKey = $('ai-apikey').value.trim();
@@ -3571,26 +3686,22 @@ async function extractQuestionsFromPdf(){
         items: {
           type: "object",
           properties: {
-            number: { type: "integer" },                 // ✅ 원본 문번
-            type: { type: "string", enum: ["mc","short"] },
-            body: { type: "string" },
+            number:       { type: "integer" },
+            questionPage: { type: "integer" },
+            type:       { type: "string", enum: ["mc","short"] },
+            body:       { type: "string" },
             hasPassage: { type: "boolean" },
-            passage: { type: "string" },
-            choices: { type: "array", items: { type: "string" }, minItems: 5, maxItems: 5 },
-            answer: { type: "string" },
-            explain: { type: "string" },
-            hasImage: { type: "boolean" },
-            imagePage: { type: "integer" },
-            imageBox: {
-              type: "object",
-              properties: {
-                x: { type: "number" }, y: { type: "number" },
-                w: { type: "number" }, h: { type: "number" }
-              }
-            }
+            passage:    { type: "string" },
+            choices:    { type: "array", items: { type: "string" }, minItems: 5, maxItems: 5 },
+            answer:     { type: "string" },
+            explain:    { type: "string" },
+            hasImage:   { type: "boolean" },
+            imagePage:  { type: "integer" },
+            imageBox2d: { type: "array", items: { type: "integer" }, minItems: 4, maxItems: 4 },
+            imageDesc:  { type: "string" }
           },
-          required: ["number","type","body","hasPassage","passage","answer","explain","hasImage"],
-          propertyOrdering: ["number","type","body","hasPassage","passage","choices","answer","explain","hasImage","imagePage","imageBox"]
+          required: ["number","questionPage","type","body","hasPassage","passage","answer","explain","hasImage"],
+          propertyOrdering: ["number","questionPage","type","body","hasPassage","passage","choices","answer","explain","hasImage","imagePage","imageBox2d","imageDesc"]
         }
       }
     },
@@ -3602,22 +3713,29 @@ async function extractQuestionsFromPdf(){
 문제지에 있는 문제를 하나도 빠짐없이 추출하고, 정답지를 참고하여 각 문제의 정답과 해설을 매칭하라.
 
 [순서 규칙 — 매우 중요]
-- number에는 문제지에 인쇄된 원본 문항 번호(1, 2, 3 …)를 정수로 넣어라. "1.", "1번", "[1]" 같은 표기에서 숫자만 뽑는다.
-- questions 배열은 반드시 number 오름차순으로 정렬해서 출력하라.
-- 문제지가 2단 편집이면 각 페이지에서 왼쪽 단을 위→아래로 끝까지 읽은 뒤 오른쪽 단을 위→아래로 읽고, 그다음 페이지로 넘어가라. 가로로 좌우 단을 번갈아 읽지 마라.
-- 문항 번호가 없는 문제가 있으면 앞뒤 문제 번호를 보고 위치를 추정해 가장 자연스러운 번호를 넣어라.
-- 정답지의 번호는 문제지의 number와 같은 번호끼리 매칭하라. 정답지 순서가 달라도 번호 기준으로 맞춰라.
-- "[3~4] 다음 글을 읽고 물음에 답하시오" 처럼 여러 문항이 공유하는 지문은 해당 문항마다 passage에 같은 내용을 넣어라.
+- number에는 문제지에 인쇄된 원본 문항 번호를 정수로 넣어라. "1.", "1번", "[1]" 같은 표기에서 숫자만 뽑는다.
+- questionPage에는 그 문제(물음 문장)가 시작되는 문제지 PDF의 페이지 번호(1부터)를 넣어라.
+- questions 배열은 문제지에 실제로 등장하는 순서대로 출력하라. 문제지가 2단 편집이면 각 페이지에서 왼쪽 단을 위→아래로 끝까지 읽은 뒤 오른쪽 단을 위→아래로 읽고 다음 페이지로 넘어가라.
+- 문항 번호가 없는 문제가 있으면 앞뒤 번호를 보고 가장 자연스러운 번호를 넣어라.
+- 정답지는 문제지의 number(와 파트 구분)가 같은 것끼리 매칭하라. 번호가 여러 파트에서 반복되면 순서·파트 제목을 보고 올바른 파트끼리 매칭하라.
+- "[3~4] 다음 글을 읽고 물음에 답하시오"처럼 여러 문항이 공유하는 지문은 해당 문항마다 passage에 같은 내용을 넣어라.
 
 [내용 규칙]
-- 객관식(mc)은 choices 배열에 선지 5개, answer는 정답 번호("1"~"5") 문자열로. choices 각 항목에는 원본 PDF에 있는 번호 표기(①②③④⑤, 1. 2. 3., (1)(2)(3) 등)를 절대 포함하지 말고 선지 내용 텍스트만 넣어라.
-- 단답형(short)은 choices는 빈 배열로 두고, answer는 정답 텍스트.
-- body에는 문항 번호를 넣지 마라. (예: "1. 다음 중…" → "다음 중…")
-- <보기> 지문이 있는 문제는 hasPassage를 true로 하고 passage에 그 내용을 그대로 채워라. 없으면 false와 빈 문자열("").
-- 밑줄 처리: passage 안에서 원본 PDF에 밑줄이 그어진 부분이 있으면 <u>와 </u> 태그로 감싸라. body와 choices에는 <u> 태그를 넣지 마라.
-- 그림/사진/그래프/도표(표는 제외, 순수 이미지만) 처리 (매우 중요): 문제의 <보기>나 지문에 그림, 사진, 그래프, 삽화 등 이미지 요소가 포함되어 있으면 hasImage를 true로 하고, imagePage에 문제지 PDF에서 그 그림이 있는 페이지 번호(1부터 시작)를, imageBox에 그 페이지 안에서 그림이 차지하는 영역을 0~1 사이의 비율로 추정해서 넣어라. x,y는 그림 왼쪽 위 모서리의 가로/세로 비율 위치, w,h는 그림의 가로/세로 크기 비율이다. 이미지가 없으면 hasImage를 false로 하고 나머지 필드는 생략하라. 어림값이어도 되니 최대한 그림 전체를 포함하도록 넉넉하게 잡아라.
-- explain에는 1순위로 정답지 해설만을 추출해서 작성. 정답지에 해설이 없으면 문제 내용을 근거로 고2 국제 정치 교과 수준으로 간단히 작성.
-- 반드시 지정된 JSON 스키마 형식으로만 응답하라. 다른 텍스트는 포함하지 마라.`;
+- 객관식(mc)은 choices에 선지 5개, answer는 정답 번호("1"~"5") 문자열. choices 각 항목에는 ①②③, 1. 2., (1)(2) 같은 번호 표기를 넣지 말고 내용만 넣어라.
+- 단답형(short)은 choices를 빈 배열로, answer는 정답 텍스트.
+- body에는 문항 번호를 넣지 마라.
+- <보기> 지문이 있으면 hasPassage를 true, passage에 내용을 그대로. 없으면 false와 빈 문자열.
+- passage 안에서 원본에 밑줄이 있으면 <u></u>로 감싸라. body와 choices에는 <u>를 넣지 마라.
+
+[그림 규칙 — 매우 중요]
+- 문제에 그림·사진·그래프·지도·삽화·도식 같은 이미지 요소가 있으면 hasImage를 true로 하라. 글자로만 된 표는 이미지가 아니다.
+- imagePage: 그림이 있는 문제지 PDF 페이지 번호(1부터).
+- imageBox2d: 그 페이지 전체를 기준으로 한 그림 영역 [ymin, xmin, ymax, xmax]. 각 값은 0~1000 정수(0=위/왼쪽 끝, 1000=아래/오른쪽 끝). 그림 전체가 빠짐없이 들어가도록 잡되, 물음 문장과 선지는 넣지 마라.
+- imageDesc: 그 그림이 무엇인지 한 줄 설명 (예: "국가별 GDP 막대그래프", "유럽 지도").
+- 이미지가 없으면 hasImage를 false로 하고 imagePage·imageBox2d·imageDesc는 생략하라.
+
+- explain에는 정답지 해설을 우선 추출하라. 없으면 고2 국제정치 교과 수준으로 간단히 작성하라.
+- 반드시 지정된 JSON 스키마 형식으로만 응답하라.`;
 
   try {
     const examBase64 = await fileToBase64(examFile);
@@ -3636,26 +3754,29 @@ async function extractQuestionsFromPdf(){
     });
     console.log('PDF 추출에 사용된 모델:', model);
 
-    // ✅ 원본 문번 순서로 정렬
     const { list: questionsList, warnings } = sortExtractedByNumber(parsed.questions || []);
 
-    // 그림이 있는 문제가 하나라도 있으면 PDF를 페이지 이미지로 렌더링
-    if(questionsList.some(q=>q.hasImage)){
-      btn.textContent = '그림 추출 중...';
+    // 그림 정밀 추출
+    const imageQs = questionsList.filter(q => q.hasImage && q.imagePage && Array.isArray(q.imageBox2d));
+    if(imageQs.length){
+      btn.textContent = '페이지 불러오는 중...';
       const pageCanvases = await renderPdfPagesToCanvases(examFile);
-      for(const q of questionsList){
-        if(q.hasImage && q.imagePage && q.imageBox){
-          const pageCanvas = pageCanvases[q.imagePage - 1];
-          if(pageCanvas){
-            try{
-              const cropped = cropCanvas(pageCanvas, q.imageBox.x, q.imageBox.y, q.imageBox.w, q.imageBox.h);
-              q.extractedImageUrl = await uploadCanvasToCloudinary(cropped);
-            }catch(e){
-              console.error('그림 추출/업로드 실패:', e.message);
-            }
-          }
+      let failCount = 0;
+      for(let k = 0; k < imageQs.length; k++){
+        const q = imageQs[k];
+        btn.textContent = `그림 추출 중... (${k+1}/${imageQs.length})`;
+        const pageCanvas = pageCanvases[q.imagePage - 1];
+        if(!pageCanvas){ failCount++; continue; }
+        try{
+          const cropped = await refineFigureCrop(apiKey, pageCanvas, q.imageBox2d, q);
+          if(cropped) q.extractedImageUrl = await uploadCanvasToCloudinary(cropped);
+          else failCount++;
+        }catch(e){
+          failCount++;
+          console.error('그림 추출/업로드 실패:', e.message);
         }
       }
+      if(failCount) warnings.push(`그림 ${failCount}개를 추출하지 못했습니다. 저장 후 문제 수정에서 직접 이미지를 넣어주세요.`);
     }
 
     extractedQuestionsCache = questionsList;
@@ -3664,10 +3785,6 @@ async function extractQuestionsFromPdf(){
   } catch(e){
     alert('추출 실패: '+e.message);
   } finally {
-    btn.disabled = false;
-    btn.textContent = '추출하기';
-  }
-}
   function initAiApiKeyStorage(){
   const input = $('ai-apikey');
   if(!input) return;
