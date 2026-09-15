@@ -5461,35 +5461,87 @@ function markWrongMastered(qid){
    ========================================================= */
 function renderFirebaseGuide(){
   const el = $('firebase-guide'); if(!el) return;
+  const ul = 'style="font-size:13.5px; line-height:1.9; padding-left:20px; margin-top:0;"';
+  const h3 = 'style="margin-top:22px;"';
   el.innerHTML = `
   <h3>계정 · 권한</h3>
-  <ul style="font-size:13.5px; line-height:1.9; padding-left:20px;">
-    <li>학생은 로그인 화면의 <b>회원가입</b>으로 직접 신청합니다. 관리자가 <b>학생 관리 → 가입 승인 대기</b>에서 승인해야 로그인됩니다.</li>
-    <li>관리자는 코드의 <code>window.ADMIN_UIDS</code> 배열과 Firestore 규칙의 <code>isAdmin()</code>에 UID를 넣어 지정합니다.
-        <b>관리자를 추가할 때는 반드시 두 곳을 함께 수정</b>해야 합니다.</li>
+  <ul ${ul}>
+    <li>학생은 로그인 화면의 <b>회원가입</b>으로 신청하고, 관리자가 <b>학생 관리 → 가입 승인 대기</b>에서 승인해야 로그인됩니다.</li>
+    <li>관리자는 코드의 <code>window.ADMIN_UIDS</code>와 Firestore 규칙의 <code>isAdmin()</code>에 UID를 넣어 지정합니다. <b>관리자를 추가할 때는 두 곳을 반드시 함께 수정</b>하세요.</li>
     <li>학생 삭제·거절은 Firestore 문서만 지웁니다. Authentication 계정은 Firebase 콘솔에서 따로 삭제해야 합니다.</li>
     <li>비밀번호 재설정은 학생 상세 화면의 버튼 또는 로그인 화면의 "비밀번호를 잊으셨나요"로 메일이 발송됩니다.</li>
+    <li><b>학생 화면 보기</b>(미리보기)에서는 제출·오답노트 기록·임시 저장이 되지 않습니다. 검수용으로 마음껏 눌러봐도 됩니다.</li>
   </ul>
 
-  <h3 style="margin-top:18px;">데이터 구조</h3>
-  <ul style="font-size:13.5px; line-height:1.9; padding-left:20px;">
-    <li><code>students/{uid}</code> — 문서 ID가 Auth UID와 같아야 합니다. <code>{name, grade, school, phone, email, memos, approved}</code></li>
-    <li><code>schedules/{sid}</code> · <code>attendance/{sid}</code> — 출석은 회차 문서 하나에 학생별 맵으로 저장</li>
-    <li><code>questionSets/{name}</code> · <code>questions/{qid}</code> · <code>tasks/{tid}</code> (<code>kind</code>로 hw/exam 구분)</li>
-    <li><code>submissions/{tid|uid}</code> — <code>studentUid</code> 필드 필수 (보안 규칙이 검사)</li>
-    <li><code>scores/{kind__tid}</code> — 학생 uid를 키로 하는 맵</li>
+  <h3 ${h3}>데이터 구조</h3>
+  <ul ${ul}>
+    <li><code>students/{uid}</code> — 문서 ID = Auth UID. <code>{name, grade, school, phone, email, approved}</code></li>
+    <li><code>studentMemos/{uid}</code> — 관리자 상담 메모 <code>{memos:[{text,date}]}</code>. <b>관리자만</b> 읽을 수 있습니다.</li>
+    <li><code>schedules/{sid}</code> · <code>attendance/{sid}</code> — 출석은 회차 문서 하나에 학생 uid별 맵으로 저장</li>
+    <li><code>questionSets/{name}</code> · <code>questions/{qid}</code> — 문제는 <code>set</code>, <code>order</code>(세트 내 순서), <code>passages</code>(보기 최대 2개: 글·표·이미지), <code>sourceNumber</code>(PDF 원본 문번, 참고용)를 가집니다.</li>
+    <li>표는 Firestore가 중첩 배열을 저장하지 못해 <code>[{cells:[...]}, ...]</code> 형태로 저장됩니다.</li>
+    <li><code>tasks/{tid}</code> — <code>kind</code>로 hw/exam 구분. <code>startAt</code>, <code>due</code>, <code>qids</code>, <code>assignedTo</code>(null = 전체)</li>
+    <li><code>submissions/{tid|uid}</code> — <code>studentUid</code>, <code>mode</code>(omr/photo), <code>answers</code>, <code>photos</code>(사진·PDF, <code>type</code> 포함), <code>late</code>, <code>submittedAt</code></li>
+    <li><code>scores/{kind__tid}</code> — 학생 uid를 키로 하는 맵 <code>{score, status}</code>. status: 미완료 · 채점중 · 일부완료 · 완료</li>
+    <li><code>wrongBank/{uid}</code> — 오답노트 <code>items.{qid} = {status(open/mastered), kind, taskId, taskTitle, addedAt}</code></li>
+    <li><code>settings/aiConfig</code> — 학생 변형 문제용 공유 Gemini 키</li>
   </ul>
 
-  <h3 style="margin-top:18px;">최근 업데이트</h3>
-  <ul style="font-size:13.5px; line-height:1.9; padding-left:20px;">
-    <li><b>시작일 이전 풀이 제한</b> — 과제·시험에 등록한 <code>시작일시(startAt)</code>가 지나기 전에는 학생 화면에서 "풀기" 버튼이 비활성화되고 "시작 전" 배지가 표시됩니다. 시작일시를 입력하지 않은 항목은 기존처럼 언제든 풀 수 있습니다.</li>
-    <li><b>문제은행 전체 선택 표시 수정</b> — "전체 선택" 체크 후 문제를 하나라도 해제하면 파란 "－" 표시(부분 선택) 없이 바로 빈 체크박스로 돌아가도록 수정했습니다.</li>
+  <h3 ${h3}>주요 기능 사용법</h3>
+  <ul ${ul}>
+    <li><b>PDF 문제 추출</b> — 문제지·정답지 PDF를 올리면 원본 문번 순서로 정렬됩니다. 문번이 겹치면(1부·2부) 페이지 순서 → 문번 순서로 정렬합니다. 그림은 2단계로 정밀하게 잘라 자동 첨부됩니다.</li>
+    <li><b>추출 결과 수정</b> — 저장 전에 유형·물음·보기·이미지·선지·정답·해설을 모두 고칠 수 있습니다. 비어 있는 칸이 있으면 저장되지 않습니다. 순서를 지키려면 <b>전체 저장</b>을 쓰세요.</li>
+    <li><b>이미지 붙여넣기</b> — 캡처 후 보기 입력칸(또는 추출 카드 안)을 클릭하고 <b>Ctrl+V</b>. "클립보드에서 붙여넣기" 버튼은 <b>https 주소에서만</b> 동작합니다.</li>
+    <li><b>문제 순서</b> — 세트 목록에서 드래그하거나 ▲▼로 바꿉니다. 과제·시험에 담긴 순서도 따로 드래그로 조정할 수 있습니다.</li>
+    <li><b>인쇄</b> — 문제은행에서 선택 → 인쇄하기 → 문제 / 빠른 정답 / 해설을 골라 출력합니다. 각 항목은 새 페이지에서 시작합니다.</li>
+    <li><b>파일 제출 채점</b> — 학생이 사진·PDF만 제출하면 "채점중"으로 남습니다. <b>성적 관리</b>에서 점수를 입력하면 채점 완료로 바뀌고, 그때 학생에게 정답·해설이 공개됩니다.</li>
+    <li><b>지각 제출</b> — 마감일시 이후 제출은 막지 않고 "지각 제출" 배지로 표시됩니다.</li>
+    <li><b>답안 수정</b> — 채점 확인 → 결과 보기 → 학생 답안 수정. 점수와 오답노트가 함께 갱신됩니다(마스터한 문항은 유지).</li>
+    <li><b>오답노트</b> — 틀린 문제가 자동으로 쌓이고, 관리자가 학생 상세에서 직접 추가·삭제할 수 있습니다. 문제·세트·과제를 삭제하면 관련 오답도 정리됩니다.</li>
+    <li><b>임시 저장</b> — 학생이 풀던 답은 브라우저에 자동 저장되어 새로고침해도 돌아옵니다. 첨부 파일은 저장되지 않고, 다른 기기에서는 이어 풀 수 없습니다.</li>
   </ul>
 
-  <h3 style="margin-top:18px;">남은 작업</h3>
-  <ul style="font-size:13.5px; line-height:1.9; padding-left:20px;">
-   <li><b>Storage 연동</b> — 과제 PDF 업로드는 아직 붙어 있지 않습니다. PDF 입력창은 비활성 상태입니다. 답안 제출은 온라인 OMR 방식만 지원합니다.</li>
-    <li><b>보안 규칙 점검</b> — <code>attendance</code>·<code>scores</code>는 로그인한 사람이면 모두 읽을 수 있습니다. 한 문서에 전체 학생 데이터가 맵으로 뭉쳐 있어 학생별 분리가 어려운 구조입니다.</li>
+  <h3 ${h3}>AI (Gemini)</h3>
+  <ul ${ul}>
+    <li>호출이 몰리거나 실패하면 코드의 <code>GEMINI_MODELS</code> 목록 순서대로 다른 모델로 자동 전환합니다. 사용된 모델은 콘솔에 표시됩니다.</li>
+    <li>모델 이름은 <code>https://generativelanguage.googleapis.com/v1beta/models?key=키</code>에서 확인하고, <b>새 모델은 같은 PDF로 추출 품질을 비교한 뒤</b> 목록에 넣으세요.</li>
+    <li>400·401·403 에러는 키나 요청 문제라 모델을 바꿔도 해결되지 않습니다.</li>
+  </ul>
+
+  <h3 ${h3}>파일 저장소 (Cloudinary)</h3>
+  <ul ${ul}>
+    <li>업로드 프리셋은 <b>Unsigned</b>여야 합니다. 서명 없는 업로드에서는 <code>use_filename</code> 같은 옵션을 코드에서 보내면 400 에러가 납니다(프리셋 설정에서 켜세요).</li>
+    <li>PDF 링크가 열리지 않으면 Settings → Security → <b>Allow delivery of PDF and ZIP files</b>를 켜세요.</li>
+    <li>무료 요금제는 파일당 약 10MB 제한이 있습니다. 업로드 실패 시 알림에 Cloudinary의 실제 사유가 표시됩니다.</li>
+  </ul>
+
+  <h3 ${h3}>보안 규칙 적용 상태</h3>
+  <ul ${ul}>
+    <li>✅ 학생은 문제·과제·일정·출석을 수정할 수 없고, 자기 인적사항은 이메일만 바꿀 수 있습니다.</li>
+    <li>✅ 제출은 본인 명의로 한 번만 가능하며, 제출 시각은 서버 시간 ±2분만 허용됩니다. <b>학생 컴퓨터 시계가 틀리면 제출이 거절</b>될 수 있습니다.</li>
+    <li>✅ 점수는 학생이 자기 칸에만, 제출물이 있을 때 한 번만 기록할 수 있습니다.</li>
+    <li>❌ 학생이 다른 학생의 출석·점수를 <b>읽는 것</b>은 아직 가능합니다(한 문서에 전체 학생이 모인 구조).</li>
+    <li>❌ 채점이 브라우저에서 이루어져 첫 제출 점수 조작 가능성이 남아 있습니다. 관리자 "결과 보기"는 답안으로 다시 채점해 보여주므로 대조할 수 있습니다.</li>
+    <li>❌ 공유 Gemini 키는 로그인한 학생이 볼 수 있습니다. Google AI Studio에서 <b>도메인 제한·사용량 한도</b>를 걸어두세요.</li>
+    <li>새 컬렉션을 만들면 규칙에 추가하지 않는 한 <b>전부 차단</b>됩니다. <code>permission-denied</code>가 뜨면 규칙부터 확인하세요.</li>
+  </ul>
+
+  <h3 ${h3}>배포 · 문제 해결</h3>
+  <ul ${ul}>
+    <li>수정 후 반영이 안 되면 <b>저장 → 커밋·푸시(또는 deploy) → 1~2분 대기 → Ctrl+Shift+R</b> 순서로 확인하세요.</li>
+    <li>콘솔에 <code>SyntaxError</code>가 있으면 <b>그것부터</b> 고치세요. 뒤따르는 <code>routeAfterAuth is not a function</code> 같은 에러는 대부분 연쇄 에러입니다.</li>
+    <li><code>Unexpected end of input</code>은 닫는 괄호 누락, <code>already been declared</code>는 같은 변수·함수를 두 번 붙여넣은 경우입니다. 코드는 <b>함수 통째로 교체</b>하는 게 안전합니다.</li>
+    <li><code>Tracking Prevention</code>, <code>favicon.ico 404</code>, <code>content.js</code> 메시지는 무시해도 됩니다.</li>
+    <li>https가 필요하면(클립보드 버튼 등) Firebase Hosting 기본 주소 <code>mdfh-study-lms.web.app</code>을 쓰는 것이 가장 확실합니다. 새 도메인을 쓰면 Authentication → 승인된 도메인에 추가하세요.</li>
+  </ul>
+
+  <h3 ${h3}>남은 작업 (아이디어)</h3>
+  <ul ${ul}>
+    <li><b>데이터 백업</b> — 문제·성적·출석 JSON/엑셀 내보내기</li>
+    <li><b>문항별 정답률 통계</b> — 가장 많이 고른 오답, 재설명이 필요한 문항 파악</li>
+    <li><b>문제 태그</b> — 단원·개념별 검색과 학생별 약점 분석</li>
+    <li><b>공지사항</b>, <b>시험 타이머·자동 제출</b>, <b>문제 순서 섞기</b></li>
+    <li><b>보안 강화</b> — 출석·점수를 학생별 문서로 분리, Cloud Functions 서버 채점</li>
   </ul>`;
 }
 
