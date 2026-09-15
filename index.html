@@ -2337,8 +2337,20 @@ function qsetQuestionHtml(q,n,total){
     ${q.type==='mc'? `<div style="margin-top:4px; color:#4C5875;">${(q.choices||[]).map((c,i)=>CIRCLE[i]+' '+esc(c)).join(' &nbsp; ')}</div>`:''}
     ${q.explain? `<div style="color:#8993AA; font-size:12px; margin-top:4px;">해설: ${esc(q.explain)}</div>`:''}</div>`;
 }
-  function getPassages(q){
-  if(Array.isArray(q.passages)) return q.passages;
+ /* Firestore는 중첩 배열 저장 불가 → 저장 시 {cells:[]} 객체 배열로 변환 */
+function tableToFs(table){
+  if(!table || !table.length) return null;
+  return table.map(row=>({ cells: row.map(c=>c||'') }));
+}
+function tableFromFs(t){
+  if(!t || !t.length) return null;
+  return t.map(row => Array.isArray(row) ? row : (row.cells || []));
+}
+
+function getPassages(q){
+  if(Array.isArray(q.passages)){
+    return q.passages.map(p=>({ ...p, table: tableFromFs(p.table) }));
+  }
   if(q.hasPassage) return [{text:q.passage||'', imageUrl:q.passageImageUrl||'', hideTitle:false, table:null}]; // 구버전 문서 호환
   return [];
 }
@@ -2373,11 +2385,20 @@ function renderTableEditor(id){
   const colCount = table[0] ? table[0].length : 2;
 
   let html = '<table class="table-editor">';
+
+  // 열 삭제 버튼 행 (맨 위)
+  html += '<tr>';
+  for(let ci=0; ci<colCount; ci++){
+    html += `<td class="col-del" onclick="removeTableCol('${id}',${ci})" title="이 열 삭제">✕</td>`;
+  }
+  html += '<td class="row-del" style="cursor:default;"></td>'; // 오른쪽 모서리 빈칸
+  html += '</tr>';
+
   table.forEach((row, ri)=>{
     html += '<tr>';
     for(let ci=0; ci<colCount; ci++){
       const val = row[ci] || '';
-      html += `<td><input type="text" value="${esc(val)}" onchange="updateTableCell('${id}',${ri},${ci},this.value)"></td>`;
+      html += `<td><input type="text" value="${esc(val)}" oninput="updateTableCell('${id}',${ri},${ci},this.value)"></td>`;
     }
     html += `<td class="row-del" onclick="removeTableRow('${id}',${ri})" title="이 행 삭제">✕</td>`;
     html += '</tr>';
@@ -2412,6 +2433,14 @@ function removeTableRow(id, ri){
   renderTableEditor(id);
 }
 
+function removeTableCol(id, ci){
+  const table = ensureTableData(id);
+  const colCount = table[0] ? table[0].length : 0;
+  if(colCount<=1){ alert('최소 1개의 열은 있어야 합니다.'); return; }
+  table.forEach(row=>row.splice(ci,1));
+  renderTableEditor(id);
+}
+  
 function clearTableEditor(id){
   if(!confirm('표 내용을 모두 지울까요?')) return;
   tableEditorData[id] = [['','']];
@@ -2482,11 +2511,13 @@ async function saveQuestion(){
   if(!body){ alert('물음(문제 지문)을 입력하세요.'); return; }
   const editId = editingQid;
 
- const hasPassage=$('q-has-passage').checked;
-const passageEl = $('q-passage');
-const passageText = passageEl.textContent.trim(); // 빈 값 체크용
-const passage = hasPassage ? passageEl.innerHTML : ''; // 실제 저장은 HTML(밑줄 포함)로
-if(hasPassage && !passageText){ alert('<보기> 사용을 선택했으니 보기 내용을 입력하세요.'); return; }
+  const hasPassage  = $('q-has-passage').checked;
+  const hasPassage2 = hasPassage && $('q-has-passage-2').checked;
+
+  if(hasPassage && !$('q-passage').textContent.trim() && !getTableEditorData('q-passage-table')
+     && !$('q-passage-image').files[0]){
+    alert('<보기> 사용을 선택했으니 보기 내용(글·표·이미지 중 하나)을 입력하세요.'); return;
+  }
 
   let choices=[], answer;
   if(type==='mc'){
@@ -2498,10 +2529,9 @@ if(hasPassage && !passageText){ alert('<보기> 사용을 선택했으니 보기
     if(!answer){ alert('단답형 정답을 입력하세요.'); return; }
   }
 
-    const hasPassage2 = $('q-has-passage-2').checked;   // ← 빠져있던 선언 추가
-
   const oldPassages = editId ? getPassages(questions.find(x=>x.qid===editId)||{}) : [];
   const passages = [];
+
   if(hasPassage){
     let img1 = oldPassages[0]?.imageUrl || '';
     const f1 = $('q-passage-image').files[0];
@@ -2509,12 +2539,13 @@ if(hasPassage && !passageText){ alert('<보기> 사용을 선택했으니 보기
       try { img1 = await uploadToCloudinary(f1); }
       catch(e){ alert('보기1 이미지 업로드 실패: '+e.message); return; }
     }
-   passages.push({
-  text: $('q-passage').innerHTML,
-  hideTitle: $('q-passage-hide').checked,
-  imageUrl: img1,
-  table: getTableEditorData('q-passage-table')
-});
+    passages.push({
+      text: $('q-passage').innerHTML,
+      hideTitle: $('q-passage-hide').checked,
+      imageUrl: img1,
+      table: tableToFs(getTableEditorData('q-passage-table'))
+    });
+
     if(hasPassage2){
       let img2 = oldPassages[1]?.imageUrl || '';
       const f2 = $('q-passage-2-image').files[0];
@@ -2522,14 +2553,15 @@ if(hasPassage && !passageText){ alert('<보기> 사용을 선택했으니 보기
         try { img2 = await uploadToCloudinary(f2); }
         catch(e){ alert('보기2 이미지 업로드 실패: '+e.message); return; }
       }
-     passages.push({
-  text: $('q-passage').innerHTML,
-  hideTitle: $('q-passage-hide').checked,
-  imageUrl: img1,
-  table: getTableEditorData('q-passage-table')
-});
+      passages.push({
+        text: $('q-passage-2').innerHTML,                         // ✅ 보기 2 내용
+        hideTitle: $('q-passage-2-hide').checked,                 // ✅ 보기 2 라벨 숨김
+        imageUrl: img2,                                           // ✅ 보기 2 이미지
+        table: tableToFs(getTableEditorData('q-passage-2-table')) // ✅ 보기 2 표
+      });
     }
   }
+
   const sameSetCount = questions.filter(x=>x.set===$('q-set').value).length;
   const existingOrder = editId ? questions.find(x=>x.qid===editId)?.order : undefined;
   const data={set:$('q-set').value, type, body, passages, choices, answer,
@@ -2542,9 +2574,15 @@ if(hasPassage && !passageText){ alert('<보기> 사용을 선택했으니 보기
   p.catch(e=>alert('저장 실패: '+e.message));
 }
 function clearQuestionForm(){
-  $('q-body').value=''; $('q-explain').value=''; $('q-passage').innerHTML='';
-  $('q-passage').value=''; $('q-passage-hide').checked=false; $('q-passage-image').value=''; setTableEditorData('q-passage-table', null);
-  $('q-passage-2').value=''; $('q-passage-2-hide').checked=false; $('q-passage-2-image').value=''; setTableEditorData('q-passage-2-table', null);
+  $('q-body').value=''; $('q-explain').value='';
+  $('q-passage').innerHTML='';
+  $('q-passage-hide').checked=false;
+  $('q-passage-image').value='';
+  setTableEditorData('q-passage-table', null);
+  $('q-passage-2').innerHTML='';                    // ✅ .value → .innerHTML
+  $('q-passage-2-hide').checked=false;
+  $('q-passage-2-image').value='';
+  setTableEditorData('q-passage-2-table', null);
   $('q-has-passage').checked=false; togglePassage();
   $('q-has-passage-2').checked=false; togglePassage2();
   [1,2,3,4,5].forEach(n=>$('q-c'+n).value='');
@@ -2556,15 +2594,20 @@ function editQuestion(qid){
   $('q-type').value=q.type; toggleQType();
   if(questionSets.includes(q.set)) $('q-set').value=q.set;
   $('q-body').value=q.body;
+
   const ps = getPassages(q);
   $('q-has-passage').checked = ps.length>0; togglePassage();
   $('q-passage').innerHTML = ps[0]?.text || '';
   $('q-passage-hide').checked = !!(ps[0]?.hideTitle);
-  setTableEditorData('q-passage-table', null);
+  $('q-passage-image').value = '';
+  setTableEditorData('q-passage-table', ps[0]?.table || null);     // ✅ 저장된 표 불러오기
+
   $('q-has-passage-2').checked = ps.length>1; togglePassage2();
-  $('q-passage-2').value = ps[1]?.text || '';
+  $('q-passage-2').innerHTML = ps[1]?.text || '';                   // ✅ .value → .innerHTML
   $('q-passage-2-hide').checked = !!(ps[1]?.hideTitle);
-  setTableEditorData('q-passage-2-table', null);
+  $('q-passage-2-image').value = '';
+  setTableEditorData('q-passage-2-table', ps[1]?.table || null);   // ✅ 저장된 표 불러오기
+
   if(q.type==='mc'){ [1,2,3,4,5].forEach(n=>$('q-c'+n).value=(q.choices||[])[n-1]||''); $('q-answer-mc').value=q.answer; }
   else $('q-answer-short').value=q.answer;
   $('q-explain').value=q.explain||'';
