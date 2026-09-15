@@ -1294,8 +1294,6 @@ async function uploadToCloudinary(file){
   const fd = new FormData();
   fd.append('file', file);
   fd.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
-  fd.append('use_filename', 'true');
-  fd.append('unique_filename', 'true');
 
   let res;
   try{
@@ -3842,12 +3840,16 @@ async function uploadCanvasToCloudinary(canvas){
   const fd = new FormData();
   fd.append('file', blob, 'passage-image.png');
   fd.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
-  fd.append('use_filename', 'true');
-  fd.append('unique_filename', 'true');
+
   const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/auto/upload`, {
     method:'POST', body: fd
   });
-  if(!res.ok) throw new Error('이미지 업로드 실패');
+  if(!res.ok){
+    let reason = '';
+    try{ reason = (await res.json()).error?.message || ''; }catch(e){}
+    console.error('Cloudinary 그림 업로드 실패:', res.status, reason);
+    throw new Error(`이미지 업로드 실패 (${res.status}) ${reason}`);
+  }
   return (await res.json()).secure_url;
 }
   
