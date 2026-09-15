@@ -1276,8 +1276,9 @@ let currentWrongIsVariant = false;
 let currentWrongVariantQ = null;
 let editOmrTarget = null; // {kind, tid, uid}
 let openedTaskDetailKey = null;
-  let videos = [];
-  let draftAssignees = {hw:null, exam:null, sch:null, 'sch-edit':null, video:null};
+let videos = [];
+let memosByUid = {};   // 관리자 전용 메모 (studentMemos 컬렉션)
+let draftAssignees = {hw:null, exam:null, sch:null, 'sch-edit':null, video:null};
 
 /* 구독 관리 — 로그인 후에만 켜고, 계정이 바뀌거나 로그아웃하면 반드시 해제 */
 let unsubs = [];
@@ -1353,7 +1354,12 @@ function startSubscriptions(isAdmin, ownerUid){
       ensureScoreSlots();
       renderStudents(); renderAttendance();
       renderScoreTable('hw'); renderScoreTable('exam'); renderGradingTable();
-    });
+    }
+      sub('studentMemos', snap => {
+      memosByUid = {};
+      snap.docs.forEach(d => { memosByUid[d.id] = d.data().memos || []; });
+      renderMemos();
+    }););
   } else if(currentStudent){
     // 학생은 본인 문서만 읽을 수 있으므로 컬렉션이 아니라 문서 하나만 구독
     unsubs.push(onSnapshot(doc(db, 'students', currentStudent), snap => {
@@ -1482,7 +1488,6 @@ async function doSignup(){
       school: $('su-school').value.trim(),
       phone: $('su-phone').value.trim(),
       email,
-      memos: [],
       approved: false
     });
     await signOut(auth);
@@ -1758,48 +1763,51 @@ function openStudentDetail(u){
   loadAdminWrongNote(u);   // ← 추가
   openModal('student-detail-modal');
 }
-function saveMemos(memos){
-  const { db, doc, updateDoc } = window.fb;
-  updateDoc(doc(db,'students', currentDetailUid), { memos })
-    .then(()=>{
-      const s = students.find(x=>x.uid===currentDetailUid);
-      if(s){ s.memos = memos; renderMemos(); }
-    })
-    .catch(e=>alert('메모 저장 실패: '+e.message));
+function getMemos(uid){
+  if(memosByUid[uid]) return memosByUid[uid];
+  const s = students.find(x=>x.uid===uid);
+  return (s && Array.isArray(s.memos)) ? s.memos : [];   // 아직 옮기지 않은 옛날 메모
+}
+async function saveMemos(memos){
+  const uid = currentDetailUid; if(!uid) return;
+  const { db, doc, setDoc, updateDoc, deleteField } = window.fb;
+  try{
+    await setDoc(doc(db,'studentMemos', uid), { memos });
+    memosByUid[uid] = memos;
+    // 학생 문서에 남아 있던 옛날 메모 필드 제거
+    const s = students.find(x=>x.uid===uid);
+    if(s && s.memos !== undefined) await updateDoc(doc(db,'students', uid), { memos: deleteField() });
+    renderMemos();
+  }catch(e){ alert('메모 저장 실패: '+e.message); }
 }
 function addStudentMemo(){
   if(!currentDetailUid) return;
   const box = $('new-memo-text'), t = box.value.replace(/\s+$/,'');
   if(!t.trim()){ alert('메모 내용을 입력해주세요.'); return; }
-  const s = students.find(x=>x.uid===currentDetailUid);
-  const memos = (s.memos || []).concat([{text:t, date:new Date().toLocaleDateString('ko-KR')}]);
+  const memos = getMemos(currentDetailUid).concat([{text:t, date:new Date().toLocaleDateString('ko-KR')}]);
   box.value='';
   saveMemos(memos);
 }
 function editStudentMemo(i){
   memoEditIndex = i;
-  const s = students.find(x=>x.uid===currentDetailUid);
-  $('memo-edit-text').value = s.memos[i].text;
+  $('memo-edit-text').value = getMemos(currentDetailUid)[i].text;
   openModal('memo-edit-modal');
 }
 function saveMemoEdit(){
-  const s = students.find(x=>x.uid===currentDetailUid);
   const v = $('memo-edit-text').value;
   if(!v.trim()){ alert('내용을 입력해주세요.'); return; }
-  const memos = s.memos.slice();
+  const memos = getMemos(currentDetailUid).slice();
   memos[memoEditIndex] = Object.assign({}, memos[memoEditIndex], {text:v});
   closeModal('memo-edit-modal');
   saveMemos(memos);
 }
 function deleteStudentMemo(i){
   if(!confirm('이 메모를 삭제할까요?')) return;
-  const s = students.find(x=>x.uid===currentDetailUid);
-  saveMemos(s.memos.filter((_,idx)=>idx!==i));
+  saveMemos(getMemos(currentDetailUid).filter((_,idx)=>idx!==i));
 }
 function renderMemos(){
-  const board = $('memo-board'); if(!board) return;
-  const s = students.find(x=>x.uid===currentDetailUid) || {};
-  const list = s.memos || [];
+  const board = $('memo-board'); if(!board || !currentDetailUid) return;
+  const list = getMemos(currentDetailUid);
   board.innerHTML = list.length ? list.map((m,i)=>
     `<div class="memo-note">${esc(m.text)}<small>${esc(m.date)}</small>
       <div class="memo-actions">
@@ -1807,6 +1815,20 @@ function renderMemos(){
         <button onclick="deleteStudentMemo(${i})">삭제</button>
       </div></div>`).join('')
     : '<p class="note" style="width:100%;">등록된 메모가 없습니다. 위 입력창에서 추가해보세요.</p>';
+}
+
+/* 옛날 메모 한 번에 옮기기 — 관리자로 로그인한 뒤 콘솔에서 migrateMemos() 실행 */
+async function migrateMemos(){
+  const { db, doc, setDoc, updateDoc, deleteField } = window.fb;
+  let moved = 0;
+  for(const s of students){
+    if(s.memos === undefined) continue;
+    const merged = (memosByUid[s.uid] || []).concat(Array.isArray(s.memos) ? s.memos : []);
+    await setDoc(doc(db,'studentMemos', s.uid), { memos: merged });
+    await updateDoc(doc(db,'students', s.uid), { memos: deleteField() });
+    moved++;
+  }
+  alert(`메모 이동 완료: ${moved}명`);
 }
 
 /* ---------- 성적 추이 ---------- */
