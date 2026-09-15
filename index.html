@@ -3327,7 +3327,76 @@ function clearDraft(kind){ draftQids[kind]=[]; renderDraft(kind); }
     + '<option value="">미분류</option>';
   if(prev && sel.querySelector('option[value="'+prev+'"]')) sel.value = prev;
 }
+/* =========================================================
+   Gemini 호출 (모델 자동 전환)
+   ========================================================= */
+// 앞에서부터 순서대로 시도합니다. 실제로 쓸 수 있는 모델 이름으로 채워주세요.
+const GEMINI_MODELS = [
+  'gemini-3.6-flash',
+  'gemini-3.8-flash',
+  'gemini-3.5-flash',
+  'gemini-flash-latest',
+];
 
+// 이 상태 코드면 "잠깐 몰린 것"으로 보고 재시도·다음 모델로 넘어감
+const GEMINI_RETRY_STATUS = [429, 500, 502, 503, 504];
+
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+async function callGemini({ apiKey, parts, schema, onModelChange, timeoutMs = 120000 }){
+  const errors = [];
+
+  for(let mi = 0; mi < GEMINI_MODELS.length; mi++){
+    const model = GEMINI_MODELS[mi];
+    if(onModelChange) onModelChange(model, mi);
+
+    for(let attempt = 0; attempt < 2; attempt++){      // 모델당 최대 2번
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+      try{
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+        const res = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          signal: ctrl.signal,
+          body: JSON.stringify({
+            contents: [{ role: 'user', parts }],
+            generationConfig: { responseMimeType: 'application/json', responseSchema: schema }
+          })
+        });
+        clearTimeout(timer);
+
+        if(!res.ok){
+          const errText = await res.text();
+          // 키 오류·요청 형식 오류는 다른 모델로 바꿔도 소용없으므로 즉시 중단
+          if(!GEMINI_RETRY_STATUS.includes(res.status) && res.status !== 404){
+            throw Object.assign(new Error(`API 오류 (${res.status}): ${errText.slice(0,200)}`), { fatal: true });
+          }
+          errors.push(`${model}: ${res.status}`);
+          if(res.status === 404) break;                 // 모델 이름이 없음 → 바로 다음 모델
+          if(attempt === 0){ await sleep(1500 + Math.random()*1000); continue; }
+          break;                                        // 두 번 실패 → 다음 모델
+        }
+
+        const data = await res.json();
+        const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+        if(!text){
+          errors.push(`${model}: 빈 응답`);
+          break;
+        }
+        return { parsed: JSON.parse(text), model };
+
+      }catch(e){
+        clearTimeout(timer);
+        if(e.fatal) throw e;
+        errors.push(`${model}: ${e.name==='AbortError' ? '시간 초과' : e.message}`);
+        if(attempt === 0 && e.name !== 'SyntaxError'){ await sleep(1500); continue; }
+        break;
+      }
+    }
+  }
+  throw new Error('모든 모델이 응답하지 않았습니다.\n' + errors.join('\n'));
+}
 function fileToBase64(file){
   return new Promise((res, rej)=>{
     const r = new FileReader();
@@ -3553,25 +3622,11 @@ async function extractQuestionsFromPdf(){
       { inline_data: { mime_type: answerFile.type || 'application/pdf', data: answerBase64 } }
     ];
 
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${apiKey}`;
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [{ role: 'user', parts }],
-        generationConfig: { responseMimeType: "application/json", responseSchema: schema }
-      })
+    const { parsed, model } = await callGemini({
+      apiKey, parts, schema,
+      onModelChange: (m, i) => { btn.textContent = i===0 ? '추출 중...' : `추출 중... (${m}로 재시도)`; }
     });
-
-    if(!res.ok){
-      const err = await res.text();
-      throw new Error('API 오류 ('+res.status+'): '+err.slice(0,200));
-    }
-
-    const json = await res.json();
-    const text = json.candidates?.[0]?.content?.parts?.[0]?.text;
-    if(!text) throw new Error('응답에서 결과를 찾을 수 없습니다.');
-    const parsed = JSON.parse(text);
+    console.log('PDF 추출에 사용된 모델:', model);
 
     // ✅ 원본 문번 순서로 정렬
     const { list: questionsList, warnings } = sortExtractedByNumber(parsed.questions || []);
@@ -3685,29 +3740,11 @@ ${refFile ? '- 첨부된 참고 자료의 내용을 최대한 반영해서 문�
     }
 
     // ✅ [수정 완료] URL 변수명(apiKey) 수정, fetch 함수 복구, gemini-3.6-flash 적용
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${apiKey}`;
-     const res = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [{ role: 'user', parts }],
-        generationConfig: {
-          responseMimeType: "application/json",
-          responseSchema: schema
-        }
-      })
+    const { parsed, model } = await callGemini({
+      apiKey, parts, schema,
+      onModelChange: (m, i) => { btn.textContent = i===0 ? '생성 중...' : `생성 중... (${m}로 재시도)`; }
     });
-
-    if(!res.ok){
-      const err = await res.text();
-      throw new Error('API 오류 ('+res.status+'): '+err.slice(0,200));
-    }
-
-    const data = await res.json();
-    const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
-    if(!text) throw new Error('응답에서 결과를 찾을 수 없습니다.');
-
-    const parsed = JSON.parse(text);
+    console.log('문제 생성에 사용된 모델:', model);
     aiGenerated = (parsed.questions || []).map(q => ({
       type: q.type,
       body: q.body || '',
@@ -4756,11 +4793,11 @@ async function generateWrongVariant(qid, isRetry){
 [원본 정답] ${q.answer}`;
 
   try{
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${apiKey}`;
-    const res = await fetch(url, {
-      method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ contents:[{role:'user', parts:[{text:sysPrompt}]}],
-        generationConfig:{ responseMimeType:"application/json", responseSchema: schema } })
+       const { parsed } = await callGemini({
+      apiKey,
+      parts: [{ text: sysPrompt }],
+      schema,
+      timeoutMs: 45000
     });
     if(!res.ok) throw new Error('API 오류 ('+res.status+')');
     const data = await res.json();
