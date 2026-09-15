@@ -1346,20 +1346,22 @@ function startSubscriptions(isAdmin, ownerUid){
     err => console.error(name+' 구독 에러:', err.code, err.message)));
 };
 
-  if(isAdmin){
+    if(isAdmin){
     // 관리자만 students 컬렉션 전체를 읽을 수 있음
     sub('students', snap => {
-      console.log('students 데이터 도착', Date.now());
       students = snap.docs.map(d => ({ uid:d.id, ...d.data() }));
       ensureScoreSlots();
       renderStudents(); renderAttendance();
       renderScoreTable('hw'); renderScoreTable('exam'); renderGradingTable();
-    }
-      sub('studentMemos', snap => {
+    });
+
+    // 관리자 전용 메모
+    sub('studentMemos', snap => {
       memosByUid = {};
       snap.docs.forEach(d => { memosByUid[d.id] = d.data().memos || []; });
       renderMemos();
-    }););
+    });
+
   } else if(currentStudent){
     // 학생은 본인 문서만 읽을 수 있으므로 컬렉션이 아니라 문서 하나만 구독
     unsubs.push(onSnapshot(doc(db, 'students', currentStudent), snap => {
