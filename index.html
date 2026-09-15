@@ -1712,21 +1712,50 @@ function removeAdminWrongItem(uid, qid){
     .catch(e=>alert('삭제 실패: '+e.message));
 }
 
+let adminWrongPickerExpanded = new Set();   // 펼쳐진 문제 qid
+
 function openAdminWrongPicker(){
   $('admin-wrong-picker-search').value = '';
+  adminWrongPickerExpanded = new Set();
   renderAdminWrongPicker();
   openModal('admin-wrong-picker-modal');
+}
+
+function toggleAdminWrongPickerDetail(qid){
+  if(adminWrongPickerExpanded.has(qid)) adminWrongPickerExpanded.delete(qid);
+  else adminWrongPickerExpanded.add(qid);
+  renderAdminWrongPicker();
 }
 
 function renderAdminWrongPicker(){
   const arr = filterQuestions($('admin-wrong-picker-set').value, '', $('admin-wrong-picker-search').value);
   $('admin-wrong-picker-list').innerHTML = arr.length ? arr.map(q=>{
     const already = !!adminWrongItems[q.qid];
+    const isOpen = adminWrongPickerExpanded.has(q.qid);
+    const ps = getPassages(q);
+
+    const detail = isOpen ? `
+      <div style="margin-top:8px; padding-top:8px; border-top:1px dashed var(--border);">
+        ${renderPassageBoxHtml(ps)}
+        ${q.type==='mc'
+          ? `<div style="margin-top:4px;">${(q.choices||[]).map((c,ci)=>{
+              const isAns = String(ci+1)===String(q.answer);
+              return `<div class="choice-line ${isAns?'correct':''}">${CIRCLE[ci]} ${esc(c)}${isAns?' <span class="badge good" style="margin-left:6px;">정답</span>':''}</div>`;
+            }).join('')}</div>`
+          : `<div class="ans-row"><b>정답:</b> ${esc(q.answer)}</div>`}
+        ${q.explain ? `<div class="exam-explain"><b>해설</b><br>${esc(q.explain)}</div>` : ''}
+      </div>` : '';
+
     return `<div class="bank-item${already?' sel':''}">
       <div class="bi-body">
         <span class="qset-tag type">${q.type==='mc'?'객관식':'단답형'}</span>
         <span class="qset-tag set">${q.set? esc(q.set):'미분류'}</span>
-        <div style="margin-top:4px;"><b>${esc(q.body)}</b></div>
+        ${ps.length?'<span class="qset-tag ans">보기 포함</span>':''}
+        <div style="margin-top:4px; cursor:pointer;" onclick="toggleAdminWrongPickerDetail('${q.qid}')">
+          <b>${esc(q.body)}</b>
+          <span style="color:var(--muted); font-size:12px; white-space:nowrap;">${isOpen?'▲ 접기':'▼ 상세보기'}</span>
+        </div>
+        ${detail}
         <div style="margin-top:8px;">
           <button class="btn small ${already?'ghost':''}" ${already?'disabled':''} onclick="addAdminWrongItem('${q.qid}')">${already?'이미 추가됨':'오답노트에 추가'}</button>
         </div>
