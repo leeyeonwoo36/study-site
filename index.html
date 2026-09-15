@@ -3387,6 +3387,7 @@ function nextOrderInSet(set){
 }
 
 /* 추출된 문제 → Firestore 저장 형태 */
+/* 추출된 문제 → Firestore 저장 형태 */
 function extractedToQuestionData(q, set, order){
   const hasImg = !!q.extractedImageUrl;
   const passages = (q.hasPassage || hasImg) ? [{
@@ -3396,10 +3397,15 @@ function extractedToQuestionData(q, set, order){
     table: null
   }] : [];
   return {
-    set, order, type: q.type, body: q.body, passages,
+    set,
+    order,
+    type: q.type,
+    body: q.body,
+    passages,
     choices: q.type==='mc' ? (q.choices||[]) : [],
-    answer: String(q.answer), explain: q.explain || ''
-    sourceNumber: q.number ?? null
+    answer: String(q.answer),
+    explain: q.explain || '',
+    sourceNumber: q.number ?? null     // 원본 문번 (참고용, 학생 화면엔 안 나옴)
   };
 }
 
