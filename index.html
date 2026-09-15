@@ -1027,10 +1027,12 @@
     <h3 id="solve-title">온라인 OMR 풀이</h3>
     <p class="note">제출 후에는 답안을 수정할 수 없습니다.</p>
        <div id="solve-body"></div>
-    <div class="field-section">
+           <div class="field-section">
       <span class="section-label">손으로 푼 답안 사진 첨부 (선택)</span>
-      <p class="note" style="margin-bottom:8px;">문제를 프린트해서 풀었거나 별도 풀이 과정을 보여줘야 할 때 사진을 첨부하세요. 여러 장 선택 가능합니다.</p>
-      <input type="file" id="solve-photos" accept="image/*" multiple>
+      <p class="note" style="margin-bottom:8px;">문제를 프린트해서 풀었거나 풀이 과정을 보여줘야 할 때 사진을 첨부하세요. 여러 번 나눠서 추가할 수 있고, 최대 10장까지 올릴 수 있습니다.</p>
+      <input type="file" id="solve-photos" accept="image/*" multiple style="display:none;" onchange="onSolvePhotosSelected(this)">
+      <button type="button" class="btn secondary" style="width:100%;" onclick="$('solve-photos').click()">+ 사진 추가</button>
+      <div id="solve-photo-preview" class="thumb-row"></div>
     </div>
     <button class="btn" style="width:100%; margin-top:6px;" onclick="submitSolve()">제출하기</button>
   </div>
@@ -1888,8 +1890,7 @@ function buildTaskDetailHtml(kind, tid, u){
   if(sub.mode==='photo'){
     const rec = (scores[kind][tid]||{})[u] || {};
     const pending = isPhotoPending(kind, tid, u);
-    const photos = (sub.photos||[]).map(p=>
-      `<a href="${p.url}" target="_blank"><img src="${p.url}" alt="${esc(p.name)}"></a>`).join('');
+    ${photos ? `<div class="thumb-row">${photos}</div>` : ''}`;
     return `<p class="note">
       제출일시 ${esc(sub.date)}${lateBadge(sub)} · 사진 제출 ·
       ${pending ? '<span class="badge part">채점중</span> <span style="font-size:12px;">(성적 관리 탭에서 점수를 입력하면 채점 완료됩니다)</span>'
@@ -4348,13 +4349,92 @@ async function changeMyEmail(){
     else alert('이메일 변경 중 오류가 발생했습니다: '+e.code);
   }
 }
+  /* 첨부 파일 종류 판별 (예전 기록은 type이 없으므로 URL로도 판별) */
+function isPdfAttachment(a){
+  if(!a) return false;
+  if(a.type) return a.type === 'pdf';
+  return /\.pdf($|\?)/i.test(a.url||'') || /\.pdf$/i.test(a.name||'');
+}
+function isPdfFile(f){
+  return f.type === 'application/pdf' || /\.pdf$/i.test(f.name);
+}
 
+/* 제출된 첨부 목록 → 화면 표시용 HTML */
+function renderAttachmentThumbs(list){
+  if(!list || !list.length) return '';
+  return `<div class="thumb-row">${list.map(a=> isPdfAttachment(a)
+    ? `<a href="${a.url}" target="_blank" title="${esc(a.name)}"
+          style="width:90px; height:90px; display:flex; flex-direction:column; align-items:center; justify-content:center;
+                 border:1px solid var(--border); border-radius:6px; background:var(--accent-soft);
+                 color:var(--accent); text-decoration:none; font-size:11px; padding:4px; text-align:center;">
+         <b style="font-size:18px;">PDF</b>
+         <span style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap; width:100%;">${esc(a.name)}</span>
+       </a>`
+    : `<a href="${a.url}" target="_blank"><img src="${a.url}" alt="${esc(a.name)}"></a>`
+  ).join('')}</div>`;
+}
+/* ---------- 답안 사진 첨부 (여러 장 누적) ---------- */
+const SOLVE_PHOTO_MAX = 10;                 // 최대 장수
+const SOLVE_PHOTO_MAX_MB = 10;              // 한 장당 최대 용량
+let solvePhotoFiles = [];                   // 지금까지 고른 사진
+let solvePhotoUrls = [];                    // 미리보기 주소
+
+function onSolvePhotosSelected(input){
+  const picked = Array.from(input.files || []);
+  const skipped = [];
+  for(const f of picked){
+    const ok = f.type.startsWith('image/') || isPdfFile(f);
+    if(!ok){ skipped.push(f.name+' (사진·PDF만 가능)'); continue; }
+    if(f.size > SOLVE_PHOTO_MAX_MB*1024*1024){ skipped.push(f.name+` (${SOLVE_PHOTO_MAX_MB}MB 초과)`); continue; }
+    if(solvePhotoFiles.some(x=>x.name===f.name && x.size===f.size && x.lastModified===f.lastModified)) continue;
+    if(solvePhotoFiles.length >= SOLVE_PHOTO_MAX){ skipped.push(f.name+` (최대 ${SOLVE_PHOTO_MAX}개)`); continue; }
+    solvePhotoFiles.push(f);
+  }
+  input.value = '';
+  if(skipped.length) alert('다음 파일은 추가하지 않았습니다.\n' + skipped.join('\n'));
+  renderSolvePhotoPreview();
+}
+
+function removeSolvePhoto(i){
+  solvePhotoFiles.splice(i,1);
+  renderSolvePhotoPreview();
+}
+
+function renderSolvePhotoPreview(){
+  const box = $('solve-photo-preview'); if(!box) return;
+  solvePhotoUrls.forEach(u=>u && URL.revokeObjectURL(u));
+  solvePhotoUrls = solvePhotoFiles.map(f=> isPdfFile(f) ? '' : URL.createObjectURL(f));
+
+  const delBtn = i => `<button type="button" onclick="removeSolvePhoto(${i})" title="이 파일 빼기"
+      style="position:absolute; top:-6px; right:-6px; width:22px; height:22px; border-radius:50%;
+             border:none; background:var(--accent); color:#fff; font-size:12px; cursor:pointer;">✕</button>`;
+
+  box.innerHTML = solvePhotoFiles.length
+    ? solvePhotoFiles.map((f,i)=>`
+        <div style="position:relative;">
+          ${isPdfFile(f)
+            ? `<div title="${esc(f.name)}" style="width:90px; height:90px; display:flex; flex-direction:column;
+                   align-items:center; justify-content:center; border:1px solid var(--border); border-radius:6px;
+                   background:var(--accent-soft); color:var(--accent); font-size:11px; padding:4px; text-align:center;">
+                 <b style="font-size:18px;">PDF</b>
+                 <span style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap; width:100%;">${esc(f.name)}</span>
+               </div>`
+            : `<img src="${solvePhotoUrls[i]}" alt="${esc(f.name)}">`}
+          ${delBtn(i)}
+        </div>`).join('')
+      + `<div style="width:100%; font-size:12px; color:var(--muted);">${solvePhotoFiles.length}/${SOLVE_PHOTO_MAX}개 첨부됨</div>`
+    : '';
+}
+function resetSolvePhotos(){
+  solvePhotoFiles = [];
+  renderSolvePhotoPreview();
+}
 /* ---------- 풀이 ---------- */
 function openStudentSolve(kind,tid){
   const t = tasks[kind].find(x=>x.tid===tid);
   if(!t){ alert('해당 과제/시험을 찾을 수 없습니다. 목록이 갱신되었을 수 있어요. 다시 시도해주세요.'); return; }
   if(submissions[tid+'|'+currentStudent]){ openReview(kind,tid,currentStudent,false); return; }
-   if(!adminViewAll && t.startAt && new Date(t.startAt) > new Date()){
+  if(!adminViewAll && t.startAt && new Date(t.startAt) > new Date()){
     alert(fmtDue(t.startAt) + '부터 풀 수 있습니다.');
     return;
   }
@@ -4371,7 +4451,7 @@ function openStudentSolve(kind,tid){
               <input type="radio" name="ans_${q.qid}" value="${ci+1}">${CIRCLE[ci]} ${esc(c)}</label>`).join('')}</div>`
         : `<input type="text" id="ans_${q.qid}" placeholder="정답 입력">`}
     </div>`).join('') : '<p class="empty-hint">등록된 문항이 없습니다. PDF를 내려받아 풀고 아래에 사진을 첨부해 제출해주세요.</p>';
-  $('solve-photos').value = '';
+  resetSolvePhotos();   // ✅ 이전에 고른 사진 초기화
   openModal('solve-modal');
 }
 function pickChoice(el){
@@ -4387,7 +4467,7 @@ async function submitSolve(){
   const t = tasks[kind].find(x=>x.tid===tid);
   if(!t){ alert('과제/시험을 찾을 수 없습니다.'); return; }
   const qs = (t.qids||[]).map(q=>questions.find(x=>x.qid===q)).filter(Boolean);
-  const photoFiles = Array.from($('solve-photos').files || []);
+    const photoFiles = solvePhotoFiles.slice();
 
   const answers = {};
   let answered = 0;
@@ -4419,9 +4499,9 @@ async function submitSolve(){
   let photos = [];
   if(photoFiles.length){
     try{
-      for(const f of photoFiles){
+        for(const f of photoFiles){
         const url = await uploadToCloudinary(f);
-        photos.push({name:f.name, url});
+        photos.push({ name: f.name, url, type: isPdfFile(f) ? 'pdf' : 'image' });
       }
     }catch(e){
       alert('사진 업로드 실패: '+e.message);
@@ -4493,10 +4573,8 @@ function openReview(kind,tid,stuUid,isAdmin){
     head = `<p class="note">제출일시 ${esc(sub.date)}${lateBadge(sub)} · 자동채점 <b>${sub.correct}/${sub.total}</b> · 제출한 답안은 수정할 수 없습니다.</p>`;
   }
 
-  const photoHtml = (sub && sub.photos && sub.photos.length)
-    ? `<div class="card"><h3>첨부 사진</h3><div class="thumb-row">${
-        sub.photos.map(p=>`<a href="${p.url}" target="_blank"><img src="${p.url}" alt="${esc(p.name)}"></a>`).join('')
-      }</div></div>`
+    const photoHtml = (sub && sub.photos && sub.photos.length)
+    ? `<div class="card"><h3>첨부 파일</h3>${renderAttachmentThumbs(sub.photos)}</div>`
     : '';
 
   const body = hideKey ? '' : (qs.map((q,i)=>{
@@ -4650,7 +4728,7 @@ function renderGradingTable(){
           status='<span class="badge warn">미제출</span>';
           btn='<button class="btn small secondary" disabled>결과 보기</button>';
         } else if(sub.mode==='photo'){
-          mode='<span class="badge muted">사진 업로드</span>';
+          mode='<span class="badge muted">파일 첨부</span>';
           status = needsGrading
             ? '<span class="badge part">제출 완료 (채점중)</span>'
             : `<span class="badge good">채점 완료 (${esc(rec.score)})</span>`;
