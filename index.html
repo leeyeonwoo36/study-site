@@ -1296,13 +1296,24 @@ async function uploadToCloudinary(file){
   fd.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
   fd.append('use_filename', 'true');
   fd.append('unique_filename', 'true');
-  const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/auto/upload`, {
-    method:'POST', body: fd
-  });
-  if(!res.ok) throw new Error('업로드 실패');
-  return (await res.json()).secure_url; // 이 URL을 Firestore에 저장
-}
 
+  let res;
+  try{
+    res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/auto/upload`, {
+      method:'POST', body: fd
+    });
+  }catch(e){
+    throw new Error(`네트워크 오류 (${file.name}): 인터넷 연결을 확인해주세요.`);
+  }
+
+  if(!res.ok){
+    let reason = '';
+    try{ reason = (await res.json()).error?.message || ''; }catch(e){}
+    console.error('Cloudinary 업로드 실패:', res.status, reason, file.name, file.type, file.size);
+    throw new Error(`${file.name} (${res.status}) ${reason || '알 수 없는 오류'}`);
+  }
+  return (await res.json()).secure_url;
+}
 /* =========================================================
    Firestore 구독
    ========================================================= */
