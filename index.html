@@ -3630,6 +3630,10 @@ function toggleExtractedPassage(i, on){
   if(on && !q.passage) q.passage = '';
   renderExtractedQuestionsPreview();
 }
+function toggleExtractedHideTitle(i, on){
+  const q = exQ(i); if(!q) return;
+  q.hideTitle = on;
+}
 async function setExtractedImage(i, file){
   const q = exQ(i); if(!q || !file) return;
   if(!file.type.startsWith('image/')){ alert('이미지 파일만 첨부할 수 있습니다.'); return; }
@@ -3701,6 +3705,10 @@ function renderExtractedQuestionsPreview(){
     const pageLabel = q.questionPage!=null ? ` <span class="badge muted">${q.questionPage}쪽</span>` : '';
 
     const passageHtml = q.hasPassage ? `
+      <div class="check-line" style="margin:6px 0 0;">
+        <input type="checkbox" id="ex-ht-${i}" ${q.hideTitle?'checked':''} onchange="toggleExtractedHideTitle(${i},this.checked)">
+        <label for="ex-ht-${i}" style="margin:0;">&lt;보기&gt; 라벨 숨기기 (제시문만 표시)</label>
+      </div>
       <div style="display:flex; gap:6px; margin:6px 0;">
         <button type="button" class="btn small secondary" onmousedown="event.preventDefault()" onclick="document.execCommand('underline')">밑줄</button>
         <button type="button" class="btn small ghost" onmousedown="event.preventDefault()" onclick="document.execCommand('removeFormat')">서식 지우기</button>
@@ -3773,31 +3781,6 @@ function renderExtractedQuestionsPreview(){
   wrap.innerHTML = warnHtml + rows
     + `<button class="btn" style="width:100%;" onclick="saveAllExtractedQuestions()">전체 저장 (${extractedQuestionsCache.length}개)</button>`;
 }
-
-/* 추출된 문제 → Firestore 저장 형태 */
-function extractedToQuestionData(q, set, order){
-  const text = q.hasPassage ? (q.passage||'') : '';
-  const hasText = !!text.replace(/<[^>]*>/g,'').trim();
-  const hasImg = !!q.extractedImageUrl;
-  const passages = (hasText || hasImg) ? [{
-    text: hasText ? text : '',
-    imageUrl: q.extractedImageUrl || '',
-    hideTitle: !hasText,              // 그림만 있으면 <보기> 라벨 숨김
-    table: null
-  }] : [];
-  return {
-    set,
-    order,
-    type: q.type,
-    body: String(q.body||'').trim(),
-    passages,
-    choices: q.type==='mc' ? (q.choices||[]).map(c=>String(c||'').trim()) : [],
-    answer: String(q.answer||'').trim(),
-    explain: String(q.explain||'').trim(),
-    sourceNumber: q.number ?? null
-  };
-}
-
 async function saveExtractedQuestion(i){
   const q = extractedQuestionsCache[i]; if(!q) return;
   const err = validateExtracted(q);
@@ -4008,6 +3991,7 @@ async function extractQuestionsFromPdf(){
             body:       { type: "string" },
             hasPassage: { type: "boolean" },
             passage:    { type: "string" },
+            hideTitle:  { type: "boolean" },
             choices:    { type: "array", items: { type: "string" }, minItems: 5, maxItems: 5 },
             answer:     { type: "string" },
             explain:    { type: "string" },
@@ -4041,6 +4025,7 @@ async function extractQuestionsFromPdf(){
 - 단답형(short)은 choices를 빈 배열로, answer는 정답 텍스트.
 - body에는 문항 번호를 넣지 마라.
 - <보기> 지문이 있으면 hasPassage를 true, passage에 내용을 그대로. 없으면 false와 빈 문자열.
+- 지문 박스에 원본에서 "<보기>"라는 표시가 없으면(예: 그냥 제시문, (가)(나) 글, 자료 박스) hideTitle을 true, "<보기>"라고 적혀 있으면 false로 하라.
 - passage 안에서 원본에 밑줄이 있으면 <u></u>로 감싸라. body와 choices에는 <u>를 넣지 마라.
 
 [그림 규칙 — 매우 중요]
