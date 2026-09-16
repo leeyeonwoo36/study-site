@@ -657,10 +657,16 @@
             <div><label>④ 선지</label><input type="text" id="q-c4"></div>
             <div><label>⑤ 선지</label><input type="text" id="q-c5"></div>
           </div>
-          <div id="q-mc-answer-area" class="form-grid">
-            <div><label>정답 번호</label><select id="q-answer-mc">
-              <option value="1">1</option><option value="2">2</option><option value="3">3</option>
-              <option value="4">4</option><option value="5">5</option></select></div>
+                    <div id="q-mc-answer-area" class="form-grid full">
+            <div><label>정답 번호 (여러 개 선택 가능)</label>
+              <div class="omr-choices">
+                <label class="omr-bubble"><input type="checkbox" class="q-ans-mc" value="1" onchange="this.parentElement.classList.toggle('picked',this.checked)">①</label>
+                <label class="omr-bubble"><input type="checkbox" class="q-ans-mc" value="2" onchange="this.parentElement.classList.toggle('picked',this.checked)">②</label>
+                <label class="omr-bubble"><input type="checkbox" class="q-ans-mc" value="3" onchange="this.parentElement.classList.toggle('picked',this.checked)">③</label>
+                <label class="omr-bubble"><input type="checkbox" class="q-ans-mc" value="4" onchange="this.parentElement.classList.toggle('picked',this.checked)">④</label>
+                <label class="omr-bubble"><input type="checkbox" class="q-ans-mc" value="5" onchange="this.parentElement.classList.toggle('picked',this.checked)">⑤</label>
+              </div>
+            </div>
           </div>
           <div id="q-short-area" class="form-grid" style="display:none;">
             <div><label>정답 (단답)</label><input type="text" id="q-answer-short"></div>
@@ -1046,7 +1052,7 @@
   <div class="modal wide">
     <button class="modal-close" onclick="closeModal('solve-modal')">✕</button>
     <h3 id="solve-title">온라인 OMR 풀이</h3>
-    <p class="note">제출 후에는 답안을 수정할 수 없습니다.</p>
+        <p class="note">정답이 여러 개인 문제는 해당하는 선지를 모두 고르세요. 제출 후에는 답안을 수정할 수 없습니다.</p>
         <div id="solve-draft-status" style="font-size:12px; color:var(--muted); margin:-6px 0 10px; min-height:16px;"></div>
        <div id="solve-body"></div>
            <div class="field-section">
@@ -1744,7 +1750,7 @@ function renderAdminWrongPicker(){
         ${renderPassageBoxHtml(ps)}
         ${q.type==='mc'
           ? `<div style="margin-top:4px;">${(q.choices||[]).map((c,ci)=>{
-              const isAns = String(ci+1)===String(q.answer);
+              const isAns = isAnsChoice(q, ci)
               return `<div class="choice-line ${isAns?'correct':''}">${CIRCLE[ci]} ${esc(c)}${isAns?' <span class="badge good" style="margin-left:6px;">정답</span>':''}</div>`;
             }).join('')}</div>`
           : `<div class="ans-row"><b>정답:</b> ${esc(q.answer)}</div>`}
@@ -1990,7 +1996,7 @@ function buildTaskDetailHtml(kind, tid, u){
 
   const cells = qs.map((q,i)=>{
     const mine = (sub.answers||{})[q.qid]||'';
-    const ok = q.type==='mc' ? mine===String(q.answer) : normalize(mine)===normalize(q.answer);
+    const ok = isCorrect(q, mine)
     return `<span class="badge ${ok?'good':'warn'}" style="margin:2px;">${i+1}번 ${ok?'O':'X'}</span>`;
   }).join('');
 
@@ -2633,7 +2639,7 @@ function renderPassagePrintHtml(passages){
 
   qs.forEach(q=>{
     const mine = answers[q.qid] || '';
-    const ok = q.type==='mc' ? mine===String(q.answer) : normalize(mine)===normalize(q.answer);
+    const ok = isCorrect(q, mine)
     const prev = existing[q.qid];
 
     if(!ok){
@@ -2653,10 +2659,58 @@ function renderPassagePrintHtml(passages){
     if(Object.keys(del).length) await updateDoc(ref, del);
   }catch(e){ console.error('오답노트 저장 실패:', e.message); }
 }
+/* =========================================================
+   복수 정답 공통
+   ========================================================= */
+/* "1,3" / "3" / [1,3] → [1,3] (중복 제거, 오름차순) */
+function parseAnsList(a){
+  const src = Array.isArray(a) ? a.join(',') : String(a ?? '');
+  return [...new Set(src.split(/[,\s]+/).map(x=>parseInt(x,10)).filter(n=>n>=1 && n<=5))].sort((x,y)=>x-y);
+}
+function ansToStr(a){ return parseAnsList(a).join(','); }
+function isAnsChoice(q, ci){ return parseAnsList(q.answer).includes(ci+1); }
+
+/* 정답 판정: 객관식은 고른 선지 집합이 정답과 정확히 같아야 함 */
+function isCorrect(q, mine){
+  if(q.type==='mc'){
+    const a = parseAnsList(q.answer), m = parseAnsList(mine);
+    return a.length>0 && a.length===m.length && a.every((v,i)=>v===m[i]);
+  }
+  return normalize(mine)===normalize(q.answer);
+}
+
 function answerLabel(q){
   if(q.type!=='mc') return q.answer;
-  const i = parseInt(q.answer,10)-1;
-  return (CIRCLE[i]||'') + ' ' + ((q.choices||[])[i]||'');
+  return parseAnsList(q.answer).map(n=>CIRCLE[n-1]+' '+((q.choices||[])[n-1]||'')).join(', ');
+}
+
+/* 선지 번호 목록 → "①③" 같은 짧은 표기 */
+function circleLabel(a){
+  const list = parseAnsList(a);
+  return list.length ? list.map(n=>CIRCLE[n-1]).join('') : '';
+}
+
+/* OMR 선지 (체크박스, 여러 개 선택) */
+function omrChoicesHtml(q, name, mine){
+  const picked = parseAnsList(mine);
+  return `<div class="omr-choices">${(q.choices||[]).map((c,ci)=>{
+    const on = picked.includes(ci+1);
+    return `<label class="omr-bubble ${on?'picked':''}">
+      <input type="checkbox" name="${name}" value="${ci+1}" ${on?'checked':''}
+        onchange="this.parentElement.classList.toggle('picked', this.checked)">${CIRCLE[ci]} ${esc(c)}</label>`;
+  }).join('')}</div>`;
+}
+function readOmrChoices(name){
+  return ansToStr(Array.from(document.querySelectorAll(`input[name="${name}"]:checked`)).map(x=>x.value));
+}
+
+/* 문제 등록 폼: 정답 체크박스 */
+function setFormMcAnswer(a){
+  const list = parseAnsList(a);
+  document.querySelectorAll('.q-ans-mc').forEach(cb=>{
+    cb.checked = list.includes(+cb.value);
+    cb.parentElement.classList.toggle('picked', cb.checked);
+  });
 }
 function toggleQType(){
   const isMc = $('q-type').value==='mc';
@@ -2790,7 +2844,8 @@ async function saveQuestion(){
   if(type==='mc'){
     choices=[1,2,3,4,5].map(n=>$('q-c'+n).value.trim());
     if(choices.some(c=>!c)){ alert('선지 5개를 모두 입력하세요.'); return; }
-    answer=$('q-answer-mc').value;
+        answer = ansToStr(Array.from(document.querySelectorAll('.q-ans-mc:checked')).map(x=>x.value));
+    if(!answer){ alert('정답 번호를 하나 이상 고르세요.'); return; }
   } else {
     answer=$('q-answer-short').value.trim();
     if(!answer){ alert('단답형 정답을 입력하세요.'); return; }
@@ -2860,7 +2915,7 @@ function clearQuestionForm(){
   $('q-has-passage').checked=false; togglePassage();
   $('q-has-passage-2').checked=false; togglePassage2();
   [1,2,3,4,5].forEach(n=>$('q-c'+n).value='');
-  $('q-answer-short').value=''; $('q-answer-mc').value='1';
+  $('q-answer-short').value=''; setFormMcAnswer('');
 }
 function editQuestion(qid){
   const q=questions.find(x=>x.qid===qid); if(!q) return;
@@ -2882,7 +2937,7 @@ function editQuestion(qid){
   setPassageImageExisting(2, ps[1]?.imageUrl || '');
   setTableEditorData('q-passage-2-table', ps[1]?.table || null);
 
-  if(q.type==='mc'){ [1,2,3,4,5].forEach(n=>$('q-c'+n).value=(q.choices||[])[n-1]||''); $('q-answer-mc').value=q.answer; }
+  if(q.type==='mc'){ [1,2,3,4,5].forEach(n=>$('q-c'+n).value=(q.choices||[])[n-1]||''); setFormMcAnswer(q.answer); }
   else $('q-answer-short').value=q.answer;
   $('q-explain').value=q.explain||'';
   $('q-form-title').textContent='문제 수정';
@@ -3146,7 +3201,7 @@ function buildQuickAnswerHtml(qs, title){
     const chunk = qs.slice(i, i+cellsPerRow);
     const numRow = chunk.map((q,j)=>`<th>${i+j+1}</th>`).join('');
     const ansRow = chunk.map(q=>{
-      const a = q.type==='mc' ? (CIRCLE[parseInt(q.answer,10)-1] || q.answer) : q.answer;
+      const a = q.type==='mc' ? (circleLabel(q.answer) || q.answer) : q.answer;
       return `<td>${esc(a)}</td>`;
     }).join('');
     rows += `<tr>${numRow}</tr><tr>${ansRow}</tr>`;
@@ -3613,13 +3668,20 @@ function updateExtractedChoice(i, ci, value){
   if(!Array.isArray(q.choices) || q.choices.length!==5) q.choices = ['','','','',''];
   q.choices[ci] = value;
 }
+  function toggleExtractedAnswer(i, n, el){
+  const q = exQ(i); if(!q) return;
+  const list = parseAnsList(q.answer).filter(x=>x!==n);
+  if(el.checked) list.push(n);
+  q.answer = ansToStr(list);
+  el.parentElement.classList.toggle('picked', el.checked);
+}
 function changeExtractedType(i, type){
   const q = exQ(i); if(!q) return;
   q.type = type;
   if(type==='mc'){
     if(!Array.isArray(q.choices) || q.choices.length!==5) q.choices = ['','','','',''];
-    if(!/^[1-5]$/.test(String(q.answer))) q.answer = '1';
-  } else if(/^[1-5]$/.test(String(q.answer))){
+    if(!	parseAnsList(q.answer).length) q.answer = '1';
+  } else if(	parseAnsList(q.answer).length){
     q.answer = '';
   }
   renderExtractedQuestionsPreview();
@@ -3738,10 +3800,14 @@ function renderExtractedQuestionsPreview(){
           <span style="width:18px;">${CIRCLE[ci]}</span>
           <input type="text" value="${esc((q.choices||[])[ci]||'')}" oninput="updateExtractedChoice(${i},${ci},this.value)">
         </div>`).join('')}
-      <label style="margin-top:6px;">정답 번호</label>
-      <select style="width:120px;" onchange="updateExtracted(${i},'answer',this.value)">
-        ${[1,2,3,4,5].map(n=>`<option value="${n}" ${String(q.answer)===String(n)?'selected':''}>${CIRCLE[n-1]} ${n}번</option>`).join('')}
-      </select>`
+            <label style="margin-top:6px;">정답 번호 (여러 개 선택 가능)</label>
+      <div class="omr-choices">
+        ${[1,2,3,4,5].map(n=>{
+          const on = parseAnsList(q.answer).includes(n);
+          return `<label class="omr-bubble ${on?'picked':''}">
+            <input type="checkbox" value="${n}" ${on?'checked':''} onchange="toggleExtractedAnswer(${i},${n},this)">${CIRCLE[n-1]}</label>`;
+        }).join('')}
+      </div>`
       : `<label style="margin-top:10px;">정답 (단답)</label>
          <input type="text" value="${esc(q.answer||'')}" oninput="updateExtracted(${i},'answer',this.value)">`;
 
@@ -4181,7 +4247,7 @@ ${refFile ? '- 첨부된 참고 자료의 내용을 최대한 반영해서 문�
       hasPassage: !!q.hasPassage,
       passage: q.passage || '',
       choices: q.type==='mc' ? (q.choices||['','','','','']) : [],
-      answer: q.type==='mc' ? String(parseInt(q.answer,10)||1) : (q.answer||''),
+      answer: q.type==='mc' ? (ansToStr(q.answer)||'1') : (q.answer||''),
       explain: q.explain || '',
       include: true
     }));
@@ -4871,8 +4937,7 @@ function collectSolveAnswers(qs){
   const answers = {};
   qs.forEach(q=>{
     if(q.type==='mc'){
-      const picked = document.querySelector('input[name="ans_'+q.qid+'"]:checked');
-      answers[q.qid] = picked ? picked.value : '';
+      answers[q.qid] = readOmrChoices('ans_'+q.qid);
     } else {
       const el = $('ans_'+q.qid);
       answers[q.qid] = el ? el.value.trim() : '';
@@ -4886,12 +4951,11 @@ function restoreSolveAnswers(qs, answers){
     const v = answers[q.qid];
     if(!v) return;
     if(q.type==='mc'){
-      const input = document.querySelector('input[name="ans_'+q.qid+'"][value="'+v+'"]');
-      if(input){
-        input.checked = true;
-        input.closest('.omr-choices').querySelectorAll('.omr-bubble').forEach(b=>b.classList.remove('picked'));
-        input.closest('.omr-bubble').classList.add('picked');
-      }
+      const list = parseAnsList(v);
+      document.querySelectorAll(`input[name="ans_${q.qid}"]`).forEach(cb=>{
+        cb.checked = list.includes(+cb.value);
+        cb.parentElement.classList.toggle('picked', cb.checked);
+      });
     } else {
       const el = $('ans_'+q.qid);
       if(el) el.value = v;
@@ -4968,14 +5032,11 @@ function openStudentSolve(kind,tid){
       <div class="qnum">문제 ${i+1}. ${esc(q.body)}</div>
       ${renderPassageBoxHtml(getPassages(q))}
       ${q.type==='mc'
-        ? `<div class="omr-choices">${(q.choices||[]).map((c,ci)=>
-            `<label class="omr-bubble" onclick="pickChoice(this)">
-              <input type="radio" name="ans_${q.qid}" value="${ci+1}">${CIRCLE[ci]} ${esc(c)}</label>`).join('')}</div>`
+        ? omrChoicesHtml(q, 'ans_'+q.qid, '')
         : `<input type="text" id="ans_${q.qid}" placeholder="정답 입력">`}
-    </div>`).join('') : '<p class="empty-hint">등록된 문항이 없습니다. PDF를 내려받아 풀고 아래에 사진을 첨부해 제출해주세요.</p>';
+    </div>`).join('') : '<p class="empty-hint">등록된 문항이 없습니다. PDF를 내려받아 풀고 아래에 파일을 첨부해 제출해주세요.</p>';
   resetSolvePhotos();
 
-  // ✅ 임시 저장본 불러오기
   const draft = previewingStudent ? null : loadSolveDraft(tid);
   if(draft && draft.answers){
     restoreSolveAnswers(qs, draft.answers);
@@ -5034,8 +5095,7 @@ async function submitSolve(){
 
   let correct = 0;
   qs.forEach(q=>{
-    const ok = q.type==='mc' ? answers[q.qid]===String(q.answer)
-                             : normalize(answers[q.qid])===normalize(q.answer);
+        const ok = isCorrect(q, answers[q.qid]);
     if(ok) correct++;
   });
 
@@ -5085,7 +5145,7 @@ function openReview(kind,tid,stuUid,isAdmin){
   const rec = (scores[kind][tid]||{})[stuUid] || {};
   const isPhoto = !!(sub && sub.mode==='photo');
   const pending = isPhoto && isPhotoPending(kind, tid, stuUid);
-  const hideKey = pending && !isAdmin;   // 채점 전 사진 제출 → 학생에게 정답·해설 숨김
+  const hideKey = pending && !isAdmin;
 
   $('review-title').textContent = t.title + ' · ' + (s?s.name:'') + (isAdmin?' (관리자 확인)':'');
   const qs = (t.qids||[]).map(q=>questions.find(x=>x.qid===q)).filter(Boolean);
@@ -5095,36 +5155,38 @@ function openReview(kind,tid,stuUid,isAdmin){
     head = '<p class="note">아직 제출하지 않았습니다.</p>';
   } else if(isPhoto){
     head = pending
-      ? `<p class="note">제출일시 ${esc(sub.date)}${lateBadge(sub)} · 사진 제출 · <span class="badge part">채점중</span><br>
+      ? `<p class="note">제출일시 ${esc(sub.date)}${lateBadge(sub)} · 파일 제출 · <span class="badge part">채점중</span><br>
          ${isAdmin ? '성적 관리 탭에서 점수를 입력하면 채점 완료로 바뀝니다.'
                    : '관리자가 확인한 뒤 점수와 정답·해설이 공개됩니다.'}</p>`
-      : `<p class="note">제출일시 ${esc(sub.date)}${lateBadge(sub)} · 사진 제출 · 점수 <b>${esc(rec.score)}</b></p>`;
+      : `<p class="note">제출일시 ${esc(sub.date)}${lateBadge(sub)} · 파일 제출 · 점수 <b>${esc(rec.score)}</b></p>`;
   } else {
     head = `<p class="note">제출일시 ${esc(sub.date)}${lateBadge(sub)} · 자동채점 <b>${sub.correct}/${sub.total}</b> · 제출한 답안은 수정할 수 없습니다.</p>`;
   }
 
-    const photoHtml = (sub && sub.photos && sub.photos.length)
+  const photoHtml = (sub && sub.photos && sub.photos.length)
     ? `<div class="card"><h3>첨부 파일</h3>${renderAttachmentThumbs(sub.photos)}</div>`
     : '';
 
   const body = hideKey ? '' : (qs.map((q,i)=>{
     const mine = sub ? ((sub.answers||{})[q.qid]||'') : '';
-    const ok = q.type==='mc' ? mine===String(q.answer) : normalize(mine)===normalize(q.answer);
+    const ok = isCorrect(q, mine);
+    const mineList = parseAnsList(mine);
     const mineLabel = q.type==='mc'
-      ? (mine ? (CIRCLE[parseInt(mine,10)-1]||'')+' '+esc((q.choices||[])[parseInt(mine,10)-1]||'') : '무응답')
+      ? (mineList.length ? mineList.map(n=>CIRCLE[n-1]+' '+esc((q.choices||[])[n-1]||'')).join(', ') : '무응답')
       : (mine ? esc(mine) : '무응답');
 
     let resultBadge;
     if(!sub) resultBadge = '<span class="badge muted">미제출</span>';
-    else if(isPhoto) resultBadge = '<span class="badge muted">사진 채점</span>';
+    else if(isPhoto) resultBadge = '<span class="badge muted">파일 채점</span>';
     else resultBadge = ok ? '<span class="badge good">정답</span>' : '<span class="badge warn">오답</span>';
 
     const choicesHtml = q.type==='mc' ? (q.choices||[]).map((c,ci)=>{
-      const isAns = String(ci+1)===String(q.answer);
-      const isMineWrong = !isPhoto && String(ci+1)===mine && !ok;
+      const isAns = isAnsChoice(q, ci);
+      const isMine = !isPhoto && mineList.includes(ci+1);
+      const isMineWrong = isMine && !isAns;
       return `<div class="choice-line ${isAns?'correct':''} ${isMineWrong?'mine-wrong':''}">
         ${CIRCLE[ci]} ${esc(c)} ${isAns?'<span class="badge good" style="margin-left:6px;">정답</span>':''}
-        ${isMineWrong?'<span class="badge warn" style="margin-left:6px;">내 선택</span>':''}</div>`;
+        ${isMine?`<span class="badge ${isMineWrong?'warn':'muted'}" style="margin-left:6px;">내 선택</span>`:''}</div>`;
     }).join('') : '';
 
     const ansRow = isPhoto
@@ -5158,18 +5220,12 @@ function openReview(kind,tid,stuUid,isAdmin){
   $('edit-omr-title').textContent = t.title + ' · ' + (s?s.name:'') + ' 답안 수정';
   $('edit-omr-body').innerHTML = qs.map((q,i)=>{
     const mine = (sub.answers||{})[q.qid] || '';
-    if(q.type==='mc'){
-      const choices = (q.choices||[]).map((c,ci)=>{
-        const val = String(ci+1);
-        return `<label class="omr-bubble ${mine===val?'picked':''}" onclick="pickChoice(this)">
-          <input type="radio" name="eomr_${q.qid}" value="${val}" ${mine===val?'checked':''}>${CIRCLE[ci]} ${esc(c)}</label>`;
-      }).join('');
-      return `<div class="omr-q"><div class="qnum">문제 ${i+1}. ${esc(q.body)}</div>
-        <div class="omr-choices">${choices}</div></div>`;
-    } else {
-      return `<div class="omr-q"><div class="qnum">문제 ${i+1}. ${esc(q.body)}</div>
-        <input type="text" id="eomr_${q.qid}" value="${esc(mine)}" placeholder="정답 입력"></div>`;
-    }
+    return `<div class="omr-q"><div class="qnum">문제 ${i+1}. ${esc(q.body)}
+        <span style="font-size:12px; color:var(--muted); font-weight:500;"> · 정답 ${esc(q.type==='mc'?circleLabel(q.answer):q.answer)}</span></div>
+      ${q.type==='mc'
+        ? omrChoicesHtml(q, 'eomr_'+q.qid, mine)
+        : `<input type="text" id="eomr_${q.qid}" value="${esc(mine)}" placeholder="정답 입력">`}
+    </div>`;
   }).join('') || '<p class="empty-hint">등록된 문항이 없습니다.</p>';
 
   closeModal('review-modal');
@@ -5185,17 +5241,11 @@ async function saveOmrEdit(){
   const answers = {};
   let correct = 0;
   qs.forEach(q=>{
-    let val;
-    if(q.type==='mc'){
-      const picked = document.querySelector('input[name="eomr_'+q.qid+'"]:checked');
-      val = picked ? picked.value : '';
-    } else {
-      const el = $('eomr_'+q.qid);
-      val = el ? el.value.trim() : '';
-    }
+    const val = q.type==='mc'
+      ? readOmrChoices('eomr_'+q.qid)
+      : ($('eomr_'+q.qid) ? $('eomr_'+q.qid).value.trim() : '');
     answers[q.qid] = val;
-    const ok = q.type==='mc' ? val===String(q.answer) : normalize(val)===normalize(q.answer);
-    if(ok) correct++;
+    if(isCorrect(q, val)) correct++;
   });
 
   const rec = {
@@ -5208,11 +5258,8 @@ async function saveOmrEdit(){
   try{
     await updateDoc(doc(db,'submissions', tid+'|'+uid), { answers, correct });
     await setDoc(doc(db,'scores', kind+'__'+tid), scorePayload, {merge:true});
-    await updateWrongBankAfterGrade(uid, kind, tid, t.title, qs, answers, true);  // ✅ 수정 모드
-
-    // 학생 상세 창이 열려 있으면 오답노트 목록 새로고침
+    await updateWrongBankAfterGrade(uid, kind, tid, t.title, qs, answers, true);
     if(currentDetailUid===uid) loadAdminWrongNote(uid);
-
     alert(`저장되었습니다. 수정된 점수: ${correct}/${qs.length}`);
     closeModal('edit-omr-modal');
     editOmrTarget = null;
@@ -5343,9 +5390,7 @@ function renderWrongSolveBody(q){
       <div class="qnum">${esc(q.body)}</div>
       ${renderPassageBoxHtml(getPassages(q))}
       ${q.type==='mc'
-        ? `<div class="omr-choices">${(q.choices||[]).map((c,ci)=>
-            `<label class="omr-bubble" onclick="pickChoice(this)">
-              <input type="radio" name="wrong_ans" value="${ci+1}">${CIRCLE[ci]} ${esc(c)}</label>`).join('')}</div>`
+        ? omrChoicesHtml(q, 'wrong_ans', '')
         : `<input type="text" id="wrong_ans_text" placeholder="정답 입력">`}
     </div>`;
 }
@@ -5414,7 +5459,7 @@ async function generateWrongVariant(qid, isRetry){
       type: q.type, body: parsed.body,
       passages: parsed.hasPassage ? [{text:parsed.passage, imageUrl:'', hideTitle:false, table:null}] : [],
       choices: q.type==='mc' ? parsed.choices : [],
-      answer: q.type==='mc' ? String(parseInt(parsed.answer,10)||1) : parsed.answer,
+      answer: q.type==='mc' ? (ansToStr(parsed.answer)||'1') : parsed.answer,
       explain: parsed.explain
     };
     renderWrongSolveBody(currentWrongVariantQ);
@@ -5433,7 +5478,7 @@ function submitWrongSolve(){
     mine = $('wrong_ans_text') ? $('wrong_ans_text').value.trim() : '';
   }
   if(!mine){ alert('답을 입력해주세요.'); return; }
-  const ok = q.type==='mc' ? mine===String(q.answer) : normalize(mine)===normalize(q.answer);
+  const ok = isCorrect(q, mine)
   const box = $('wrong-solve-result');
   if(ok){
     box.innerHTML = `<div class="exam-explain">정답입니다! ${q.explain?esc(q.explain):''}</div>`;
@@ -5445,7 +5490,21 @@ function submitWrongSolve(){
     box.innerHTML = `<div class="exam-explain wrong">오답입니다. 정답: ${ansLabel}<br>${q.explain?esc(q.explain):''}</div>`;
   }
 }
-
+function submitWrongSolve(){
+  const q = currentWrongIsVariant ? currentWrongVariantQ : questions.find(x=>x.qid===currentWrongQid);
+  if(!q){ alert('문제를 불러오지 못했습니다.'); return; }
+  const mine = q.type==='mc'
+    ? readOmrChoices('wrong_ans')
+    : ($('wrong_ans_text') ? $('wrong_ans_text').value.trim() : '');
+  if(!mine){ alert('답을 입력해주세요.'); return; }
+  const box = $('wrong-solve-result');
+  if(isCorrect(q, mine)){
+    box.innerHTML = `<div class="exam-explain">정답입니다! ${q.explain?esc(q.explain):''}</div>`;
+    markWrongMastered(currentWrongQid);
+  } else {
+    box.innerHTML = `<div class="exam-explain wrong">오답입니다. 정답: ${esc(answerLabel(q))}<br>${q.explain?esc(q.explain):''}</div>`;
+  }
+}
 function markWrongMastered(qid){
   if(previewingStudent){ alert('미리보기 중에는 제출·기록되지 않습니다.'); return; }
   if(!currentStudent) return;
