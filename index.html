@@ -3847,6 +3847,34 @@ function renderExtractedQuestionsPreview(){
   wrap.innerHTML = warnHtml + rows
     + `<button class="btn" style="width:100%;" onclick="saveAllExtractedQuestions()">전체 저장 (${extractedQuestionsCache.length}개)</button>`;
 }
+  /* 세트 안에서 다음 순서 번호 (가장 큰 번호 + 1) */
+function nextOrderInSet(set){
+  return questions.filter(x=>x.set===set).reduce((m,x)=>Math.max(m, x.order ?? -1), -1) + 1;
+}
+
+/* 추출된 문제 → Firestore 저장 형태 */
+function extractedToQuestionData(q, set, order){
+  const text = q.hasPassage ? (q.passage||'') : '';
+  const hasText = !!text.replace(/<[^>]*>/g,'').trim();
+  const hasImg = !!q.extractedImageUrl;
+  const passages = (hasText || hasImg) ? [{
+    text: hasText ? text : '',
+    imageUrl: q.extractedImageUrl || '',
+    hideTitle: hasText ? !!q.hideTitle : true,   // 그림만 있으면 라벨 숨김
+    table: null
+  }] : [];
+  return {
+    set,
+    order,
+    type: q.type,
+    body: String(q.body||'').trim(),
+    passages,
+    choices: q.type==='mc' ? (q.choices||[]).map(c=>String(c||'').trim()) : [],
+    answer: q.type==='mc' ? ansToStr(q.answer) : String(q.answer||'').trim(),
+    explain: String(q.explain||'').trim(),
+    sourceNumber: q.number ?? null
+  };
+}
 async function saveExtractedQuestion(i){
   const q = extractedQuestionsCache[i]; if(!q) return;
   const err = validateExtracted(q);
