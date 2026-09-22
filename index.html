@@ -4505,8 +4505,21 @@ function pdfCell(t){
   $('preview-banner-text').textContent = '관리자 전체 보기 (배정 무관 · 모든 과제·시험·일정 표시)';
   switchSite('student');
 }
+/* 미리보기 중인 학생의 오답노트 불러오기 (실시간 반영) */
+let previewWrongUnsub = null;
+function loadPreviewWrongNote(uid){
+  if(previewWrongUnsub){ try{ previewWrongUnsub(); }catch(e){} previewWrongUnsub = null; }
+  wrongItems = {};
+  renderWrongNote();
+  if(!uid) return;
+  const { db, doc, onSnapshot } = window.fb;
+  previewWrongUnsub = onSnapshot(doc(db,'wrongBank', uid), snap=>{
+    wrongItems = snap.exists() ? (snap.data().items || {}) : {};
+    renderWrongNote();
+  }, err=>console.error('미리보기 오답노트 불러오기 실패:', err.code));
+}
 function startStudentPreview(){
-    adminViewAll = false;
+  adminViewAll = false;
   const uid = $('preview-student-select').value;
   const s = students.find(x=>x.uid===uid);
   if(!s){ alert('학생을 선택해주세요.'); return; }
@@ -4515,11 +4528,13 @@ function startStudentPreview(){
   document.body.classList.add('previewing');
   $('preview-banner').style.display = 'block';
   $('preview-banner-text').textContent = `"${s.name}" 학생 화면 미리보기 중 (관리자 세션 유지됨)`;
+  loadPreviewWrongNote(uid);   // ✅ 이 학생의 오답노트 불러오기
   switchSite('student');
 }
 function exitStudentPreview(){
+  loadPreviewWrongNote(null);   // ✅ 구독 해제 + 비우기
   previewingStudent = false;
-    adminViewAll = false;
+  adminViewAll = false;
   currentStudent = null;
   document.body.classList.remove('previewing');
   $('preview-banner').style.display = 'none';
