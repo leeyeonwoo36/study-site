@@ -1110,7 +1110,7 @@
    <div style="margin-bottom:14px; display:flex; gap:6px; flex-wrap:wrap;">
   <button class="btn small secondary" onclick="openStudentEditFromDetail()">인적사항 수정</button>
   <button class="btn small secondary" onclick="resetPw(currentDetailUid)">비밀번호 재설정 메일 보내기</button>
-  <button class="btn small" onclick="openStudentReportSheet(currentDetailUid)">성적표 PDF 출력</button>
+   <button class="btn small" onclick="openStudentReportSheet(currentDetailUid)">학습관리표 PDF 출력</button>
 </div>
         <h3>출결 현황</h3>
     <div id="detail-attendance-status" style="margin-bottom:18px;"></div>
@@ -3277,7 +3277,7 @@ function buildStudentReportHtml(uid){
   const today = new Date().toLocaleDateString('ko-KR');
 
   return `<!DOCTYPE html><html lang="ko"><head><meta charset="UTF-8">
-<title>${esc(s.name)} 학생 성적표</title>
+<title>${esc(s.name)} 학생 학습관리표</title>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;700;900&display=swap" rel="stylesheet">
 <style>
   @page{ size:A4; margin:16mm 14mm; }
@@ -3298,7 +3298,7 @@ function buildStudentReportHtml(uid){
 </style></head><body>
 <div class="no-print"><button onclick="window.print()">인쇄 / PDF로 저장</button></div>
 
-<h1>${esc(s.name)} 학생 성적표</h1>
+<h1>${esc(s.name)} 학생 학습관리표</h1>
 <div class="meta">
   <div class="info-grid">
     <div><b>학년</b>${esc(s.grade)||'-'}</div>
