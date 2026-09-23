@@ -768,7 +768,7 @@
             <div><label>과제/시험 선택</label><select id="grading-task-filter" onchange="renderGradingTable()">
               <option value="">전체</option></select></div>
             <div><label>제출 상태</label><select id="grading-status-filter" onchange="renderGradingTable()">
-              <option value="">전체</option><option value="submitted">제출됨</option><option value="pending">미제출</option><option value="needsGrading">채점 대기(사진)</option></select></div>
+                            <option value="">전체</option><option value="submitted">제출됨</option><option value="pending">미제출</option><option value="needsGrading">채점 대기</option><option value="offline">현장 제출</option></select></div>
           </div>
           <h3>제출 현황</h3>
           <table>
@@ -1908,7 +1908,7 @@ function renderStudentTaskStatus(u){
     let status;
     if(!sub){
       status = '<span class="badge warn">미제출</span>';
-    } else if(sub.mode==='photo'){
+        } else if(sub.mode==='photo' || sub.mode==='offline'){
       status = isPhotoPending(kind, t.tid, u)
         ? '<span class="badge part">사진 제출 (채점중)</span>'
         : `<span class="badge good">채점 완료 (${esc(rec.score)})</span>`;
@@ -1977,7 +1977,7 @@ function buildTaskDetailHtml(kind, tid, u){
   }
 
   // 사진·PDF 제출
-  if(sub.mode==='photo'){
+    if(sub.mode==='photo' || sub.mode==='offline'){
     const rec = (scores[kind][tid]||{})[u] || {};
     const pending = isPhotoPending(kind, tid, u);
     const files = renderAttachmentThumbs(sub.photos||[]);
@@ -4772,7 +4772,7 @@ function renderStudentTasks(kind){
                          : '<span class="badge warn">미제출</span>';
         btn = `<button class="btn small" onclick="openStudentSolve('${kind}','${t.tid}')">${overdue?'지각 제출':'풀기'}</button>`;
       }
-    } else if(sub.mode==='photo'){
+        } else if(sub.mode==='photo' || sub.mode==='offline'){
       status = isPhotoPending(kind, t.tid, currentStudent)
         ? '<span class="badge part">제출 완료 (채점중)</span>'
         : `<span class="badge good">채점 완료 (${esc(rec.score)})</span>`;
@@ -4794,10 +4794,10 @@ function isLateSub(sub){ return !!(sub && sub.late); }
 function lateBadge(sub){
   return isLateSub(sub) ? ' <span class="badge warn">지각 제출</span>' : '';
 }
-/* 사진 제출인데 아직 관리자가 점수를 안 넣은 상태 */
+/* 수동 채점이 필요한 제출(파일 첨부·현장 제출)인데 아직 점수가 없는 상태 */
 function isPhotoPending(kind, tid, uid){
   const sub = submissions[tid+'|'+uid];
-  if(!sub || sub.mode!=='photo') return false;
+  if(!sub || (sub.mode!=='photo' && sub.mode!=='offline')) return false;
   const rec = (scores[kind][tid]||{})[uid];
   return !(rec && String(rec.score||'').trim());
 }
@@ -5186,7 +5186,7 @@ function openReview(kind,tid,stuUid,isAdmin){
   const s = students.find(x=>x.uid===stuUid);
   const sub = submissions[tid+'|'+stuUid];
   const rec = (scores[kind][tid]||{})[stuUid] || {};
-  const isPhoto = !!(sub && sub.mode==='photo');
+  const isPhoto = !!(sub && (sub.mode==='photo' || sub.mode==='offline'));
   const pending = isPhoto && isPhotoPending(kind, tid, stuUid);
   const hideKey = pending && !isAdmin;
 
@@ -5310,6 +5310,62 @@ async function saveOmrEdit(){
     alert('저장 실패: '+e.message);
   }
 }
+
+/* =========================================================
+   현장 제출 (관리자가 직접 기록)
+   ========================================================= */
+async function markOfflineSubmit(kind, tid, uid){
+  const t = tasks[kind].find(x=>x.tid===tid);
+  const s = students.find(x=>x.uid===uid);
+  if(!t || !s) return;
+  if(submissions[tid+'|'+uid]){ alert('이미 제출 기록이 있습니다.'); return; }
+  if(!confirm(`${s.name} 학생의 "${t.title}"을(를) 현장 제출로 기록할까요?\n(점수는 성적 관리 탭에서 입력하세요)`)) return;
+
+  const now = new Date();
+  const dueDate = t.due ? new Date(t.due) : null;
+  const late = !!(dueDate && !isNaN(dueDate) && now > dueDate);
+  const qs = (t.qids||[]).length;
+
+  const subData = {
+    studentUid: uid,
+    taskId: tid, kind,
+    mode: 'offline',                    // ✅ 현장 제출
+    answers: {}, photos: [],
+    total: qs, correct: 0,
+    late,
+    submittedAt: now.getTime(),
+    date: now.toLocaleString('ko-KR'),
+    recordedBy: 'admin'
+  };
+  const { db, doc, setDoc } = window.fb;
+  const scorePayload = {}; scorePayload[uid] = { score: '', status: '채점중' };
+  try{
+    await setDoc(doc(db,'submissions', tid+'|'+uid), subData);
+    await setDoc(doc(db,'scores', kind+'__'+tid), scorePayload, {merge:true});
+  }catch(e){ alert('기록 실패: '+e.message); }
+}
+
+async function cancelSubmission(kind, tid, uid){
+  const t = tasks[kind].find(x=>x.tid===tid);
+  const s = students.find(x=>x.uid===uid);
+  const sub = submissions[tid+'|'+uid];
+  if(!t || !s || !sub) return;
+  const isOffline = sub.mode==='offline';
+  if(!confirm(
+    `${s.name} 학생의 "${t.title}" 제출 기록을 지울까요?\n\n` +
+    (isOffline ? '현장 제출 기록이 삭제되고 미제출로 돌아갑니다.'
+               : '⚠️ 학생이 온라인으로 제출한 답안·첨부파일이 삭제되며 되돌릴 수 없습니다.') +
+    '\n입력된 점수도 함께 지워집니다.'
+  )) return;
+
+  const { db, doc, deleteDoc, setDoc } = window.fb;
+  const scorePayload = {}; scorePayload[uid] = { score: '', status: '미완료' };
+  try{
+    await deleteDoc(doc(db,'submissions', tid+'|'+uid));
+    await setDoc(doc(db,'scores', kind+'__'+tid), scorePayload, {merge:true});
+  }catch(e){ alert('취소 실패: '+e.message); }
+}
+
 /* =========================================================
    채점 확인 (관리자)
    ========================================================= */
@@ -5333,34 +5389,43 @@ function renderGradingTable(){
     if(kindFilter && kindFilter!==kind) return;
     tasks[kind].forEach(t=>{
       if(taskFilter && taskFilter !== (kind+'|'+t.tid)) return;
-      students.filter(s=>s.approved && (!Array.isArray(t.assignedTo) || t.assignedTo.includes(s.uid))).forEach(s=>{
+      taskTargetStudents(t).forEach(s=>{
         const sub = submissions[t.tid+'|'+s.uid];
         const rec = (scores[kind][t.tid]||{})[s.uid];
-        const needsGrading = isPhotoPending(kind, t.tid, s.uid);
+        const scored = !!(rec && String(rec.score||'').trim());
+        const isOffline = !!(sub && sub.mode==='offline');
+        const needsGrading = isPhotoPending(kind, t.tid, s.uid) || (isOffline && !scored);
 
         if(statusFilter==='submitted' && !sub) return;
         if(statusFilter==='pending' && sub) return;
         if(statusFilter==='needsGrading' && !needsGrading) return;
+        if(statusFilter==='offline' && !isOffline) return;
 
         let mode, status, btn;
         if(!sub){
           mode='<span style="color:#8993AA;">-</span>';
           status='<span class="badge warn">미제출</span>';
-          btn='<button class="btn small secondary" disabled>결과 보기</button>';
+          btn=`<button class="btn small secondary" onclick="markOfflineSubmit('${kind}','${t.tid}','${s.uid}')">현장 제출 기록</button>`;
+        } else if(isOffline){
+          mode='<span class="badge part">현장 제출</span>';
+          status = scored ? `<span class="badge good">채점 완료 (${esc(rec.score)})</span>`
+                          : '<span class="badge part">제출 완료 (채점중)</span>';
+          btn=`<button class="btn small danger" onclick="cancelSubmission('${kind}','${t.tid}','${s.uid}')">제출 취소</button>`;
         } else if(sub.mode==='photo'){
           mode='<span class="badge muted">파일 첨부</span>';
-          status = needsGrading
-            ? '<span class="badge part">제출 완료 (채점중)</span>'
-            : `<span class="badge good">채점 완료 (${esc(rec.score)})</span>`;
-          btn=`<button class="btn small secondary" onclick="openReview('${kind}','${t.tid}','${s.uid}',true)">제출 보기</button>`;
+          status = scored ? `<span class="badge good">채점 완료 (${esc(rec.score)})</span>`
+                          : '<span class="badge part">제출 완료 (채점중)</span>';
+          btn=`<button class="btn small secondary" onclick="openReview('${kind}','${t.tid}','${s.uid}',true)">제출 보기</button>
+               <button class="btn small danger" onclick="cancelSubmission('${kind}','${t.tid}','${s.uid}')">제출 취소</button>`;
         } else {
           mode='<span class="badge muted">온라인 OMR</span>';
           status=`<span class="badge good">자동채점 완료 (${sub.correct}/${sub.total})</span>`;
-          btn=`<button class="btn small secondary" onclick="openReview('${kind}','${t.tid}','${s.uid}',true)">결과 보기</button>`;
+          btn=`<button class="btn small secondary" onclick="openReview('${kind}','${t.tid}','${s.uid}',true)">결과 보기</button>
+               <button class="btn small danger" onclick="cancelSubmission('${kind}','${t.tid}','${s.uid}')">제출 취소</button>`;
         }
         status += lateBadge(sub);
         const kindLabel = kind==='hw' ? '<span class="badge muted">과제</span>' : '<span class="badge muted">시험</span>';
-        rows.push(`<tr><td>${esc(s.name)}</td><td>${kindLabel} ${esc(t.title)}</td><td>${mode}</td><td>${status}</td><td>${btn}</td></tr>`);
+        rows.push(`<tr><td>${esc(s.name)}</td><td>${kindLabel} ${esc(t.title)}</td><td>${mode}</td><td>${status}</td><td class="row-actions">${btn}</td></tr>`);
       });
     });
   });
