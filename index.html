@@ -265,7 +265,7 @@
     opacity:1;
   }
 
-  @media (max-width:760px){
+   @media (max-width:760px){
     .layout{flex-direction:column; min-height:auto;}
     .main{order:1; padding:16px 14px 88px; max-width:100%;}
     .sidebar{order:2; position:fixed; left:0; right:0; bottom:0; width:100%; padding:0; z-index:40;
@@ -282,7 +282,7 @@
     /* 그룹 라벨은 데스크톱 사이드바 전용 */
     .sidebar nav .nav-group{display:none;}
 
-    /* 관리자(13개): 내용 폭 + 가로 스크롤 */
+    /* 관리자(14개): 내용 폭 + 가로 스크롤 */
     .sidebar nav button.admin-nav{
       flex:0 0 auto; width:auto; min-width:0; text-align:center;
       padding:8px 7px; font-size:10.5px; letter-spacing:-.02em;
@@ -320,39 +320,30 @@
     /* 배지 여백 축소 */
     .badge{padding:2px 6px; font-size:11px;}
   }
-  .qset-q.dragging { opacity: 0.4; }
-.qset-q.drag-over { border-top: 2px solid var(--brand, #2a6); }
-.qset-q { cursor: grab; }
-.grade-group{border:1px solid var(--border); border-radius:10px; margin-bottom:10px; overflow:hidden; background:#fff;}
-.grade-group-head{display:flex; align-items:center; justify-content:space-between; gap:8px;
-  padding:11px 14px; background:var(--brand-soft); cursor:pointer; font-weight:700; font-size:14px;}
-.grade-group-head .gg-meta{font-weight:500; font-size:12px; color:var(--ink-soft);}
-.grade-group-body{display:none; padding:4px 14px 10px;}
-.grade-group.open .grade-group-body{display:block;}
-.grade-group.open .gg-arrow{transform:rotate(180deg);}
-.gg-arrow{display:inline-block; transition:transform .15s; color:var(--muted); font-size:11px;}
-.notice-card{border:1px solid var(--border); border-left:4px solid var(--brand);
-  border-radius:var(--radius); padding:14px 16px; margin-bottom:10px; background:#fff;}
-.notice-card.important{border-left-color:var(--accent); background:var(--accent-soft);}
-.notice-head{display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:6px;}
-.notice-head .n-title{font-weight:900; font-size:15px;}
-.notice-date{font-size:12px; color:var(--muted); margin-left:auto;}
-.notice-body{font-size:13.5px; line-height:1.7; white-space:pre-wrap; color:var(--ink-soft);}
-    .sidebar nav button[data-tab="a-notice"]{font-size:0;}
-    .sidebar nav button[data-tab="a-notice"]::after{content:"공지"; font-size:10.5px;}
-</style>
-</head>
-<body>
-<div id="preview-banner">
-  <span id="preview-banner-text">학생 화면 미리보기 중</span>
-  <button onclick="exitStudentPreview()">관리자로 돌아가기</button>
-</div>
-<div class="site-switch" style="display:none;">
-  <button id="switch-login" class="active" onclick="switchSite('login')">학생 로그인</button>
-  <button id="switch-admin" onclick="switchSite('admin')">관리자 사이트</button>
-  <button id="switch-student" onclick="switchSite('student')">학생 사이트</button>
-</div>
 
+  /* ---------- 문제 세트 드래그 ---------- */
+  .qset-q{cursor:grab;}
+  .qset-q.dragging{opacity:.4;}
+  .qset-q.drag-over{border-top:2px solid var(--brand);}
+
+  /* ---------- 채점 확인 과제 그룹 ---------- */
+  .grade-group{border:1px solid var(--border); border-radius:10px; margin-bottom:10px; overflow:hidden; background:#fff;}
+  .grade-group-head{display:flex; align-items:center; justify-content:space-between; gap:8px;
+    padding:11px 14px; background:var(--brand-soft); cursor:pointer; font-weight:700; font-size:14px;}
+  .grade-group-head .gg-meta{font-weight:500; font-size:12px; color:var(--ink-soft);}
+  .grade-group-body{display:none; padding:4px 14px 10px;}
+  .grade-group.open .grade-group-body{display:block;}
+  .grade-group.open .gg-arrow{transform:rotate(180deg);}
+  .gg-arrow{display:inline-block; transition:transform .15s; color:var(--muted); font-size:11px;}
+
+  /* ---------- 공지사항 ---------- */
+  .notice-card{border:1px solid var(--border); border-left:4px solid var(--brand);
+    border-radius:var(--radius); padding:14px 16px; margin-bottom:10px; background:#fff;}
+  .notice-card.important{border-left-color:var(--accent); background:var(--accent-soft);}
+  .notice-head{display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:6px;}
+  .notice-head .n-title{font-weight:900; font-size:15px;}
+  .notice-date{font-size:12px; color:var(--muted); margin-left:auto;}
+  .notice-body{font-size:13.5px; line-height:1.7; white-space:pre-wrap; color:var(--ink-soft);}
 <!-- ============ 로그인 ============ -->
 <div class="app-shell" id="shell-login">
   <div class="login-wrap">
