@@ -140,8 +140,17 @@
   .thumb-row img{width:90px; height:90px; object-fit:cover; border-radius:6px; border:1px solid var(--border);}
   .note{font-size:12.5px; color:var(--ink-soft); background:var(--brand-soft); border:1px solid var(--border);
     padding:8px 10px; border-radius:var(--radius); margin-bottom:14px;}
-  .login-wrap{max-width:380px; margin:70px auto; text-align:center;}
-  .login-wrap .card{text-align:left;}
+    /* ---------- 로그인 화면 ---------- */
+  body.on-login{background:linear-gradient(160deg, #35695A 0%, #2F5D50 45%, #24483E 100%);
+    background-attachment:fixed;}
+  .login-wrap{max-width:380px; margin:0 auto; padding:64px 18px 48px; text-align:center;}
+  .login-head{margin-bottom:22px;}
+  .login-head h1{font-size:21px; color:#fff; letter-spacing:-.3px; margin:0;}
+  .login-head p{font-size:13px; color:rgba(255,255,255,.72); margin:6px 0 0;}
+  .login-wrap .card{text-align:left; border:none; padding:24px 22px;
+    box-shadow:0 10px 30px rgba(0,0,0,.18);}
+  .login-foot{font-size:11.5px; color:rgba(255,255,255,.5); margin-top:16px;}
+  .login-wrap .btn-login{width:100%; padding:12px; font-size:14px;}
   .detail-info-table th{width:80px; border-bottom:none; color:var(--muted); font-weight:600; font-size:12.5px;}
   .detail-info-table td{border-bottom:none; font-weight:700;}
 
@@ -346,22 +355,26 @@
   .notice-body{font-size:13.5px; line-height:1.7; white-space:pre-wrap; color:var(--ink-soft);}
 </style>
 <!-- ============ 로그인 ============ -->
+<!-- ============ 로그인 ============ -->
 <div class="app-shell" id="shell-login">
   <div class="login-wrap">
-    <h1 style="font-size:22px;">명덕외고 국제정치 스터디</h1>
-    <p style="color:var(--muted); margin-bottom:24px; font-size:13.5px;">이메일로 로그인하세요.</p>
+    <div class="login-head">
+      <h1>명덕외고 국제정치 스터디</h1>
+      <p>학습관리 시스템</p>
+    </div>
     <div class="card">
       <label>이메일</label>
-      <input type="email" id="login-id" placeholder="예: student@gmail.com" style="margin-bottom:12px;">
+      <input type="email" id="login-id" placeholder="student@gmail.com" style="margin-bottom:14px;">
       <label>비밀번호</label>
-      <input type="password" id="login-pw" placeholder="비밀번호" style="margin-bottom:16px;"
+      <input type="password" id="login-pw" placeholder="비밀번호" style="margin-bottom:18px;"
         onkeydown="if(event.key==='Enter')doLogin()">
-      <button class="btn" style="width:100%;" onclick="doLogin()">로그인</button>
-      <div style="display:flex; justify-content:space-between; margin-top:10px;">
+      <button class="btn btn-login" onclick="doLogin()">로그인</button>
+      <div style="display:flex; justify-content:space-between; margin-top:14px;">
         <a href="#" onclick="openModal('signup-modal'); return false;" style="font-size:12.5px;">회원가입</a>
-        <a href="#" onclick="openModal('findpw-modal'); return false;" style="font-size:12.5px;">비밀번호를 잊으셨나요?</a>
+        <a href="#" onclick="openModal('findpw-modal'); return false;" style="font-size:12.5px; color:var(--muted);">비밀번호를 잊으셨나요?</a>
       </div>
     </div>
+    <div class="login-foot">가입 후 관리자 승인이 완료되어야 로그인할 수 있습니다</div>
   </div>
 </div>
 
@@ -1352,6 +1365,8 @@ function switchSite(site){
   document.querySelectorAll('.app-shell').forEach(el=>{ el.style.display='none'; });
   const shell = $('shell-'+site);
   shell.style.display = (site==='login') ? 'block' : 'flex';
+  // 로그인 화면에서만 그라데이션 배경
+  document.body.classList.toggle('on-login', site==='login');
   document.querySelectorAll('.site-switch button').forEach(b=>b.classList.remove('active'));
   const sw = $('switch-'+site); if(sw) sw.classList.add('active');
   if(site==='student') renderStudentSite();
