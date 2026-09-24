@@ -4862,6 +4862,16 @@ function pdfCell(t){
   if(!t.pdfUrl) return esc(t.pdfName)+' <span style="color:#8993AA; font-size:11px;">(업로드 대기)</span>';
   return `<a href="${t.pdfUrl}" download="${esc(t.pdfName)}" target="_blank">${esc(t.pdfName)}</a>`;
 }
+/* 학생 화면용 PDF 칸 — 시작 전이면 링크 대신 안내 문구 */
+function studentPdfCell(t){
+  const notStarted = !adminViewAll && t.startAt && new Date(t.startAt) > new Date();
+  if(notStarted){
+    return t.pdfName
+      ? `<span style="color:var(--muted); font-size:12px;">시작 후 공개</span>`
+      : '<span style="color:#8993AA;">없음</span>';
+  }
+  return pdfCell(t);
+}
   function renderPreviewStudentSelect(){
   const sel = $('preview-student-select'); if(!sel) return;
   const prev = sel.value;
@@ -5176,7 +5186,7 @@ function renderStudentTasks(kind){
 
     const doneCell = kind==='hw' ? `<td>${statusBadge(rec.status||'미완료')}</td>` : '';
     const dbadge = sub ? '' : ' ' + ddayBadge(t.due);
-    return `<tr><td>${esc(t.title)}${dbadge}</td><td>${fmtPeriod(t)}</td><td>${pdfCell(t)}</td>${doneCell}
+    return `<tr><td>${esc(t.title)}${dbadge}</td><td>${fmtPeriod(t)}</td><td>${studentPdfCell(t)}</td>${doneCell}
       <td>${status}</td><td>${btn}</td></tr>`;
   }).join('') || `<tr><td colspan="${kind==='hw'?6:5}" class="empty-hint">등록된 항목이 없습니다.</td></tr>`;
 }
