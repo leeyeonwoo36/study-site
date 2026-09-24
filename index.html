@@ -3535,6 +3535,10 @@ function printWithOptions(){
     .sheet-section + .sheet-section{margin-top:0; padding-top:0; border-top:none;}
   }
 </style></head><body>
+<div id="preview-banner">
+  <span id="preview-banner-text">학생 화면 미리보기 중</span>
+  <button onclick="exitStudentPreview()">관리자로 돌아가기</button>
+</div>
 <div class="no-print"><button onclick="window.print()">인쇄 / PDF로 저장</button></div>
 ${sections.join('')}
 </body></html>`;
