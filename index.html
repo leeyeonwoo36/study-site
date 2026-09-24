@@ -354,6 +354,9 @@
   .notice-head .n-title{font-weight:900; font-size:15px;}
   .notice-date{font-size:12px; color:var(--muted); margin-left:auto;}
   .notice-body{font-size:13.5px; line-height:1.7; white-space:pre-wrap; color:var(--ink-soft);}
+  .variant-item{border:1px solid var(--border); border-left:3px solid var(--brand);
+    border-radius:0; padding:12px 14px; margin-bottom:8px; background:#fff;}
+  .variant-meta{font-size:11.5px; color:var(--muted); margin-bottom:6px;}
 </style>
 </head>
 <body>
@@ -1015,6 +1018,10 @@
       <div class="tabpanel" id="tab-t-wrong">
   <div class="page-head"><div><h1>오답노트</h1><p>틀린 문제를 원본 그대로, 또는 AI가 만든 변형 문제로 계속 다시 풀어볼 수 있어요.</p></div></div>
   <div class="card"><div id="wrong-note-list"></div></div>
+  <div style="margin-bottom:14px;">
+    <button class="btn secondary" onclick="toggleVariantList()">변형 문제 보기</button>
+  </div>
+  <div id="variant-list-area"></div>
 </div>
       <div class="tabpanel" id="tab-t-video">
   <div class="page-head"><div><h1>수업 영상</h1><p>수업 영상을 시청하세요.</p></div></div>
@@ -1404,7 +1411,7 @@ function setStudentTab(id){
   const btn = document.querySelector('.student-nav[data-tab="'+id+'"]');
   if(btn) btn.classList.add('active');
   if(id==='t-me') fillMyInfo();
-  if(id==='t-wrong') renderWrongNote();
+  if(id==='t-wrong'){ renderWrongNote(); renderVariantList(); }
 }
 
 /* =========================================================
@@ -1440,6 +1447,7 @@ let adminWrongItems = {};   // 현재 상세 모달로 보고 있는 학생의 �
 let currentWrongQid = null;
 let currentWrongIsVariant = false;
 let currentWrongVariantQ = null;
+let currentVariantIsSaved = false;   // 저장된 변형을 다시 푸는 중인지
 let editOmrTarget = null; // {kind, tid, uid}
 let openedTaskDetailKey = null;
 let videos = [];
@@ -1544,6 +1552,11 @@ if(!isAdmin && currentStudent){
     wrongItems = snap.exists() ? (snap.data().items||{}) : {};
     renderWrongNote();
   }, err=>console.error('wrongBank 구독 에러:', err.code)));
+
+  unsubs.push(onSnapshot(doc(db,'variants', currentStudent), snap=>{
+    myVariants = snap.exists() ? (snap.data().items || []) : [];
+    renderVariantList();
+  }, err=>console.error('variants 구독 에러:', err.code)));
 }
   // settings는 컬렉션 쿼리 대신 aiConfig 문서 하나만 구독한다.
   // (학생은 컬렉션 전체 읽기 권한이 없어 쿼리가 거부됨)
@@ -1620,7 +1633,8 @@ function stopSubscriptions(){
   questionSets = []; questions = [];
   tasks = { hw:[], exam:[] };
   submissions = {}; scores = { hw:{}, exam:{} };
-    wrongItems = {};   // ← 추가
+  wrongItems = {};   // ← 추가
+  myVariants = []; variantListOpen = false;
   draftQids = { hw:[], exam:[] };
 }
 
@@ -6081,6 +6095,7 @@ async function openWrongSolve(qid, wantVariant){
   currentWrongQid = qid;
   currentWrongIsVariant = wantVariant;
   currentWrongVariantQ = null;
+  currentVariantIsSaved = false;
   $('wrong-solve-result').innerHTML = '';
   if(wantVariant){
     $('wrong-solve-title').textContent = '변형 문제 풀이';
@@ -6155,11 +6170,19 @@ function submitWrongSolve(){
     : ($('wrong_ans_text') ? $('wrong_ans_text').value.trim() : '');
   if(!mine){ alert('답을 입력해주세요.'); return; }
   const box = $('wrong-solve-result');
-  if(isCorrect(q, mine)){
+  const ok = isCorrect(q, mine);
+
+  if(ok){
     box.innerHTML = `<div class="exam-explain">정답입니다! ${q.explain?esc(q.explain):''}</div>`;
     markWrongMastered(currentWrongQid);
   } else {
     box.innerHTML = `<div class="exam-explain wrong">오답입니다. 정답: ${esc(answerLabel(q))}<br>${q.explain?esc(q.explain):''}</div>`;
+  }
+
+  // 새로 만든 변형 문제는 채점을 마친 시점에 보관
+  if(currentWrongIsVariant && !currentVariantIsSaved){
+    currentVariantIsSaved = true;
+    saveVariantQuestion(currentWrongQid, q, ok);
   }
 }
 function markWrongMastered(qid){
@@ -6168,6 +6191,85 @@ function markWrongMastered(qid){
   const { db, doc, setDoc } = window.fb;
   setDoc(doc(db,'wrongBank', currentStudent), { items: { [qid]: { status: 'mastered' } } }, {merge:true})
     .catch(e=>console.error(e.message));
+}
+/* =========================================================
+   AI 변형 문제 보관 (variants/{uid})
+   ========================================================= */
+let myVariants = [];          // 학생 본인 것
+let variantListOpen = false;  // 오답노트에서 목록을 펼쳤는지
+
+/* 채점을 마친 변형 문제를 저장. 같은 원본의 같은 물음은 중복 저장하지 않음 */
+async function saveVariantQuestion(srcQid, vq, gotCorrect){
+  if(previewingStudent || !currentStudent || !vq) return;
+  const src = questions.find(x=>x.qid===srcQid);
+  const item = {
+    vid: 'v' + Date.now().toString(36) + Math.random().toString(36).slice(2,6),
+    srcQid,
+    srcBody: src ? String(src.body||'').slice(0,80) : '',
+    type: vq.type,
+    body: vq.body || '',
+    passages: vq.passages || [],
+    choices: vq.choices || [],
+    answer: vq.answer || '',
+    explain: vq.explain || '',
+    firstCorrect: !!gotCorrect,
+    createdAt: Date.now()
+  };
+  // 같은 원본에서 나온 동일한 물음이면 건너뜀
+  if(myVariants.some(v => v.srcQid===srcQid && v.body===item.body)) return;
+
+  const { db, doc, setDoc } = window.fb;
+  try{
+    await setDoc(doc(db,'variants', currentStudent),
+                 { items: myVariants.concat([item]) }, {merge:true});
+  }catch(e){ console.error('변형 문제 저장 실패:', e.message); }
+}
+
+/* 오답노트 하단 목록 열기/닫기 */
+function toggleVariantList(){
+  variantListOpen = !variantListOpen;
+  renderVariantList();
+}
+
+function renderVariantList(){
+  const box = $('variant-list-area'); if(!box) return;
+  if(!variantListOpen){ box.innerHTML = ''; return; }
+
+  if(!myVariants.length){
+    box.innerHTML = `<div class="card"><p class="empty-hint">아직 저장된 변형 문제가 없습니다. 오답노트에서 "변형 문제 풀기"로 채점을 마치면 여기에 쌓입니다.</p></div>`;
+    return;
+  }
+  const list = myVariants.slice().sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
+  box.innerHTML = `<div class="card">
+    <h3>내가 받은 변형 문제 (${list.length})</h3>
+    <p class="note">원본 문제를 바탕으로 AI가 만든 문제입니다. 다시 풀어볼 수 있습니다.</p>
+    ${list.map(v=>`
+      <div class="variant-item">
+        <div class="variant-meta">
+          ${fmtNoticeDate(v.createdAt)} · 원본: ${esc(v.srcBody||'(삭제된 문제)')}
+          ${v.firstCorrect?'<span class="badge good" style="margin-left:6px;">처음에 정답</span>'
+                          :'<span class="badge warn" style="margin-left:6px;">처음에 오답</span>'}
+        </div>
+        <b>${esc(v.body)}</b>
+        <div style="margin-top:8px;">
+          <button class="btn small secondary" onclick="openSavedVariant('${v.vid}')">다시 풀기</button>
+        </div>
+      </div>`).join('')}
+  </div>`;
+}
+
+/* 저장된 변형 문제를 풀이 모달에 띄움 */
+function openSavedVariant(vid){
+  const v = myVariants.find(x=>x.vid===vid);
+  if(!v){ alert('문제를 찾을 수 없습니다.'); return; }
+  currentWrongQid = v.srcQid;
+  currentWrongIsVariant = true;
+  currentWrongVariantQ = v;
+  currentVariantIsSaved = true;        // 이미 저장된 것 → 다시 저장하지 않음
+  $('wrong-solve-result').innerHTML = '';
+  $('wrong-solve-title').textContent = '저장된 변형 문제 다시 풀기';
+  renderWrongSolveBody(v);
+  openModal('wrong-solve-modal');
 }
 /* =========================================================
    데이터 백업
