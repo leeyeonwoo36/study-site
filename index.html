@@ -1177,6 +1177,22 @@
     </div>
   </div>
 </div>
+  <!-- 현장 제출 채점 -->
+<div class="modal-bg" id="offline-grade-modal">
+  <div class="modal wide">
+    <button class="modal-close" onclick="closeModal('offline-grade-modal')">✕</button>
+    <h3 id="offline-grade-title">현장 제출 채점</h3>
+    <p class="note">맞은 문항은 O, 틀린 문항은 X를 누르세요. 틀린 문항은 학생 오답노트에 자동으로 등록되고, 점수와 완료 여부가 성적 관리에 반영됩니다.</p>
+    <div style="display:flex; gap:6px; margin-bottom:12px; flex-wrap:wrap;">
+      <button class="btn small secondary" onclick="setAllOfflineMarks(true)">전체 O</button>
+      <button class="btn small secondary" onclick="setAllOfflineMarks(false)">전체 X</button>
+      <span id="offline-grade-score" class="badge muted" style="align-self:center;"></span>
+    </div>
+    <div id="offline-grade-body"></div>
+    <button class="btn" style="width:100%; margin-top:12px;" onclick="saveOfflineGrade()">채점 저장</button>
+    <button class="btn ghost" id="offline-grade-skip" style="width:100%; margin-top:8px;" onclick="saveOfflineGrade(true)">채점 없이 기록 (나중에 채점)</button>
+  </div>
+</div>
 <!-- 메모 수정 -->
 <div class="modal-bg" id="memo-edit-modal">
   <div class="modal">
@@ -1977,14 +1993,20 @@ function buildTaskDetailHtml(kind, tid, u){
   }
 
   // 사진·PDF 제출
-    if(sub.mode==='photo' || sub.mode==='offline'){
+     if(sub.mode==='photo' || sub.mode==='offline'){
     const rec = (scores[kind][tid]||{})[u] || {};
     const pending = isPhotoPending(kind, tid, u);
+    const isOffline = sub.mode==='offline';
     const files = renderAttachmentThumbs(sub.photos||[]);
     const statusHtml = pending
-      ? '<span class="badge part">채점중</span> <span style="font-size:12px;">(성적 관리 탭에서 점수를 입력하면 채점 완료됩니다)</span>'
+      ? '<span class="badge part">채점중</span> <span style="font-size:12px;">(채점 확인 탭에서 채점하거나 성적 관리에서 점수를 입력하세요)</span>'
       : `<span class="badge good">채점 완료 (${esc(rec.score)})</span>`;
-    return `<p class="note">제출일시 ${esc(sub.date)}${lateBadge(sub)} · 파일 제출 · ${statusHtml}</p>` + files;
+    const marksHtml = (isOffline && sub.graded && sub.marks)
+      ? `<div style="margin-top:8px;">${qs.map((q,i)=>
+          `<span class="badge ${sub.marks[q.qid]===true?'good':'warn'}" style="margin:2px;">${i+1}번 ${sub.marks[q.qid]===true?'O':'X'}</span>`).join('')}</div>`
+      : '';
+    return `<p class="note">제출일시 ${esc(sub.date)}${lateBadge(sub)} · ${isOffline?'현장 제출':'파일 제출'} · ${statusHtml}</p>`
+      + marksHtml + files;
   }
 
   let doneBadge;
@@ -4496,10 +4518,11 @@ function pdfCell(t){
     : '<option value="">승인된 학생이 없습니다</option>';
   if(prev && sel.querySelector('option[value="'+prev+'"]')) sel.value = prev;
 }
-  function startAdminPreview(){
+ function startAdminPreview(){
+  loadPreviewWrongNote(null);   // ✅ 이전 학생 오답노트 비우기
   previewingStudent = true;
   adminViewAll = true;
-  currentStudent = '__admin_view__';   // 실제 학생 uid가 아닌 가상 값
+  currentStudent = '__admin_view__';
   document.body.classList.add('previewing');
   $('preview-banner').style.display = 'block';
   $('preview-banner-text').textContent = '관리자 전체 보기 (배정 무관 · 모든 과제·시험·일정 표시)';
@@ -4532,10 +4555,11 @@ function startStudentPreview(){
   switchSite('student');
 }
 function exitStudentPreview(){
-  loadPreviewWrongNote(null);   // ✅ 구독 해제 + 비우기
+  loadPreviewWrongNote(null);
   previewingStudent = false;
   adminViewAll = false;
   currentStudent = null;
+  fillMyInfo();                 // ✅ 남아 있던 학생 정보 비우기
   document.body.classList.remove('previewing');
   $('preview-banner').style.display = 'none';
   switchSite('admin');
@@ -4855,12 +4879,13 @@ function renderWrongNote(){
     + (mastered.length ? `<h3 style="margin:18px 0 8px;">마스터 완료 (${mastered.length})</h3>` + mastered.map(row).join('') : '');
 }
 function fillMyInfo(){
-  const s = students.find(x=>x.uid===currentStudent); if(!s) return;
-  $('me-name').value = s.name||'';
-  $('me-grade').value = s.grade||'';
-  $('me-school').value = s.school||'';
-  $('me-phone').value = s.phone||'';
-  $('me-email').value = s.email||'';
+  const s = (!adminViewAll && currentStudent) ? students.find(x=>x.uid===currentStudent) : null;
+  const v = k => s ? (s[k]||'') : '';
+  $('me-name').value = v('name');
+  $('me-grade').value = v('grade');
+  $('me-school').value = v('school');
+  $('me-phone').value = v('phone');
+  $('me-email').value = v('email');
   $('me-new-email').value = '';
   $('me-cur-pw').value = '';
 }
@@ -5312,37 +5337,148 @@ async function saveOmrEdit(){
 }
 
 /* =========================================================
-   현장 제출 (관리자가 직접 기록)
+   현장 제출 (관리자가 직접 기록 · 문항별 채점)
    ========================================================= */
-async function markOfflineSubmit(kind, tid, uid){
+let offlineGradeTarget = null;   // {kind, tid, uid, qs, marks}
+
+function openOfflineGrade(kind, tid, uid){
   const t = tasks[kind].find(x=>x.tid===tid);
   const s = students.find(x=>x.uid===uid);
   if(!t || !s) return;
-  if(submissions[tid+'|'+uid]){ alert('이미 제출 기록이 있습니다.'); return; }
-  if(!confirm(`${s.name} 학생의 "${t.title}"을(를) 현장 제출로 기록할까요?\n(점수는 성적 관리 탭에서 입력하세요)`)) return;
+  const sub = submissions[tid+'|'+uid];
+  if(sub && sub.mode!=='offline'){ alert('온라인으로 제출한 기록이 있어 현장 채점을 쓸 수 없습니다.'); return; }
 
+  const qs = (t.qids||[]).map(q=>questions.find(x=>x.qid===q)).filter(Boolean);
+  // 이미 기록된 채점이 있으면 불러오기
+  const marks = {};
+  qs.forEach(q=>{
+    const prev = sub && sub.marks ? sub.marks[q.qid] : undefined;
+    marks[q.qid] = (prev===true || prev===false) ? prev : null;
+  });
+
+  offlineGradeTarget = { kind, tid, uid, qs, marks, isNew: !sub };
+  $('offline-grade-title').textContent = `${s.name} · ${t.title} 현장 제출 채점`;
+  $('offline-grade-skip').style.display = qs.length ? 'block' : 'none';
+  renderOfflineGrade();
+  openModal('offline-grade-modal');
+}
+
+function renderOfflineGrade(){
+  const g = offlineGradeTarget; if(!g) return;
+  const box = $('offline-grade-body');
+  if(!g.qs.length){
+    box.innerHTML = '<p class="empty-hint">이 과제에는 등록된 문항이 없습니다. 아래 "채점 저장"을 누르면 제출만 기록되고, 점수는 성적 관리 탭에서 입력하면 됩니다.</p>';
+    $('offline-grade-score').textContent = '문항 없음';
+    return;
+  }
+  box.innerHTML = g.qs.map((q,i)=>{
+    const m = g.marks[q.qid];
+    return `<div class="omr-q" style="padding:10px 0;">
+      <div style="display:flex; align-items:center; gap:10px;">
+        <b style="width:52px;">${i+1}번</b>
+        <div class="att-dots">
+          <div class="att-dot p ${m===true?'on':''}" onclick="setOfflineMark('${q.qid}',true)">O</div>
+          <div class="att-dot a ${m===false?'on':''}" onclick="setOfflineMark('${q.qid}',false)">X</div>
+        </div>
+        <span style="flex:1; font-size:12.5px; color:var(--ink-soft); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
+          ${esc(q.body)}
+        </span>
+        <span style="font-size:12px; color:var(--muted); white-space:nowrap;">정답 ${esc(q.type==='mc'?circleLabel(q.answer):q.answer)}</span>
+      </div>
+    </div>`;
+  }).join('');
+
+  const done = g.qs.filter(q=>g.marks[q.qid]!==null).length;
+  const correct = g.qs.filter(q=>g.marks[q.qid]===true).length;
+  $('offline-grade-score').textContent = `${correct}/${g.qs.length} 정답 · 미체크 ${g.qs.length-done}개`;
+}
+
+function setOfflineMark(qid, val){
+  const g = offlineGradeTarget; if(!g) return;
+  g.marks[qid] = (g.marks[qid]===val) ? null : val;   // 같은 버튼 다시 누르면 미체크
+  renderOfflineGrade();
+}
+function setAllOfflineMarks(val){
+  const g = offlineGradeTarget; if(!g) return;
+  g.qs.forEach(q=>{ g.marks[q.qid] = val; });
+  renderOfflineGrade();
+}
+
+async function saveOfflineGrade(skipGrading){
+  const g = offlineGradeTarget; if(!g) return;
+  const { kind, tid, uid, qs, marks } = g;
+  const t = tasks[kind].find(x=>x.tid===tid); if(!t) return;
+
+  const graded = !skipGrading && qs.length > 0;
+  if(graded){
+    const missing = qs.filter(q=>marks[q.qid]===null).length;
+    if(missing && !confirm(`아직 체크하지 않은 문항이 ${missing}개 있습니다.\n미체크 문항은 오답으로 처리됩니다. 계속할까요?`)) return;
+  }
+
+  const correct = graded ? qs.filter(q=>marks[q.qid]===true).length : 0;
   const now = new Date();
+  const existing = submissions[tid+'|'+uid];
   const dueDate = t.due ? new Date(t.due) : null;
-  const late = !!(dueDate && !isNaN(dueDate) && now > dueDate);
-  const qs = (t.qids||[]).length;
 
   const subData = {
     studentUid: uid,
     taskId: tid, kind,
-    mode: 'offline',                    // ✅ 현장 제출
+    mode: 'offline',
     answers: {}, photos: [],
-    total: qs, correct: 0,
-    late,
-    submittedAt: now.getTime(),
-    date: now.toLocaleString('ko-KR'),
+    marks: graded ? marks : {},
+    graded,
+    total: qs.length, correct,
+    late: existing ? !!existing.late : !!(dueDate && !isNaN(dueDate) && now > dueDate),
+    submittedAt: existing ? existing.submittedAt : now.getTime(),
+    date: existing ? existing.date : now.toLocaleString('ko-KR'),
     recordedBy: 'admin'
   };
+
+  const rec = graded
+    ? { score: correct+'/'+qs.length,
+        status: correct===qs.length ? '완료' : (correct>0 ? '일부완료' : '미완료') }
+    : { score: '', status: '채점중' };
+
   const { db, doc, setDoc } = window.fb;
-  const scorePayload = {}; scorePayload[uid] = { score: '', status: '채점중' };
+  const scorePayload = {}; scorePayload[uid] = rec;
   try{
     await setDoc(doc(db,'submissions', tid+'|'+uid), subData);
     await setDoc(doc(db,'scores', kind+'__'+tid), scorePayload, {merge:true});
-  }catch(e){ alert('기록 실패: '+e.message); }
+    if(graded) await updateOfflineWrongBank(uid, kind, tid, t.title, qs, marks);
+    if(currentDetailUid===uid) loadAdminWrongNote(uid);
+    closeModal('offline-grade-modal');
+    offlineGradeTarget = null;
+    alert(graded ? `채점되었습니다. ${correct}/${qs.length}` : '제출이 기록되었습니다. 점수는 나중에 입력하세요.');
+  }catch(e){ alert('저장 실패: '+e.message); }
+}
+
+/* 현장 채점 결과를 오답노트에 반영 (O로 바뀐 문항은 제거) */
+async function updateOfflineWrongBank(targetUid, kind, tid, taskTitle, qs, marks){
+  const { db, doc, getDoc, setDoc, updateDoc, deleteField } = window.fb;
+  const ref = doc(db,'wrongBank', targetUid);
+  let existing = {};
+  try{
+    const snap = await getDoc(ref);
+    existing = snap.exists() ? (snap.data().items || {}) : {};
+  }catch(e){ console.error('오답노트 읽기 실패:', e.message); }
+
+  const add = {}, del = {};
+  qs.forEach(q=>{
+    const ok = marks[q.qid]===true;
+    const prev = existing[q.qid];
+    if(!ok){
+      if(prev && prev.status==='mastered') return;                 // 마스터한 문항은 유지
+      if(prev && prev.taskId && prev.taskId!==tid) return;         // 다른 과제 오답은 건드리지 않음
+      add[q.qid] = { status:'open', kind, taskId:tid, taskTitle,
+                     addedAt: (prev && prev.addedAt) || Date.now() };
+    } else if(prev && prev.taskId===tid){
+      del['items.'+q.qid] = deleteField();
+    }
+  });
+  try{
+    if(Object.keys(add).length) await setDoc(ref, { items: add }, {merge:true});
+    if(Object.keys(del).length) await updateDoc(ref, del);
+  }catch(e){ console.error('오답노트 저장 실패:', e.message); }
 }
 
 async function cancelSubmission(kind, tid, uid){
@@ -5405,7 +5541,7 @@ function renderGradingTable(){
         if(!sub){
           mode='<span style="color:#8993AA;">-</span>';
           status='<span class="badge warn">미제출</span>';
-          btn=`<button class="btn small secondary" onclick="markOfflineSubmit('${kind}','${t.tid}','${s.uid}')">현장 제출 기록</button>`;
+          btn=`<button class="btn small secondary" onclick="openOfflineGrade('${kind}','${t.tid}','${s.uid}')">현장 제출 기록</button>`;
         } else if(isOffline){
           mode='<span class="badge part">현장 제출</span>';
           status = scored ? `<span class="badge good">채점 완료 (${esc(rec.score)})</span>`
@@ -5416,6 +5552,7 @@ function renderGradingTable(){
           status = scored ? `<span class="badge good">채점 완료 (${esc(rec.score)})</span>`
                           : '<span class="badge part">제출 완료 (채점중)</span>';
           btn=`<button class="btn small secondary" onclick="openReview('${kind}','${t.tid}','${s.uid}',true)">제출 보기</button>
+          btn=`<button class="btn small" onclick="openOfflineGrade('${kind}','${t.tid}','${s.uid}')">${sub.graded?'채점 수정':'채점하기'}</button>
                <button class="btn small danger" onclick="cancelSubmission('${kind}','${t.tid}','${s.uid}')">제출 취소</button>`;
         } else {
           mode='<span class="badge muted">온라인 OMR</span>';
