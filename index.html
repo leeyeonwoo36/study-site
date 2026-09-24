@@ -5163,10 +5163,11 @@ async function submitSolve(){
     submittedAt: now.getTime(),
     date: now.toLocaleString('ko-KR')
   };
-  const rec = mode==='omr'
+    const rec = mode==='omr'
     ? { score: correct+'/'+qs.length,
-        status: correct===qs.length ? '완료' : (correct>0 ? '일부완료' : '미완료') }
-    : { score: '', status: '채점중' };
+        status: correct===qs.length ? '완료' : (correct>0 ? '일부완료' : '미완료'),
+        taskId: tid }
+    : { score: '', status: '채점중', taskId: tid };
 
   const { db, doc, setDoc } = window.fb;
   const scorePayload = {}; scorePayload[currentStudent] = rec;
