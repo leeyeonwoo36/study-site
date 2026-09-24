@@ -3566,14 +3566,6 @@ function onDraftDragEnd(ev){
   document.querySelectorAll('.draft-item.drag-over').forEach(el=>el.classList.remove('drag-over'));
   dragState = null;
 }
-function moveDraftItem(kind, qid, dir){
-  const arr = draftQids[kind];
-  const i = arr.indexOf(qid);
-  const j = i + dir;
-  if(i<0 || j<0 || j>=arr.length) return;
-  [arr[i], arr[j]] = [arr[j], arr[i]];
-  renderDraft(kind);
-}
 function removeFromDraft(kind,qid){ draftQids[kind]=draftQids[kind].filter(x=>x!==qid); renderDraft(kind); }
 function clearDraft(kind){ draftQids[kind]=[]; renderDraft(kind); }
 
@@ -3674,15 +3666,6 @@ function removeExtractedQuestion(i){
   renderExtractedQuestionsPreview();
 }
 
-/* 세트 안에서 다음 순서 번호 (가장 큰 번호 + 1) */
-function nextOrderInSet(set){
-  return questions.filter(x=>x.set===set).reduce((m,x)=>Math.max(m, x.order ?? -1), -1) + 1;
-}
-
-/* 추출된 문제 → Firestore 저장 형태 */
-/* 추출된 문제 → Firestore 저장 형태 */
-
-
 function exQ(i){ return extractedQuestionsCache[i]; }
 function updateExtracted(i, field, value){ const q = exQ(i); if(q) q[field] = value; }
 function updateExtractedChoice(i, ci, value){
@@ -3758,14 +3741,11 @@ function validateExtracted(q){
   if(q.type==='mc'){
     if(!Array.isArray(q.choices) || q.choices.length!==5 || q.choices.some(c=>!String(c||'').trim()))
       return '선지 5개를 모두 입력해야 합니다';
-    if(!/^[1-5]$/.test(String(q.answer))) return '정답 번호가 올바르지 않습니다';
+    if(!parseAnsList(q.answer).length) return '정답 번호를 하나 이상 골라야 합니다';
   } else if(!String(q.answer||'').trim()){
     return '정답이 비어 있습니다';
   }
   return '';
-}
-function extractedLabel(q, i){
-  return q.number!=null ? `원본 ${q.number}번` : `${i+1}번째`;
 }
 
 function renderExtractedQuestionsPreview(){
@@ -3935,6 +3915,7 @@ async function saveAllExtractedQuestions(){
 }
 
 let extractedQuestionsCache = [];
+let extractWarnings = [];
 /* 추출 결과 정렬
    - 문번 중복 없음: 문번 순
    - 문번 중복 있음: 페이지 순 → 같은 페이지 안에서 문번 순 */
@@ -4043,11 +4024,16 @@ function canvasToBase64(canvas, maxSide = 1600){
 
 /* 2단계 정밀 자르기: 대략 영역을 넓게 잘라 AI에게 다시 보여주고 정확한 테두리를 받음 */
 async function refineFigureCrop(apiKey, pageCanvas, roughBox, q){
+  // 체크박스가 꺼져 있으면 1차 영역만 살짝 넓혀 자르고 끝낸다 (AI 호출 없음)
   if(!$('q-extract-refine').checked){
     const r = box2dToRect(pageCanvas, roughBox, 0.06);
     return r ? trimCanvasWhitespace(cropRect(pageCanvas, r)) : null;
   }
+
+  // 1차: 대략 영역을 넉넉히(35%) 넓혀서 실제로 잘라낸다
   const roughRect = box2dToRect(pageCanvas, roughBox, 0.35);
+  if(!roughRect) return null;
+  const rough = cropRect(pageCanvas, roughRect);   // ★ 이 줄이 없어서 ReferenceError가 났음
 
   const schema = {
     type: 'object',
@@ -4075,6 +4061,7 @@ ${q.number ? q.number+'번 문제의 ' : ''}<보기>에 들어 있는 그림(사
   }catch(e){
     console.warn('그림 정밀 자르기 실패, 1차 영역 사용:', e.message);
   }
+
   // 대체: 1차 영역에 약간 여유를 두고 자름
   const fallback = box2dToRect(pageCanvas, roughBox, 0.06);
   return fallback ? trimCanvasWhitespace(cropRect(pageCanvas, fallback)) : null;
@@ -4311,7 +4298,14 @@ ${refFile ? '- 첨부된 참고 자료의 내용을 최대한 반영해서 문�
     btn.textContent = '문제 생성';
   }
 }
-
+/* AI 생성 결과: 정답 체크박스 토글 (복수 정답 지원) */
+function toggleAiAnswer(i, n, el){
+  const q = aiGenerated[i]; if(!q) return;
+  const list = parseAnsList(q.answer).filter(x=>x!==n);
+  if(el.checked) list.push(n);
+  q.answer = ansToStr(list);
+  el.parentElement.classList.toggle('picked', el.checked);
+}
 function renderAiResults(){
   const card = $('ai-result-card'), list = $('ai-result-list');
   if(!aiGenerated.length){ card.style.display='none'; return; }
@@ -4325,15 +4319,20 @@ function renderAiResults(){
           ${q.hasPassage?'<span class="qset-tag ans">보기 포함</span>':''}
         </div>
         <textarea style="min-height:44px;" onchange="aiGenerated[${i}].body=this.value">${esc(q.body)}</textarea>
-        ${q.hasPassage ? `<textarea style="min-height:44px; margin-top:6px;" placeholder="<보기>" onchange="aiGenerated[${i}].passage=this.value">${(q.passage)}</textarea>` : ''}
+        ${q.hasPassage ? `<textarea style="min-height:44px; margin-top:6px;" placeholder="<보기>" onchange="aiGenerated[${i}].passage=this.value">${esc(q.passage)}</textarea>` : ''}
         ${q.type==='mc' ? `
           <div class="form-grid five" style="margin-top:6px;">
             ${[0,1,2,3,4].map(ci=>`<input type="text" value="${esc(q.choices[ci]||'')}" onchange="aiGenerated[${i}].choices[${ci}]=this.value">`).join('')}
           </div>
-          <div style="margin-top:6px;"><label>정답 번호</label>
-            <select onchange="aiGenerated[${i}].answer=this.value">
-              ${[1,2,3,4,5].map(n=>`<option value="${n}" ${String(n)===q.answer?'selected':''}>${n}</option>`).join('')}
-            </select>
+          <div style="margin-top:6px;">
+            <label>정답 번호 (여러 개 선택 가능)</label>
+            <div class="omr-choices">
+              ${[1,2,3,4,5].map(n=>{
+                const on = parseAnsList(q.answer).includes(n);
+                return `<label class="omr-bubble ${on?'picked':''}">
+                  <input type="checkbox" value="${n}" ${on?'checked':''} onchange="toggleAiAnswer(${i},${n},this)">${CIRCLE[n-1]}</label>`;
+              }).join('')}
+            </div>
           </div>` : `
           <div style="margin-top:6px;"><label>정답</label>
             <input type="text" value="${esc(q.answer)}" onchange="aiGenerated[${i}].answer=this.value"></div>`}
@@ -4360,18 +4359,6 @@ async function renderPdfPagesToCanvases(file){
 }
 
 /* 캔버스에서 비율 좌표(0~1)를 기준으로 영역을 잘라 새 캔버스로 반환 */
-function cropCanvas(canvas, xRatio, yRatio, wRatio, hRatio){
-  const sx = canvas.width * xRatio;
-  const sy = canvas.height * yRatio;
-  const sw = canvas.width * wRatio;
-  const sh = canvas.height * hRatio;
-  const out = document.createElement('canvas');
-  out.width = sw; out.height = sh;
-  const ctx = out.getContext('2d');
-  ctx.drawImage(canvas, sx, sy, sw, sh, 0, 0, sw, sh);
-  return out;
-}
-
 /* 캔버스를 Cloudinary에 업로드하고 URL 반환 */
 async function uploadCanvasToCloudinary(canvas){
   const blob = await new Promise(res => canvas.toBlob(res, 'image/png'));
@@ -4393,8 +4380,16 @@ async function uploadCanvasToCloudinary(canvas){
   
 function saveAiQuestions(){
   const set = $('ai-set').value;
-  const picked = aiGenerated.filter(q=>q.include);
+    const picked = aiGenerated.filter(q=>q.include);
   if(!picked.length){ alert('저장할 문제를 선택하세요.'); return; }
+  const bad = picked
+    .map((q,i)=>{
+      if(q.type==='mc' && !parseAnsList(q.answer).length) return `· ${i+1}번째 문제: 정답 번호를 하나 이상 골라주세요`;
+      if(q.type!=='mc' && !String(q.answer||'').trim()) return `· ${i+1}번째 문제: 정답이 비어 있습니다`;
+      return '';
+    })
+    .filter(Boolean);
+  if(bad.length){ alert('아래 문제를 먼저 고쳐주세요.\n\n' + bad.join('\n')); return; }
   const { db, collection, doc, setDoc } = window.fb;
   let order = questions.filter(x=>x.set===set).length;   // ← 추가
   const jobs = picked.map((q, idx) => setDoc(doc(collection(db,'questions')), {
@@ -4889,9 +4884,6 @@ function fillMyInfo(){
   $('me-new-email').value = '';
   $('me-cur-pw').value = '';
 }
-function saveMyInfo(){
-  alert('인적사항은 관리자만 수정할 수 있습니다.');
-}
 async function changeMyEmail(){
   const newEmail = $('me-new-email').value.trim();
   const curPw = $('me-cur-pw').value;
@@ -5113,11 +5105,6 @@ function openStudentSolve(kind,tid){
     showSolveDraftStatus(null);
   }
   openModal('solve-modal');
-}
-function pickChoice(el){
-  el.parentElement.querySelectorAll('.omr-bubble').forEach(b=>b.classList.remove('picked'));
-  el.classList.add('picked');
-  el.querySelector('input').checked = true;
 }
 function normalize(s){ return String(s||'').replace(/\s+/g,'').toLowerCase(); }
 async function submitSolve(){
@@ -5710,29 +5697,6 @@ async function generateWrongVariant(qid, isRetry){
     renderWrongSolveBody(currentWrongVariantQ);
   } catch(e){
     $('wrong-solve-body').innerHTML = `<p class="empty-hint">변형 문제 생성 실패: ${esc(e.message)}</p>`;
-  }
-}
-function submitWrongSolve(){
-  const q = currentWrongIsVariant ? currentWrongVariantQ : questions.find(x=>x.qid===currentWrongQid);
-  if(!q){ alert('문제를 불러오지 못했습니다.'); return; }
-  let mine;
-  if(q.type==='mc'){
-    const picked = document.querySelector('input[name="wrong_ans"]:checked');
-    mine = picked ? picked.value : '';
-  } else {
-    mine = $('wrong_ans_text') ? $('wrong_ans_text').value.trim() : '';
-  }
-  if(!mine){ alert('답을 입력해주세요.'); return; }
-  const ok = isCorrect(q, mine)
-  const box = $('wrong-solve-result');
-  if(ok){
-    box.innerHTML = `<div class="exam-explain">정답입니다! ${q.explain?esc(q.explain):''}</div>`;
-    markWrongMastered(currentWrongQid);
-  } else {
-    const ansLabel = q.type==='mc'
-      ? (CIRCLE[parseInt(q.answer,10)-1]||'')+' '+esc((q.choices||[])[parseInt(q.answer,10)-1]||'')
-      : esc(q.answer);
-    box.innerHTML = `<div class="exam-explain wrong">오답입니다. 정답: ${ansLabel}<br>${q.explain?esc(q.explain):''}</div>`;
   }
 }
 function submitWrongSolve(){
