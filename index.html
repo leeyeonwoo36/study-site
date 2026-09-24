@@ -132,7 +132,9 @@
   #preview-banner button{margin-left:12px; padding:5px 14px; border:1px solid #fff;
     background:#fff; color:var(--accent); border-radius:20px; font-size:12.5px;
     font-weight:700; cursor:pointer; font-family:inherit;}
-  body.previewing .layout{padding-top:42px;}
+   /* 배너는 fixed라 자리를 차지하지 않음 → 본문만 밀어주고 사이드바는 그대로 둔다 */
+  body.previewing .main{padding-top:52px;}
+  body.previewing{background:var(--brand);}
   .empty-hint{color:var(--muted); font-size:13px; padding:14px 0;}
   .file-drop{border:1.5px dashed var(--border); border-radius:var(--radius); padding:16px;
     text-align:center; color:var(--muted); font-size:13px; background:var(--paper);}
