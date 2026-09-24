@@ -4868,8 +4868,23 @@ function pdfCell(t){
   sel.innerHTML = list.length
     ? list.map(s=>`<option value="${s.uid}">${esc(s.name)} (${esc(s.grade||'')})</option>`).join('')
     : '<option value="">승인된 학생이 없습니다</option>';
-  if(prev && sel.querySelector('option[value="'+prev+'"]')) sel.value = prev;
+   if(prev && sel.querySelector('option[value="'+prev+'"]')) sel.value = prev;
 }
+
+/* 미리보기 중인 학생의 오답노트 불러오기 (실시간 반영) */
+let previewWrongUnsub = null;
+function loadPreviewWrongNote(uid){
+  if(previewWrongUnsub){ try{ previewWrongUnsub(); }catch(e){} previewWrongUnsub = null; }
+  wrongItems = {};
+  renderWrongNote();
+  if(!uid) return;
+  const { db, doc, onSnapshot } = window.fb;
+  previewWrongUnsub = onSnapshot(doc(db,'wrongBank', uid), snap=>{
+    wrongItems = snap.exists() ? (snap.data().items || {}) : {};
+    renderWrongNote();
+  }, err=>console.error('미리보기 오답노트 불러오기 실패:', err.code));
+}
+
 /* 미리보기 배너 표시 — 요소가 없어도 죽지 않게 */
 function setPreviewBanner(text){
   const b = $('preview-banner');
