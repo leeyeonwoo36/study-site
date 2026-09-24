@@ -3438,7 +3438,19 @@ function openPrintOptions(){
   if(!$('print-title').value.trim()) $('print-title').value = '문제지';
   openModal('print-options-modal');
 }
-
+/* 인쇄용 새 창 열기.
+   about:blank 대신 사이트 주소가 찍히도록 주소만 바꿔치기한다(내용은 그대로). */
+function openPrintWindow(html, pathLabel){
+  const win = window.open('', '_blank');
+  if(!win){ alert('팝업이 차단되었습니다. 브라우저 팝업 차단을 해제한 뒤 다시 시도해주세요.'); return null; }
+  win.document.write(html);
+  win.document.close();
+  try{
+    // about:blank는 연 창의 출처를 물려받으므로 같은 출처 경로로 교체 가능
+    win.history.replaceState(null, '', location.origin + '/' + (pathLabel||'print'));
+  }catch(e){ /* 실패해도 인쇄 자체엔 지장 없음 */ }
+  return win;
+}
 function printWithOptions(){
   const qs = pdfSelectedQids.map(id=>questions.find(x=>x.qid===id)).filter(Boolean);
   if(!qs.length){ alert('선택한 문제를 찾을 수 없습니다.'); return; }
@@ -3450,9 +3462,6 @@ function printWithOptions(){
 
   const title = $('print-title').value.trim() || '문제지';
 
-  // 클릭 직후 바로 열어야 팝업 차단을 피할 수 있음
-  const win = window.open('', '_blank');
-  if(!win){ alert('팝업이 차단되었습니다. 브라우저 팝업 차단을 해제한 뒤 다시 시도해주세요.'); return; }
   closeModal('print-options-modal');
 
   const sections = [];
@@ -3513,8 +3522,7 @@ function printWithOptions(){
 ${sections.join('')}
 </body></html>`;
 
-  win.document.write(html);
-  win.document.close();
+   openPrintWindow(html, 'print');
 }
 
 function buildPrintQuestionHtml(q, n){
@@ -3673,10 +3681,8 @@ ${buildTrendSvgMarkup(trendArr)}
 function openStudentReportSheet(uid){
   const html = buildStudentReportHtml(uid);
   if(!html){ alert('학생 정보를 찾을 수 없습니다.'); return; }
-  const win = window.open('', '_blank');
-  if(!win){ alert('팝업이 차단되었습니다. 브라우저 팝업 차단을 해제한 뒤 다시 시도해주세요.'); return; }
-  win.document.write(html);
-  win.document.close();
+  const s = students.find(x=>x.uid===uid);
+  openPrintWindow(html, `학습관리표-${s ? s.name : ''}`);
 }
 function openAssignPicker(kind){
   assignKind = kind;
