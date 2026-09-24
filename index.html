@@ -1877,8 +1877,8 @@ function removeAdminWrongItem(uid, qid){
     .catch(e=>alert('삭제 실패: '+e.message));
 }
 
-/* 현재 보고 있는 학생의 오답노트를 문제지로 인쇄
-   includeMastered=false 면 '복습 필요'만 */
+/* 다음 인쇄에 쓸 주소 라벨. printWithOptions가 한 번 쓰고 비운다. */
+let printPathLabel = '';
 function printWrongNote(includeMastered){
   if(!currentDetailUid){ alert('학생을 먼저 선택하세요.'); return; }
   const s = students.find(x=>x.uid===currentDetailUid);
@@ -1897,6 +1897,7 @@ function printWrongNote(includeMastered){
   const title = `${s?s.name:''} 오답노트`;
 
   // 선택 목록을 잠시 바꿔서 기존 인쇄 옵션 창을 그대로 사용
+  printPathLabel = `오답노트-${s ? s.name : ''}`;
   pdfSelectedQids = qs.map(q=>q.qid);
   renderBank();
   $('print-options-count').textContent =
@@ -3434,6 +3435,7 @@ function renderPdfBar(){
 function openPrintOptions(){
   const qs = pdfSelectedQids.map(id=>questions.find(x=>x.qid===id)).filter(Boolean);
   if(!qs.length){ alert('먼저 문제은행에서 문제를 선택하세요.'); return; }
+  printPathLabel = '';   // 문제은행에서 연 인쇄는 기본 라벨 사용
   $('print-options-count').textContent = `선택한 문제 ${qs.length}개`;
   if(!$('print-title').value.trim()) $('print-title').value = '문제지';
   openModal('print-options-modal');
@@ -3522,7 +3524,8 @@ function printWithOptions(){
 ${sections.join('')}
 </body></html>`;
 
-   openPrintWindow(html, 'print');
+  openPrintWindow(html, printPathLabel || '명덕외고-국제정치');
+  printPathLabel = '';   // 다음 인쇄에 남지 않도록 비움
 }
 
 function buildPrintQuestionHtml(q, n){
