@@ -2334,7 +2334,9 @@ function renderAttendance(){
   const sid = sel.value;
   const sch = schedules.find(s=>s.sid===sid);
   if(!sid || !sch){
-    tb.innerHTML='<tr><td colspan="3" class="empty-hint">등록된 일정이 없습니다.</td></tr>'; return;
+    tb.innerHTML='<tr><td colspan="3" class="empty-hint">등록된 일정이 없습니다.</td></tr>';
+    const sum0 = $('att-summary'); if(sum0) sum0.textContent = '';
+    return;
   }
   const targets = Array.isArray(sch.assignedTo)
     ? students.filter(s=>s.approved && sch.assignedTo.includes(s.uid))
@@ -2356,6 +2358,16 @@ function renderAttendance(){
       <td>${dots}</td>
       <td>${reasonCell}</td></tr>`;
   }).join('') || '<tr><td colspan="3" class="empty-hint">출석 대상 학생이 없습니다.</td></tr>';
+
+  const sum = $('att-summary');
+  if(sum){
+    let p=0,l=0,a=0,n=0;
+    targets.forEach(st=>{
+      const v = ((attendance[sid]||{})[st.uid]||{}).status;
+      if(v==='p')p++; else if(v==='l')l++; else if(v==='a')a++; else n++;
+    });
+    sum.textContent = `출석 ${p} · 지각 ${l} · 결석 ${a} · 미체크 ${n}`;
+  }
 }
 function renderStudentSchedule(){
   const tb=$('t-schedule-table'); if(!tb || !currentStudent) return;
@@ -2369,19 +2381,8 @@ function renderStudentSchedule(){
     const reason = (rec && rec.reason) ? esc(rec.reason).replace(/\n/g,'<br>') : '-';
     return `<tr><td><b>${f.label}</b></td><td>${f.day}</td><td>${esc(s.time)}</td><td>${esc(s.room)}</td>
       <td>${esc(s.topic)||'-'}</td><td>${b}</td><td style="font-size:12px;">${reason}</td></tr>`;
-  }).join('') || '<tr><td colspan="3" class="empty-hint">출석 대상 학생이 없습니다.</td></tr>';
-
-  const sum = $('att-summary');
-  if(sum){
-    let p=0,l=0,a=0,n=0;
-    targets.forEach(st=>{
-      const v = ((attendance[sid]||{})[st.uid]||{}).status;
-      if(v==='p')p++; else if(v==='l')l++; else if(v==='a')a++; else n++;
-    });
-    sum.textContent = `출석 ${p} · 지각 ${l} · 결석 ${a} · 미체크 ${n}`;
-  }
+  }).join('') || '<tr><td colspan="7" class="empty-hint">등록된 일정이 없습니다.</td></tr>';
 }
-
 
   /* =========================================================
    동영상 (유튜브)
