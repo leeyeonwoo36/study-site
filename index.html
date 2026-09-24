@@ -271,23 +271,36 @@
     .sidebar{order:2; position:fixed; left:0; right:0; bottom:0; width:100%; padding:0; z-index:40;
       box-shadow:0 -3px 12px rgba(40,50,74,.18);}
     .sidebar .brand{display:none;}
-    .sidebar nav{display:flex; width:100%; overflow-x:auto;}
-    .sidebar nav button{flex:1; text-align:center; padding:10px 4px; font-size:11.5px;
-      border-left:none; border-top:3px solid transparent; white-space:nowrap;}
-    .sidebar nav button.active{border-top-color:#fff; border-left-color:transparent;}
-       .form-grid,.form-grid.five,.form-grid.three{grid-template-columns:1fr 1fr;}
-        .dt-grid{grid-template-columns:1fr;}
-          /* 그룹 라벨은 데스크톱 사이드바 전용 — 하단 탭바에서는 숨김 */
-    .sidebar nav .nav-group{display:none;}
-     #shell-student .sidebar nav button{flex:1 1 0; min-width:0;}
-    /* 하단 탭바: 내용에 맞춰 폭을 잡고 가로 스크롤 */
-    .sidebar nav button{flex:0 0 auto; min-width:0; padding:8px 7px; font-size:10.5px; letter-spacing:-.02em;}
-    .sidebar nav{-webkit-overflow-scrolling:touch;}
+
+    .form-grid,.form-grid.five,.form-grid.three{grid-template-columns:1fr 1fr;}
+    .dt-grid{grid-template-columns:1fr;}
+
+    /* ---------- 하단 탭바 ---------- */
+    .sidebar nav{display:flex; width:100%; overflow-x:auto; -webkit-overflow-scrolling:touch;}
     .sidebar nav::-webkit-scrollbar{display:none;}
+
+    /* 그룹 라벨은 데스크톱 사이드바 전용 */
+    .sidebar nav .nav-group{display:none;}
+
+    /* 관리자(13개): 내용 폭 + 가로 스크롤 */
+    #shell-admin .sidebar nav button{
+      flex:0 0 auto; min-width:0; text-align:center;
+      padding:8px 7px; font-size:10.5px; letter-spacing:-.02em;
+      border-left:none; border-top:3px solid transparent; white-space:nowrap;
+    }
+
+    /* 학생(6개): 화면 균등 분할 */
+    #shell-student .sidebar nav button{
+      flex:1 1 0; min-width:0; text-align:center;
+      padding:10px 4px; font-size:11.5px;
+      border-left:none; border-top:3px solid transparent; white-space:nowrap;
+    }
+
+    .sidebar nav button.active{border-top-color:#fff; border-left-color:transparent;}
     .sidebar nav button:hover{background:none;}
 
-    /* 로그아웃: 위쪽 구분선·여백은 세로 배치용이라 가로에서는 제거 */
-    .sidebar nav .nav-logout{margin-top:0; padding-top:9px; border-top:none;
+    /* 로그아웃: 세로 배치용 구분선을 가로용으로 */
+    .sidebar nav .nav-logout{margin-top:0; padding-top:8px; border-top:none;
       border-left:1px solid rgba(255,255,255,.18);}
 
     /* 표가 화면을 넘칠 때 카드 안에서만 가로 스크롤 */
