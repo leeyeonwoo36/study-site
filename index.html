@@ -5542,17 +5542,17 @@ function renderGradingTable(){
           mode='<span style="color:#8993AA;">-</span>';
           status='<span class="badge warn">미제출</span>';
           btn=`<button class="btn small secondary" onclick="openOfflineGrade('${kind}','${t.tid}','${s.uid}')">현장 제출 기록</button>`;
-        } else if(isOffline){
+                } else if(isOffline){
           mode='<span class="badge part">현장 제출</span>';
           status = scored ? `<span class="badge good">채점 완료 (${esc(rec.score)})</span>`
                           : '<span class="badge part">제출 완료 (채점중)</span>';
-          btn=`<button class="btn small danger" onclick="cancelSubmission('${kind}','${t.tid}','${s.uid}')">제출 취소</button>`;
+          btn=`<button class="btn small" onclick="openOfflineGrade('${kind}','${t.tid}','${s.uid}')">${sub.graded?'채점 수정':'채점하기'}</button>
+               <button class="btn small danger" onclick="cancelSubmission('${kind}','${t.tid}','${s.uid}')">제출 취소</button>`;
         } else if(sub.mode==='photo'){
           mode='<span class="badge muted">파일 첨부</span>';
           status = scored ? `<span class="badge good">채점 완료 (${esc(rec.score)})</span>`
                           : '<span class="badge part">제출 완료 (채점중)</span>';
           btn=`<button class="btn small secondary" onclick="openReview('${kind}','${t.tid}','${s.uid}',true)">제출 보기</button>
-          btn=`<button class="btn small" onclick="openOfflineGrade('${kind}','${t.tid}','${s.uid}')">${sub.graded?'채점 수정':'채점하기'}</button>
                <button class="btn small danger" onclick="cancelSubmission('${kind}','${t.tid}','${s.uid}')">제출 취소</button>`;
         } else {
           mode='<span class="badge muted">온라인 OMR</span>';
