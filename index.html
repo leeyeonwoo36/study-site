@@ -3539,6 +3539,11 @@ function printWithOptions(){
   <span id="preview-banner-text">학생 화면 미리보기 중</span>
   <button onclick="exitStudentPreview()">관리자로 돌아가기</button>
 </div>
+<div class="site-switch" style="display:none;">
+  <button id="switch-login" class="active" onclick="switchSite('login')">학생 로그인</button>
+  <button id="switch-admin" onclick="switchSite('admin')">관리자 사이트</button>
+  <button id="switch-student" onclick="switchSite('student')">학생 사이트</button>
+</div>
 <div class="no-print"><button onclick="window.print()">인쇄 / PDF로 저장</button></div>
 ${sections.join('')}
 </body></html>`;
@@ -4865,29 +4870,26 @@ function pdfCell(t){
     : '<option value="">승인된 학생이 없습니다</option>';
   if(prev && sel.querySelector('option[value="'+prev+'"]')) sel.value = prev;
 }
- function startAdminPreview(){
-  loadPreviewWrongNote(null);   // ✅ 이전 학생 오답노트 비우기
+/* 미리보기 배너 표시 — 요소가 없어도 죽지 않게 */
+function setPreviewBanner(text){
+  const b = $('preview-banner');
+  if(!b) return;                       // 배너 요소가 없으면 조용히 건너뜀
+  if(text===null){ b.style.display = 'none'; return; }
+  const t = $('preview-banner-text');
+  if(t) t.textContent = text;
+  b.style.display = 'block';
+}
+
+function startAdminPreview(){
+  loadPreviewWrongNote(null);
   previewingStudent = true;
   adminViewAll = true;
   currentStudent = '__admin_view__';
   document.body.classList.add('previewing');
-  $('preview-banner').style.display = 'block';
-  $('preview-banner-text').textContent = '관리자 전체 보기 (배정 무관 · 모든 과제·시험·일정 표시)';
+  setPreviewBanner('관리자 전체 보기 (배정 무관 · 모든 과제·시험·일정 표시)');
   switchSite('student');
 }
-/* 미리보기 중인 학생의 오답노트 불러오기 (실시간 반영) */
-let previewWrongUnsub = null;
-function loadPreviewWrongNote(uid){
-  if(previewWrongUnsub){ try{ previewWrongUnsub(); }catch(e){} previewWrongUnsub = null; }
-  wrongItems = {};
-  renderWrongNote();
-  if(!uid) return;
-  const { db, doc, onSnapshot } = window.fb;
-  previewWrongUnsub = onSnapshot(doc(db,'wrongBank', uid), snap=>{
-    wrongItems = snap.exists() ? (snap.data().items || {}) : {};
-    renderWrongNote();
-  }, err=>console.error('미리보기 오답노트 불러오기 실패:', err.code));
-}
+
 function startStudentPreview(){
   adminViewAll = false;
   const uid = $('preview-student-select').value;
@@ -4896,19 +4898,19 @@ function startStudentPreview(){
   previewingStudent = true;
   currentStudent = uid;
   document.body.classList.add('previewing');
-  $('preview-banner').style.display = 'block';
-  $('preview-banner-text').textContent = `"${s.name}" 학생 화면 미리보기 중 (관리자 세션 유지됨)`;
-  loadPreviewWrongNote(uid);   // ✅ 이 학생의 오답노트 불러오기
+  setPreviewBanner(`"${s.name}" 학생 화면 미리보기 중 (관리자 세션 유지됨)`);
+  loadPreviewWrongNote(uid);
   switchSite('student');
 }
+
 function exitStudentPreview(){
   loadPreviewWrongNote(null);
   previewingStudent = false;
   adminViewAll = false;
   currentStudent = null;
-  fillMyInfo();                 // ✅ 남아 있던 학생 정보 비우기
+  fillMyInfo();
   document.body.classList.remove('previewing');
-  $('preview-banner').style.display = 'none';
+  setPreviewBanner(null);
   switchSite('admin');
   setAdminTab('a-preview');
 }
