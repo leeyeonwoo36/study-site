@@ -3961,6 +3961,7 @@ function nextOrderInSet(set){
 }
 
 /* 추출된 문제 → Firestore 저장 형태 */
+/* 추출된 문제 → Firestore 저장 형태 */
 function extractedToQuestionData(q, set, order){
   const text = q.hasPassage ? (q.passage||'') : '';
   const hasText = !!text.replace(/<[^>]*>/g,'').trim();
@@ -3980,7 +3981,7 @@ function extractedToQuestionData(q, set, order){
     choices: q.type==='mc' ? (q.choices||[]).map(c=>String(c||'').trim()) : [],
     answer: q.type==='mc' ? ansToStr(q.answer) : String(q.answer||'').trim(),
     explain: String(q.explain||'').trim(),
-    sourceNumber: q.number ?? null
+    sourceNumber: q.number ?? null,
     createdAt: Date.now()
   };
 }
