@@ -424,6 +424,11 @@
         <div class="card">
           <p class="note">초록(출석) · 노랑(지각) · 빨강(결석) 버튼을 눌러 표시합니다. 같은 버튼을 다시 누르면 미체크로 되돌아갑니다. 지각·결석은 "사유 입력" 버튼으로 나중에 따로 입력할 수 있고, 학생 사이트 메인탭에도 그대로 반영됩니다.</p>
           <div class="form-grid full"><div><label>회차 선택</label><select id="att-session" onchange="renderAttendance()"></select></div></div>
+           <div style="display:flex; gap:6px; margin-bottom:12px; flex-wrap:wrap;">
+            <button class="btn small secondary" onclick="setAllAttendance('p')">전체 출석</button>
+            <button class="btn small ghost" onclick="setAllAttendance(null)">전체 미체크</button>
+            <span id="att-summary" class="badge muted" style="align-self:center;"></span>
+          </div>
           <table><tr><th style="width:30%;">학생</th><th style="width:22%;">출석 상태</th><th>사유 / 비고</th></tr><tbody id="att-table"></tbody></table>
         </div>
       </div>
@@ -739,10 +744,14 @@
       <div class="tabpanel" id="tab-a-bank">
         <div class="page-head"><div><h1>문제은행</h1><p>등록된 모든 문제를 세트와 무관하게 한 곳에서 검색·확인하고, 과제·시험에 낱개로 담을 수 있습니다</p></div></div>
         <div class="card">
-          <div class="form-grid three">
+                    <div class="form-grid">
             <div><label>세트 필터</label><select id="bank-set-filter" onchange="renderBank()"></select></div>
             <div><label>유형 필터</label><select id="bank-type-filter" onchange="renderBank()">
               <option value="">전체</option><option value="mc">객관식</option><option value="short">단답형</option></select></div>
+            <div><label>정렬</label><select id="bank-sort" onchange="renderBank()">
+              <option value="recent">최근 등록순</option>
+              <option value="set">세트 · 문항 순서</option>
+            </select></div>
             <div><label>검색어</label><input type="text" id="bank-search" placeholder="물음·보기·선지 검색" oninput="renderBank()"></div>
           </div>
           <div id="bank-count" class="note" style="margin-bottom:10px;"></div>
@@ -2224,6 +2233,28 @@ function saveReason(){
   setDoc(doc(db,'attendance',sid), payload, {merge:true})
     .catch(e=>alert('사유 저장 실패: '+e.message));
 }
+/* 선택한 회차의 대상 학생 전원을 한 번에 체크 (null이면 미체크로) */
+async function setAllAttendance(status){
+  const sid = $('att-session').value;
+  const sch = schedules.find(s=>s.sid===sid);
+  if(!sid || !sch){ alert('회차를 먼저 선택하세요.'); return; }
+  const targets = Array.isArray(sch.assignedTo)
+    ? students.filter(s=>s.approved && sch.assignedTo.includes(s.uid))
+    : students.filter(s=>s.approved);
+  if(!targets.length){ alert('출석 대상 학생이 없습니다.'); return; }
+  if(status===null && !confirm(`${targets.length}명의 출석 기록을 모두 지울까요?\n(사유도 함께 지워집니다)`)) return;
+
+  const { db, doc, setDoc, deleteField } = window.fb;
+  const payload = {};
+  targets.forEach(s=>{
+    payload[s.uid] = status===null
+      ? deleteField()
+      : { status, reason: ((attendance[sid]||{})[s.uid]||{}).reason || '' };
+  });
+  try{
+    await setDoc(doc(db,'attendance',sid), payload, {merge:true});
+  }catch(e){ alert('저장 실패: '+e.message); }
+}
 function renderAttendance(){
   const sel=$('att-session'), tb=$('att-table'); if(!sel||!tb) return;
   const sid = sel.value;
@@ -2264,7 +2295,17 @@ function renderStudentSchedule(){
     const reason = (rec && rec.reason) ? esc(rec.reason).replace(/\n/g,'<br>') : '-';
     return `<tr><td><b>${f.label}</b></td><td>${f.day}</td><td>${esc(s.time)}</td><td>${esc(s.room)}</td>
       <td>${esc(s.topic)||'-'}</td><td>${b}</td><td style="font-size:12px;">${reason}</td></tr>`;
-  }).join('') || '<tr><td colspan="7" class="empty-hint">등록된 일정이 없습니다.</td></tr>';
+  }).join('') || '<tr><td colspan="3" class="empty-hint">출석 대상 학생이 없습니다.</td></tr>';
+
+  const sum = $('att-summary');
+  if(sum){
+    let p=0,l=0,a=0,n=0;
+    targets.forEach(st=>{
+      const v = ((attendance[sid]||{})[st.uid]||{}).status;
+      if(v==='p')p++; else if(v==='l')l++; else if(v==='a')a++; else n++;
+    });
+    sum.textContent = `출석 ${p} · 지각 ${l} · 결석 ${a} · 미체크 ${n}`;
+  }
 }
 
 
@@ -2964,6 +3005,7 @@ async function saveQuestion(){
 
   const data={set:newSet, type, body, passages, choices, answer, order,
               explain:$('q-explain').value.trim()};
+  if(!editId) data.createdAt = Date.now();   // 신규 등록일 때만 기록 (수정 시 유지)
   cancelQuestionEdit();
   const { db, doc, collection, setDoc, updateDoc } = window.fb;
   const p = editId ? updateDoc(doc(db,'questions', editId), data)
@@ -3090,15 +3132,33 @@ function filterQuestions(setVal, typeVal, kw){
     return true;
   });
 }
+/* 문제은행 정렬. createdAt이 없는 옛 문제는 뒤로 보내고 세트·순서로 정렬 */
+function sortBankList(arr){
+  const mode = $('bank-sort') ? $('bank-sort').value : 'recent';
+  const list = arr.slice();
+  if(mode==='recent'){
+    list.sort((a,b)=>{
+      const ta = a.createdAt ?? -1, tb = b.createdAt ?? -1;
+      if(ta !== tb) return tb - ta;                    // 최근 것이 위로
+      return String(a.set||'').localeCompare(String(b.set||''))
+          || (a.order??0) - (b.order??0);
+    });
+  } else {
+    list.sort((a,b)=>
+      String(a.set||'').localeCompare(String(b.set||'')) || (a.order??0) - (b.order??0));
+  }
+  return list;
+}
 function renderBank(){
   const list = $('bank-list'); if(!list) return;
 
   // 삭제된 문제는 선택 목록에서 제거
   pdfSelectedQids = pdfSelectedQids.filter(id=>questions.some(q=>q.qid===id));
 
-  const arr = filterQuestions($('bank-set-filter').value, $('bank-type-filter').value, $('bank-search').value);
+    const arr = sortBankList(
+    filterQuestions($('bank-set-filter').value, $('bank-type-filter').value, $('bank-search').value)
+  );
   updateBankSelectAllState(arr);
-  renderPdfBar();   // ✅ 선택 개수 배지 갱신
 
   $('bank-count').textContent = `전체 ${questions.length}문제 중 ${arr.length}문제 표시 중 · 과제/시험 등록 화면의 "문제 골라 담기"에서 낱개 선택이 가능합니다.`;
   list.innerHTML = arr.length ? arr.map(q=>`
@@ -3921,6 +3981,7 @@ function extractedToQuestionData(q, set, order){
     answer: q.type==='mc' ? ansToStr(q.answer) : String(q.answer||'').trim(),
     explain: String(q.explain||'').trim(),
     sourceNumber: q.number ?? null
+    createdAt: Date.now()
   };
 }
 async function saveExtractedQuestion(i){
@@ -4443,7 +4504,7 @@ function saveAiQuestions(){
         type: q.type, body: q.body,
     passages: q.hasPassage ? [{text:q.passage||'', imageUrl:'', hideTitle:false, table:null}] : [],
     choices: q.type==='mc' ? q.choices : [],
-    answer: q.answer, explain: q.explain
+    answer: q.answer, explain: q.explain, createdAt: Date.now()
   }));
   Promise.all(jobs)
     .then(()=>{ alert(picked.length+'개 문제가 문제은행에 저장되었습니다.'); aiGenerated=[]; renderAiResults(); })
