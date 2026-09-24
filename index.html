@@ -331,6 +331,15 @@
 .grade-group.open .grade-group-body{display:block;}
 .grade-group.open .gg-arrow{transform:rotate(180deg);}
 .gg-arrow{display:inline-block; transition:transform .15s; color:var(--muted); font-size:11px;}
+.notice-card{border:1px solid var(--border); border-left:4px solid var(--brand);
+  border-radius:var(--radius); padding:14px 16px; margin-bottom:10px; background:#fff;}
+.notice-card.important{border-left-color:var(--accent); background:var(--accent-soft);}
+.notice-head{display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:6px;}
+.notice-head .n-title{font-weight:900; font-size:15px;}
+.notice-date{font-size:12px; color:var(--muted); margin-left:auto;}
+.notice-body{font-size:13.5px; line-height:1.7; white-space:pre-wrap; color:var(--ink-soft);}
+    .sidebar nav button[data-tab="a-notice"]{font-size:0;}
+    .sidebar nav button[data-tab="a-notice"]::after{content:"공지"; font-size:10.5px;}
 </style>
 </head>
 <body>
@@ -379,6 +388,7 @@
         <button class="admin-nav active" data-tab="a-schedule" onclick="setAdminTab('a-schedule')">수업 일정</button>
         <button class="admin-nav" data-tab="a-attendance" onclick="setAdminTab('a-attendance')">출석 체크</button>
         <button class="admin-nav" data-tab="a-students" onclick="setAdminTab('a-students')">학생 관리</button>
+        <button class="admin-nav" data-tab="a-notice" onclick="setAdminTab('a-notice')">공지사항</button>
 
         <div class="nav-group">출제</div>
         <button class="admin-nav" data-tab="a-hw" onclick="setAdminTab('a-hw')">과제 관리</button>
@@ -556,6 +566,33 @@
           <h3>등록된 시험</h3>
           <table><tr><th>시험명</th><th>기간</th><th>문항수</th><th>PDF</th><th>대상</th><th>제출현황</th><th></th></tr>
             <tbody id="exam-table"></tbody></table>
+        </div>
+      </div>
+              <!-- 공지사항 -->
+      <div class="tabpanel" id="tab-a-notice">
+        <div class="page-head"><div><h1>공지사항</h1><p>학생 메인 화면 맨 위에 표시됩니다.</p></div></div>
+        <div class="card">
+          <h3 id="notice-form-title">공지 등록</h3>
+          <div class="form-grid full">
+            <div><label>제목</label><input type="text" id="notice-title" placeholder="예: 다음 주 수업 휴강 안내"></div>
+            <div><label>내용</label><textarea id="notice-body" placeholder="내용을 입력하세요 (여러 줄 입력 가능)" style="min-height:100px;"></textarea></div>
+          </div>
+          <div class="check-line">
+            <input type="checkbox" id="notice-important">
+            <label for="notice-important" style="margin:0;">중요 공지 (강조 표시 · 맨 위 고정)</label>
+          </div>
+          <div class="field-section">
+            <span class="section-label">대상 학생</span>
+            <button class="btn secondary" style="width:100%;" onclick="openAssignPicker('notice')">학생 지정</button>
+            <div class="picked-list" id="notice-assignees" style="margin-top:8px;">대상 학생: 전체</div>
+          </div>
+          <button class="btn" id="notice-submit-btn" style="width:100%; margin-top:16px;" onclick="addNotice()">공지 등록</button>
+          <button class="btn ghost" id="notice-cancel-btn" style="width:100%; margin-top:8px; display:none;" onclick="cancelNoticeEdit()">수정 취소</button>
+        </div>
+        <div class="card">
+          <h3>등록된 공지</h3>
+          <table><tr><th>제목</th><th>등록일</th><th>대상</th><th></th></tr>
+            <tbody id="notice-table"></tbody></table>
         </div>
       </div>
       <!-- 동영상 관리 -->
@@ -915,7 +952,7 @@
 
            <div class="tabpanel active" id="tab-t-main">
         <div class="page-head"><div><h1 id="stu-greeting">메인</h1><p>오늘 할 일과 나의 학습 현황을 한눈에 확인하세요.</p></div></div>
-
+        <div id="stu-notice-area"></div>
         <div id="stu-deadline-card" class="card" style="border-left:4px solid var(--accent);"></div>
 
         <div class="form-grid">
@@ -1336,6 +1373,7 @@ function setAdminTab(id){
   if(id==='a-scores'){ renderScoreSelects(); renderScoreTable('hw'); renderScoreTable('exam'); }
   if(id==='a-attendance') renderAttendance();
   if(id==='a-video') renderVideos();
+  if(id==='a-notice') renderNotices();
     if(id==='a-preview') renderPreviewStudentSelect();
   if(id==='a-bank') renderBank();
   if(id==='a-ai') renderAiSetOptions();
@@ -1388,7 +1426,7 @@ let editOmrTarget = null; // {kind, tid, uid}
 let openedTaskDetailKey = null;
 let videos = [];
 let memosByUid = {};   // 관리자 전용 메모 (studentMemos 컬렉션)
-let draftAssignees = {hw:null, exam:null, sch:null, 'sch-edit':null, video:null};
+let draftAssignees = {hw:null, exam:null, sch:null, 'sch-edit':null, video:null, notice:null};
 
 /* 구독 관리 — 로그인 후에만 켜고, 계정이 바뀌거나 로그아웃하면 반드시 해제 */
 let unsubs = [];
@@ -1508,6 +1546,12 @@ if(!isAdmin && currentStudent){
   videos.sort((a,b)=> (b.createdAt||0) - (a.createdAt||0));
   renderVideos(); renderStudentVideos();
 });
+  sub('notices', snap => {
+    notices = snap.docs.map(d => ({ nid:d.id, ...d.data() }));
+    // 중요 공지 먼저, 그다음 최신순
+    notices.sort((a,b)=> (b.important?1:0)-(a.important?1:0) || (b.createdAt||0)-(a.createdAt||0));
+    renderNotices(); renderStudentNotices();
+  });
   sub('questionSets', snap => {
     questionSets = snap.docs.map(d => d.data().name).filter(Boolean);
     renderQSetOptions();
@@ -1552,7 +1596,7 @@ function stopSubscriptions(){
   unsubs.forEach(fn => { try{ fn(); }catch(e){} });
   unsubs = [];
   subsOwner = null;
-  students = []; schedules = []; attendance = {}; videos = [];
+  students = []; schedules = []; attendance = {}; videos = []; notices = [];
   questionSets = []; questions = [];
   tasks = { hw:[], exam:[] };
   submissions = {}; scores = { hw:{}, exam:{} };
@@ -2383,7 +2427,111 @@ function renderStudentSchedule(){
       <td>${esc(s.topic)||'-'}</td><td>${b}</td><td style="font-size:12px;">${reason}</td></tr>`;
   }).join('') || '<tr><td colspan="7" class="empty-hint">등록된 일정이 없습니다.</td></tr>';
 }
+/* =========================================================
+   공지사항
+   ========================================================= */
+let notices = [];
+let editingNoticeId = null;
 
+function addNotice(){
+  const title = $('notice-title').value.trim();
+  const body  = $('notice-body').value.trim();
+  if(!title){ alert('제목을 입력하세요.'); return; }
+  if(!body){ alert('내용을 입력하세요.'); return; }
+  const assignedTo = draftAssignees['notice'];
+  if(Array.isArray(assignedTo) && !assignedTo.length){
+    alert('대상 학생이 없습니다. 학생을 선택하거나 전체 선택을 체크해주세요.'); return;
+  }
+
+  const editId = editingNoticeId;
+  const existing = editId ? notices.find(n=>n.nid===editId) : null;
+  const data = {
+    title, body,
+    important: $('notice-important').checked,
+    assignedTo,
+    createdAt: existing ? existing.createdAt : Date.now()   // 수정 시 등록일 유지
+  };
+
+  $('notice-title').value=''; $('notice-body').value='';
+  $('notice-important').checked=false;
+  draftAssignees['notice'] = null; renderAssigneeSummary('notice');
+  cancelNoticeEdit();
+
+  const { db, collection, doc, setDoc, updateDoc } = window.fb;
+  const p = editId ? updateDoc(doc(db,'notices', editId), data)
+                   : setDoc(doc(collection(db,'notices')), data);
+  p.catch(e=>alert('저장 실패: '+e.message));
+}
+
+function editNotice(nid){
+  const n = notices.find(x=>x.nid===nid); if(!n) return;
+  editingNoticeId = nid;
+  $('notice-title').value = n.title||'';
+  $('notice-body').value = n.body||'';
+  $('notice-important').checked = !!n.important;
+  draftAssignees['notice'] = Array.isArray(n.assignedTo) ? n.assignedTo.slice() : null;
+  renderAssigneeSummary('notice');
+  $('notice-form-title').textContent = '공지 수정';
+  $('notice-submit-btn').textContent = '수정 저장';
+  $('notice-cancel-btn').style.display = 'block';
+  setAdminTab('a-notice');
+}
+
+function cancelNoticeEdit(){
+  editingNoticeId = null;
+  $('notice-form-title').textContent = '공지 등록';
+  $('notice-submit-btn').textContent = '공지 등록';
+  $('notice-cancel-btn').style.display = 'none';
+}
+
+function removeNotice(nid){
+  const n = notices.find(x=>x.nid===nid);
+  if(!confirm(`"${n?n.title:''}" 공지를 삭제할까요?`)) return;
+  const { db, doc, deleteDoc } = window.fb;
+  deleteDoc(doc(db,'notices', nid)).catch(e=>alert('삭제 실패: '+e.message));
+}
+
+function fmtNoticeDate(ts){
+  if(!ts) return '-';
+  const d = new Date(ts);
+  if(isNaN(d)) return '-';
+  return `${d.getFullYear()}.${d.getMonth()+1}.${d.getDate()}`;
+}
+
+/* 관리자 목록 */
+function renderNotices(){
+  const tb = $('notice-table'); if(!tb) return;
+  tb.innerHTML = notices.map(n=>{
+    const targetLabel = Array.isArray(n.assignedTo) ? `${n.assignedTo.length}명 지정` : '전체';
+    return `<tr>
+      <td>${n.important?'<span class="badge warn">중요</span> ':''}${esc(n.title)}</td>
+      <td>${fmtNoticeDate(n.createdAt)}</td>
+      <td><span class="badge muted">${esc(targetLabel)}</span></td>
+      <td class="row-actions">
+        <button class="btn small secondary" onclick="editNotice('${n.nid}')">수정</button>
+        <button class="btn small danger" onclick="removeNotice('${n.nid}')">삭제</button>
+      </td>
+    </tr>`;
+  }).join('') || '<tr><td colspan="4" class="empty-hint">등록된 공지가 없습니다.</td></tr>';
+}
+
+/* 학생 메인 */
+function renderStudentNotices(){
+  const box = $('stu-notice-area'); if(!box || !currentStudent) return;
+  const list = notices.filter(n =>
+    adminViewAll || !Array.isArray(n.assignedTo) || n.assignedTo.includes(currentStudent));
+  if(!list.length){ box.innerHTML = ''; return; }
+
+  box.innerHTML = list.map(n=>`
+    <div class="notice-card${n.important?' important':''}">
+      <div class="notice-head">
+        ${n.important?'<span class="badge warn">중요</span>':'<span class="badge muted">공지</span>'}
+        <span class="n-title">${esc(n.title)}</span>
+        <span class="notice-date">${fmtNoticeDate(n.createdAt)}</span>
+      </div>
+      <div class="notice-body">${esc(n.body)}</div>
+    </div>`).join('');
+}
   /* =========================================================
    동영상 (유튜브)
    ========================================================= */
@@ -3575,7 +3723,7 @@ function applyAssignPicker(){
   renderAssigneeSummary(assignKind);
 }
 function renderAssigneeSummary(kind){
-  const boxId = {hw:'hw-assignees', exam:'exam-assignees', sch:'sch-assignees', 'sch-edit':'sch-edit-assignees', video:'video-assignees'};
+  const boxId = {hw:'hw-assignees', exam:'exam-assignees', sch:'sch-assignees', 'sch-edit':'sch-edit-assignees', video:'video-assignees', notice:'notice-assignees'};
   const box = $(boxId[kind]); if(!box) return;   // ← boxId[kind]로 수정
   const cur = draftAssignees[kind];
   if(cur===null){ box.textContent = '대상 학생: 전체'; return; }
@@ -4806,6 +4954,7 @@ function renderStudentSite(){
   if(!s) return;
   $('stu-name').textContent = adminViewAll ? '관리자 (전체보기)' : s.name+' 학생';
   $('stu-sub').textContent = adminViewAll ? '모든 항목 표시 중' : (s.school||'')+' · '+(s.grade||'');
+  renderStudentNotices();
   renderStudentDashboard(s);
   renderStudentSchedule();
   renderStudentTasks('hw'); renderStudentTasks('exam');
