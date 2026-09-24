@@ -1553,7 +1553,7 @@ if(!isAdmin && currentStudent){
     renderDraft('hw'); renderDraft('exam');
     renderWrongNote();
   });
-  sub('tasks', snap => {
+    sub('tasks', snap => {
     const all = snap.docs.map(d => ({ tid:d.id, ...d.data() }));
     tasks.hw   = all.filter(t=>t.kind==='hw');
     tasks.exam = all.filter(t=>t.kind==='exam');
@@ -1569,6 +1569,7 @@ sub('submissions', snap => {
   submissions = {};
   snap.docs.forEach(d => { submissions[d.id] = d.data(); });
   renderStudentSite(); renderTasks(); renderGradingTable();
+  renderStudents();   // 제출이 들어오면 '미제출' 칸도 갱신
 }, submissionsRef);
   sub('scores', snap => {
     scores.hw = {}; scores.exam = {};
