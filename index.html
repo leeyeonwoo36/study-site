@@ -323,6 +323,14 @@
   .qset-q.dragging { opacity: 0.4; }
 .qset-q.drag-over { border-top: 2px solid var(--brand, #2a6); }
 .qset-q { cursor: grab; }
+.grade-group{border:1px solid var(--border); border-radius:10px; margin-bottom:10px; overflow:hidden; background:#fff;}
+.grade-group-head{display:flex; align-items:center; justify-content:space-between; gap:8px;
+  padding:11px 14px; background:var(--brand-soft); cursor:pointer; font-weight:700; font-size:14px;}
+.grade-group-head .gg-meta{font-weight:500; font-size:12px; color:var(--ink-soft);}
+.grade-group-body{display:none; padding:4px 14px 10px;}
+.grade-group.open .grade-group-body{display:block;}
+.grade-group.open .gg-arrow{transform:rotate(180deg);}
+.gg-arrow{display:inline-block; transition:transform .15s; color:var(--muted); font-size:11px;}
 </style>
 </head>
 <body>
@@ -443,7 +451,7 @@
         <div class="card">
           <h3>학생 목록</h3>
           <table>
-            <tr><th>이름</th><th>학년</th><th>학교</th><th>전화번호</th><th>이메일</th><th></th></tr>
+            <tr><th>이름</th><th>학년</th><th>학교</th><th>전화번호</th><th>미제출</th><th></th></tr>
             <tbody id="student-table"></tbody>
           </table>
         </div>
@@ -825,11 +833,12 @@
             <div><label>제출 상태</label><select id="grading-status-filter" onchange="renderGradingTable()">
                             <option value="">전체</option><option value="submitted">제출됨</option><option value="pending">미제출</option><option value="needsGrading">채점 대기</option><option value="offline">현장 제출</option></select></div>
           </div>
-          <h3>제출 현황</h3>
-          <table>
-            <tr><th>학생</th><th>과제/시험명</th><th>제출방식</th><th>상태</th><th></th></tr>
-            <tbody id="grading-table"></tbody>
-          </table>
+          <div style="display:flex; align-items:center; gap:8px; margin-bottom:10px; flex-wrap:wrap;">
+            <h3 style="margin:0; border:none; padding:0;">제출 현황</h3>
+            <button class="btn small ghost" onclick="toggleAllGradeGroups(true)">모두 펼치기</button>
+            <button class="btn small ghost" onclick="toggleAllGradeGroups(false)">모두 접기</button>
+          </div>
+          <div id="grading-table"></div>
         </div>
       </div>
 
@@ -1180,7 +1189,11 @@
     <div id="detail-trend-chart"></div>
         <h3 style="margin-top:18px;">오답노트</h3>
     <p class="note">학생이 틀린 문제가 자동으로 쌓입니다. 관리자가 직접 추가하거나 삭제할 수 있습니다.</p>
-    <button class="btn secondary" style="margin-bottom:10px;" onclick="openAdminWrongPicker()">+ 문제 추가</button>
+    <div style="display:flex; gap:6px; margin-bottom:10px; flex-wrap:wrap;">
+      <button class="btn secondary" onclick="openAdminWrongPicker()">+ 문제 추가</button>
+      <button class="btn secondary" onclick="printWrongNote(false)">복습 필요만 인쇄</button>
+      <button class="btn ghost" onclick="printWrongNote(true)">전체 인쇄</button>
+    </div>
     <div id="admin-wrong-list" style="margin-bottom:18px;"></div>
     <h3 style="margin-top:18px;">개별 메모</h3>
     <p class="note">Enter로 줄바꿈이 가능합니다. 저장은 아래 버튼을 눌러주세요.</p>
@@ -1666,6 +1679,19 @@ async function sendResetLink(){
 /* =========================================================
    학생 관리 (관리자)
    ========================================================= */
+/* 이 학생에게 배정된 과제·시험 중 미제출 건수 (시작 전 항목은 제외) */
+function pendingCountForStudent(uid){
+  const now = new Date();
+  let n = 0;
+  ['hw','exam'].forEach(kind=>{
+    tasks[kind].forEach(t=>{
+      if(Array.isArray(t.assignedTo) && !t.assignedTo.includes(uid)) return;
+      if(t.startAt && new Date(t.startAt) > now) return;     // 아직 시작 안 한 건 제외
+      if(!submissions[t.tid+'|'+uid]) n++;
+    });
+  });
+  return n;
+}
 function renderStudents(){
   const pt = $('pending-table'), st = $('student-table');
   if(!pt || !st) return;
@@ -1687,17 +1713,23 @@ function renderStudents(){
       </td>
     </tr>`).join('') || '<tr><td colspan="6" class="empty-hint">대기 중인 가입 신청이 없습니다.</td></tr>';
 
-  st.innerHTML = approved.map(s=>`
+    st.innerHTML = approved.map(s=>{
+    const pend = pendingCountForStudent(s.uid);
+    const pendCell = pend
+      ? `<span class="badge warn">미제출 ${pend}</span>`
+      : '<span class="badge good">없음</span>';
+    return `
     <tr>
       <td><a href="#" onclick="openStudentDetail('${s.uid}'); return false;">${esc(s.name)}</a></td>
       <td>${esc(s.grade)}</td><td>${esc(s.school)}</td><td>${esc(s.phone)}</td>
-      <td>${esc(s.email)}</td>
+      <td>${pendCell}</td>
       <td class="row-actions">
         <button class="btn small secondary" onclick="openStudentEdit('${s.uid}')">수정</button>
         <button class="btn small secondary" onclick="openStudentDetail('${s.uid}')">상세</button>
         <button class="btn small danger" onclick="removeStudent('${s.uid}')">삭제</button>
       </td>
-    </tr>`).join('') || '<tr><td colspan="6" class="empty-hint">등록된 학생이 없습니다.</td></tr>';
+    </tr>`;
+  }).join('') || '<tr><td colspan="6" class="empty-hint">등록된 학생이 없습니다.</td></tr>';
 }
 function approveStudent(u){
   const { db, doc, updateDoc } = window.fb;
@@ -1792,6 +1824,34 @@ function removeAdminWrongItem(uid, qid){
       renderAdminWrongNote(uid);
     })
     .catch(e=>alert('삭제 실패: '+e.message));
+}
+
+/* 현재 보고 있는 학생의 오답노트를 문제지로 인쇄
+   includeMastered=false 면 '복습 필요'만 */
+function printWrongNote(includeMastered){
+  if(!currentDetailUid){ alert('학생을 먼저 선택하세요.'); return; }
+  const s = students.find(x=>x.uid===currentDetailUid);
+
+  const entries = Object.entries(adminWrongItems)
+    .filter(([qid,item]) => questions.some(x=>x.qid===qid)
+                         && (includeMastered || item.status!=='mastered'))
+    .sort((a,b)=> (a[1].addedAt||0) - (b[1].addedAt||0));   // 오래된 오답부터
+
+  if(!entries.length){
+    alert(includeMastered ? '오답노트에 문제가 없습니다.' : '복습이 필요한 문제가 없습니다.');
+    return;
+  }
+
+  const qs = entries.map(([qid])=>questions.find(x=>x.qid===qid)).filter(Boolean);
+  const title = `${s?s.name:''} 오답노트`;
+
+  // 선택 목록을 잠시 바꿔서 기존 인쇄 옵션 창을 그대로 사용
+  pdfSelectedQids = qs.map(q=>q.qid);
+  renderBank();
+  $('print-options-count').textContent =
+    `${title} · ${qs.length}문제${includeMastered?' (마스터 포함)':' (복습 필요)'}`;
+  $('print-title').value = title;
+  openModal('print-options-modal');
 }
 
 let adminWrongPickerExpanded = new Set();   // 펼쳐진 문제 qid
@@ -5601,8 +5661,24 @@ async function cancelSubmission(kind, tid, uid){
 /* =========================================================
    채점 확인 (관리자)
    ========================================================= */
+/* 펼쳐둔 과제 (kind|tid) — 다시 그려도 유지 */
+let gradeGroupOpen = new Set();
+
+function toggleGradeGroup(key){
+  if(gradeGroupOpen.has(key)) gradeGroupOpen.delete(key);
+  else gradeGroupOpen.add(key);
+  renderGradingTable();
+}
+function toggleAllGradeGroups(open){
+  gradeGroupOpen = new Set();
+  if(open){
+    ['hw','exam'].forEach(kind=>tasks[kind].forEach(t=>gradeGroupOpen.add(kind+'|'+t.tid)));
+  }
+  renderGradingTable();
+}
+
 function renderGradingTable(){
-  const tb = $('grading-table'); if(!tb) return;
+  const box = $('grading-table'); if(!box) return;
 
   const kindFilter = $('grading-kind-filter').value;
   const taskSel = $('grading-task-filter');
@@ -5616,17 +5692,25 @@ function renderGradingTable(){
   const statusFilter = $('grading-status-filter').value;
   const taskFilter = taskSel.value;
 
-  const rows = [];
+  const groups = [];
   ['hw','exam'].forEach(kind=>{
     if(kindFilter && kindFilter!==kind) return;
     tasks[kind].forEach(t=>{
       if(taskFilter && taskFilter !== (kind+'|'+t.tid)) return;
+
+      const rows = [];
+      let submitted=0, needs=0, total=0;
+
       taskTargetStudents(t).forEach(s=>{
         const sub = submissions[t.tid+'|'+s.uid];
         const rec = (scores[kind][t.tid]||{})[s.uid];
         const scored = !!(rec && String(rec.score||'').trim());
         const isOffline = !!(sub && sub.mode==='offline');
         const needsGrading = isPhotoPending(kind, t.tid, s.uid) || (isOffline && !scored);
+
+        total++;
+        if(sub) submitted++;
+        if(needsGrading) needs++;
 
         if(statusFilter==='submitted' && !sub) return;
         if(statusFilter==='pending' && sub) return;
@@ -5638,7 +5722,7 @@ function renderGradingTable(){
           mode='<span style="color:#8993AA;">-</span>';
           status='<span class="badge warn">미제출</span>';
           btn=`<button class="btn small secondary" onclick="openOfflineGrade('${kind}','${t.tid}','${s.uid}')">현장 제출 기록</button>`;
-                } else if(isOffline){
+        } else if(isOffline){
           mode='<span class="badge part">현장 제출</span>';
           status = scored ? `<span class="badge good">채점 완료 (${esc(rec.score)})</span>`
                           : '<span class="badge part">제출 완료 (채점중)</span>';
@@ -5657,12 +5741,32 @@ function renderGradingTable(){
                <button class="btn small danger" onclick="cancelSubmission('${kind}','${t.tid}','${s.uid}')">제출 취소</button>`;
         }
         status += lateBadge(sub);
-        const kindLabel = kind==='hw' ? '<span class="badge muted">과제</span>' : '<span class="badge muted">시험</span>';
-        rows.push(`<tr><td>${esc(s.name)}</td><td>${kindLabel} ${esc(t.title)}</td><td>${mode}</td><td>${status}</td><td class="row-actions">${btn}</td></tr>`);
+        rows.push(`<tr><td>${esc(s.name)}</td><td>${mode}</td><td>${status}</td><td class="row-actions">${btn}</td></tr>`);
       });
+
+      if(!rows.length) return;   // 필터에 걸려 아무도 안 남으면 그룹 자체를 숨김
+
+      const key = kind+'|'+t.tid;
+      const isOpen = gradeGroupOpen.has(key);
+      const kindLabel = kind==='hw' ? '과제' : '시험';
+      const needsBadge = needs ? `<span class="badge part">채점 대기 ${needs}</span>` : '';
+
+      groups.push(`<div class="grade-group${isOpen?' open':''}">
+        <div class="grade-group-head" onclick="toggleGradeGroup('${key}')">
+          <span><span class="badge muted">${kindLabel}</span> ${esc(t.title)}
+            <span class="gg-meta">· 제출 ${submitted}/${total}</span></span>
+          <span style="display:flex; gap:6px; align-items:center;">
+            ${needsBadge}<span class="gg-arrow">▼</span>
+          </span>
+        </div>
+        <div class="grade-group-body">
+          <table><tr><th>학생</th><th>제출방식</th><th>상태</th><th></th></tr>${rows.join('')}</table>
+        </div>
+      </div>`);
     });
   });
-    tb.innerHTML = rows.join('') || '<tr><td colspan="5" class="empty-hint">조건에 맞는 제출 내역이 없습니다.</td></tr>';
+
+  box.innerHTML = groups.join('') || '<p class="empty-hint">조건에 맞는 제출 내역이 없습니다.</p>';
   renderGradingNavBadge();
 }
 
