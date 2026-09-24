@@ -103,6 +103,8 @@
 .passage-editor[placeholder]:empty:before{content:attr(placeholder); color:var(--muted);}
   .omr-choices{display:flex; gap:10px; flex-wrap:wrap;}
   .omr-bubble{display:flex; align-items:center; gap:6px; padding:6px 12px; border:1px solid var(--border);
+.omr-choices{flex-direction:column; align-items:stretch;}
+.omr-bubble{justify-content:flex-start;}
     border-radius:20px; cursor:pointer; font-size:13px; background:#fff;}
   .omr-bubble input{margin:0;}
   .omr-bubble.picked{border-color:var(--brand); background:var(--brand); color:#fff;}
