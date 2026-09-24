@@ -277,6 +277,18 @@
     .sidebar nav button.active{border-top-color:#fff; border-left-color:transparent;}
        .form-grid,.form-grid.five,.form-grid.three{grid-template-columns:1fr 1fr;}
         .dt-grid{grid-template-columns:1fr;}
+          /* 그룹 라벨은 데스크톱 사이드바 전용 — 하단 탭바에서는 숨김 */
+    .sidebar nav .nav-group{display:none;}
+     #shell-student .sidebar nav button{flex:1 1 0; min-width:0;}
+    /* 하단 탭바: 내용에 맞춰 폭을 잡고 가로 스크롤 */
+    .sidebar nav button{flex:0 0 auto; min-width:64px; padding:9px 10px; font-size:11px;}
+    .sidebar nav{-webkit-overflow-scrolling:touch;}
+    .sidebar nav::-webkit-scrollbar{display:none;}
+    .sidebar nav button:hover{background:none;}
+
+    /* 로그아웃: 위쪽 구분선·여백은 세로 배치용이라 가로에서는 제거 */
+    .sidebar nav .nav-logout{margin-top:0; padding-top:9px; border-top:none;
+      border-left:1px solid rgba(255,255,255,.18);}
 
     /* 표가 화면을 넘칠 때 카드 안에서만 가로 스크롤 */
     .card{overflow-x:auto; -webkit-overflow-scrolling:touch;}
