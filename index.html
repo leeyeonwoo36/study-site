@@ -7,11 +7,12 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&display=swap" rel="stylesheet">
 <style>
-  :root{
-    --ink:#28324A; --ink-soft:#4C5875; --paper:#F6F9FF; --paper-line:#E4E9F5; --card:#FFFFFF;
-    --brand:#3B6FF6; --brand-soft:#EAF1FF; --accent:#FF6B4A; --accent-soft:#FFEBE3;
-    --good:#12B886; --good-soft:#DFF7EC; --warn:#F59F00; --warn-soft:#FFF4DB;
-    --muted:#8993AA; --border:#E3E7F3; --radius:9px;
+    :root{
+    --ink:#1F2937; --ink-soft:#4B5563; --paper:#F7F8FA; --paper-line:#E8EAEF; --card:#FFFFFF;
+    --brand:#2F5D50; --brand-soft:#E7F0ED; --brand-deep:#24483E;
+    --accent:#C2603F; --accent-soft:#FBEDE7;
+    --good:#3F8F6F; --good-soft:#E3F1EB; --warn:#C08A2E; --warn-soft:#FBF1DE;
+    --muted:#8A919E; --border:#E4E7EC; --radius:9px;
   }
   *{box-sizing:border-box;}
   body{margin:0; font-family:'Noto Sans KR',-apple-system,'Malgun Gothic',sans-serif;
@@ -30,11 +31,23 @@
   .sidebar .brand{padding:0 20px 18px; border-bottom:1px solid rgba(255,255,255,.18); margin-bottom:10px;}
   .sidebar .brand small{color:#CFE0FF; font-size:11px; display:block; margin-top:3px;}
   .sidebar nav button{display:block; width:100%; text-align:left; padding:11px 20px; background:none;
-    border:none; color:#DCE7FF; font-size:14px; cursor:pointer; border-left:3px solid transparent; font-family:inherit;}
+  border:none; color:#DCE7FF; font-size:14px; cursor:pointer; border-left:3px solid transparent; font-family:inherit;}
   .sidebar nav button.active{color:#fff; background:rgba(255,255,255,.14); border-left-color:#fff; font-weight:700;}
+  .sidebar nav .nav-group{padding:14px 20px 5px; font-size:10.5px; font-weight:700;
+  color:rgba(255,255,255,.5); letter-spacing:.09em; text-transform:uppercase;}
+  .sidebar nav .nav-group:first-child{padding-top:2px;}
+  .sidebar nav button{transition:background .12s;}
+  .sidebar nav button:hover{background:rgba(255,255,255,.07);}
+  .sidebar nav .nav-logout{margin-top:16px; padding-top:14px;
+  border-top:1px solid rgba(255,255,255,.18); color:#C9D6D1;}
+  .sidebar{display:flex; flex-direction:column;}
+  .sidebar nav{flex:1; overflow-y:auto;}
   .main{flex:1; padding:30px 38px; max-width:1000px;}
   .tabpanel{display:none;}
   .tabpanel.active{display:block;}
+    .sidebar nav #nav-grading-badge:not(:empty){display:inline-block; margin-left:5px;
+    min-width:17px; padding:1px 5px; border-radius:20px; background:var(--accent);
+    color:#fff; font-size:10.5px; font-weight:700; text-align:center;}
 
   .page-head{display:flex; justify-content:space-between; align-items:baseline;
     border-bottom:2px solid var(--brand); padding-bottom:10px; margin-bottom:22px;}
@@ -328,21 +341,29 @@
   <div class="layout">
     <div class="sidebar">
       <div class="brand"><h3 style="color:#fff; font-size:16px; margin:0;">관리자</h3><small>명덕외고 국제정치 스터디</small></div>
-      <nav>
+            <nav>
+        <div class="nav-group">수업</div>
         <button class="admin-nav active" data-tab="a-schedule" onclick="setAdminTab('a-schedule')">수업 일정</button>
         <button class="admin-nav" data-tab="a-attendance" onclick="setAdminTab('a-attendance')">출석 체크</button>
         <button class="admin-nav" data-tab="a-students" onclick="setAdminTab('a-students')">학생 관리</button>
+
+        <div class="nav-group">출제</div>
         <button class="admin-nav" data-tab="a-hw" onclick="setAdminTab('a-hw')">과제 관리</button>
         <button class="admin-nav" data-tab="a-exam" onclick="setAdminTab('a-exam')">시험 관리</button>
         <button class="admin-nav" data-tab="a-video" onclick="setAdminTab('a-video')">동영상 관리</button>
+
+        <div class="nav-group">문제</div>
         <button class="admin-nav" data-tab="a-questions" onclick="setAdminTab('a-questions')">문제 등록</button>
         <button class="admin-nav" data-tab="a-bank" onclick="setAdminTab('a-bank')">문제은행</button>
         <button class="admin-nav" data-tab="a-ai" onclick="setAdminTab('a-ai')">AI 문제 생성</button>
-        <button class="admin-nav" data-tab="a-grading" onclick="setAdminTab('a-grading')">채점 확인</button>
+
+        <div class="nav-group">채점 · 확인</div>
+        <button class="admin-nav" data-tab="a-grading" onclick="setAdminTab('a-grading')">채점 확인 <span id="nav-grading-badge"></span></button>
         <button class="admin-nav" data-tab="a-scores" onclick="setAdminTab('a-scores')">성적 관리</button>
         <button class="admin-nav" data-tab="a-preview" onclick="setAdminTab('a-preview')">학생 화면 보기</button>
         <button class="admin-nav" data-tab="a-firebase" onclick="setAdminTab('a-firebase')">운영 안내</button>
-        <button class="admin-nav" onclick="logout()" style="margin-top:14px; border-top:1px solid rgba(255,255,255,.18);">로그아웃</button>
+
+        <button class="admin-nav nav-logout" onclick="logout()">로그아웃</button>
       </nav>
     </div>
     <div class="main">
@@ -5554,7 +5575,26 @@ function renderGradingTable(){
       });
     });
   });
-  tb.innerHTML = rows.join('') || '<tr><td colspan="5" class="empty-hint">조건에 맞는 제출 내역이 없습니다.</td></tr>';
+    tb.innerHTML = rows.join('') || '<tr><td colspan="5" class="empty-hint">조건에 맞는 제출 내역이 없습니다.</td></tr>';
+  renderGradingNavBadge();
+}
+
+/* 사이드바 "채점 확인" 옆 미채점 건수 (필터와 무관하게 전체 기준) */
+function renderGradingNavBadge(){
+  const badge = $('nav-grading-badge'); if(!badge) return;
+  let n = 0;
+  ['hw','exam'].forEach(kind=>{
+    tasks[kind].forEach(t=>{
+      taskTargetStudents(t).forEach(s=>{
+        const sub = submissions[t.tid+'|'+s.uid];
+        if(!sub) return;
+        const rec = (scores[kind][t.tid]||{})[s.uid];
+        const scored = !!(rec && String(rec.score||'').trim());
+        if(isPhotoPending(kind, t.tid, s.uid) || (sub.mode==='offline' && !scored)) n++;
+      });
+    });
+  });
+  badge.textContent = n ? n : '';
 }
 
 /* =========================================================
