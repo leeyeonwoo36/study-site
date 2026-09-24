@@ -1535,10 +1535,11 @@ if(!isAdmin && currentStudent){
     renderWrongNote();
   }, err=>console.error('wrongBank 구독 에러:', err.code)));
 }
-  sub('settings', snap => {
-  const doc0 = snap.docs.find(d=>d.id==='aiConfig');
-  sharedAiKey = doc0 ? (doc0.data().geminiKey||'') : '';
-});
+  // settings는 컬렉션 쿼리 대신 aiConfig 문서 하나만 구독한다.
+  // (학생은 컬렉션 전체 읽기 권한이 없어 쿼리가 거부됨)
+  unsubs.push(onSnapshot(doc(db,'settings','aiConfig'), snap=>{
+    sharedAiKey = snap.exists() ? (snap.data().geminiKey || '') : '';
+  }, err=>console.error('aiConfig 구독 에러:', err.code)));
   sub('schedules', snap => {
     schedules = snap.docs.map(d => ({ sid:d.id, ...d.data() }));
     schedules.sort((a,b)=> String(a.date) < String(b.date) ? -1 : 1);
