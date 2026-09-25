@@ -1581,10 +1581,15 @@ function startSubscriptions(isAdmin, ownerUid){
   const { db, collection, doc, onSnapshot, query, where } = window.fb;
 
   const sub = (name, handler, customRef) => {
-  const ref = customRef || collection(db, name);
-  unsubs.push(onSnapshot(ref, handler,
-    err => console.error(name+' 구독 에러:', err.code, err.message)));
-};
+    try{
+      const ref = customRef || collection(db, name);
+      unsubs.push(onSnapshot(ref, handler,
+        err => console.error(name+' 구독 에러:', err.code, err.message)));
+    }catch(e){
+      // 구독 하나가 실패해도 나머지는 계속 걸리도록 격리
+      console.error(name+' 구독 생성 실패:', e.message);
+    }
+  };
 
     if(isAdmin){
     // 관리자만 students 컬렉션 전체를 읽을 수 있음
@@ -1623,6 +1628,10 @@ if(!isAdmin && currentStudent){
     myVariants = snap.exists() ? (snap.data().items || []) : [];
     renderVariantList();
   }, err=>console.error('variants 구독 에러:', err.code)));
+
+  unsubs.push(onSnapshot(doc(db,'drafts', currentStudent), snap=>{
+    cloudDrafts = snap.exists() ? (snap.data().items || {}) : {};
+  }, err=>console.error('drafts 구독 에러:', err.code)));
 }
   // settings는 컬렉션 쿼리 대신 aiConfig 문서 하나만 구독한다.
   // (학생은 컬렉션 전체 읽기 권한이 없어 쿼리가 거부됨)
@@ -1634,9 +1643,6 @@ if(!isAdmin && currentStudent){
     schedules.sort((a,b)=> String(a.date) < String(b.date) ? -1 : 1);
     renderSchedules();
   });
- unsubs.push(onSnapshot(doc(db,'drafts', currentStudent), snap=>{
-    cloudDrafts = snap.exists() ? (snap.data().items || {}) : {};
-  }, err=>console.error('drafts 구독 에러:', err.code)));
   sub('attendance', snap => {
     attendance = {};
     snap.docs.forEach(d => { attendance[d.id] = d.data(); });
