@@ -361,6 +361,19 @@
   .variant-item{border:1px solid var(--border); border-left:3px solid var(--brand);
     border-radius:0; padding:12px 14px; margin-bottom:8px; background:#fff;}
   .variant-meta{font-size:11.5px; color:var(--muted); margin-bottom:6px;}
+
+/* 풀이 화면 진행률 바 */
+.solve-progress{position:sticky; top:0; z-index:5; background:#fff;
+  border-bottom:1px solid var(--border); padding:10px 0 12px; margin-bottom:6px;}
+.solve-progress .sp-line{display:flex; justify-content:space-between; align-items:center;
+  font-size:13px; color:var(--ink-soft); margin-bottom:7px;}
+.solve-progress .sp-count{font-weight:700; color:var(--brand);}
+.solve-progress .sp-bar{height:6px; border-radius:20px; background:var(--paper-line); overflow:hidden;}
+.solve-progress .sp-fill{height:100%; background:var(--brand); border-radius:20px;
+  width:0; transition:width .2s;}
+.solve-progress.done .sp-fill{background:var(--good);}
+.solve-progress.done .sp-count{color:var(--good);}
+    
 </style>
 </head>
 <body>
@@ -5473,6 +5486,27 @@ function initSolveDraftHandlers(){
   const body = $('solve-body'); if(!body) return;
   ['input','change','click'].forEach(ev => body.addEventListener(ev, scheduleSolveDraftSave));
 }
+/* 현재 풀이 중인 문항과 응답 상태 */
+function solveAnsweredInfo(){
+  if(!currentSolve) return { qs:[], answers:{}, answered:0, missing:[] };
+  const t = tasks[currentSolve.kind].find(x=>x.tid===currentSolve.tid);
+  const qs = t ? (t.qids||[]).map(q=>questions.find(x=>x.qid===q)).filter(Boolean) : [];
+  const answers = collectSolveAnswers(qs);
+  const missing = [];
+  qs.forEach((q,i)=>{ if(!answers[q.qid]) missing.push(i+1); });   // 화면에 보이는 문제 번호
+  return { qs, answers, answered: qs.length - missing.length, missing };
+}
+
+/* 상단 진행률 갱신 */
+function updateSolveProgress(){
+  const box = $('solve-progress'); if(!box) return;
+  const { qs, answered } = solveAnsweredInfo();
+  if(!qs.length){ box.style.display = 'none'; return; }
+  box.style.display = 'block';
+  $('sp-count').textContent = `${answered} / ${qs.length}`;
+  $('sp-fill').style.width = Math.round(answered / qs.length * 100) + '%';
+  box.classList.toggle('done', answered === qs.length);
+}
 /* ---------- 풀이 ---------- */
 function openStudentSolve(kind,tid){
   const t = tasks[kind].find(x=>x.tid===tid);
@@ -5489,7 +5523,14 @@ function openStudentSolve(kind,tid){
   currentSolve = {kind,tid};
   $('solve-title').textContent = t.title + ' · 온라인 OMR 풀이';
   const qs = (t.qids||[]).map(q=>questions.find(x=>x.qid===q)).filter(Boolean);
-  $('solve-body').innerHTML = qs.length ? qs.map((q,i)=>`
+
+  const progressHtml = qs.length ? `
+    <div class="solve-progress" id="solve-progress">
+      <div class="sp-line"><span>답한 문제</span><span class="sp-count" id="sp-count">0 / ${qs.length}</span></div>
+      <div class="sp-bar"><div class="sp-fill" id="sp-fill"></div></div>
+    </div>` : '';
+
+  $('solve-body').innerHTML = qs.length ? progressHtml + qs.map((q,i)=>`
     <div class="omr-q">
       <div class="qnum">문제 ${i+1}. ${esc(q.body)}</div>
       ${renderPassageBoxHtml(getPassages(q))}
@@ -5499,6 +5540,11 @@ function openStudentSolve(kind,tid){
     </div>`).join('') : '<p class="empty-hint">등록된 문항이 없습니다. PDF를 내려받아 풀고 아래에 파일을 첨부해 제출해주세요.</p>';
   resetSolvePhotos();
 
+  // 답을 고르거나 입력할 때마다 진행률 갱신 (이벤트 위임이라 문항이 몇 개든 동작)
+  const bodyEl = $('solve-body');
+  bodyEl.onchange = updateSolveProgress;
+  bodyEl.oninput  = updateSolveProgress;
+
   const draft = previewingStudent ? null : loadSolveDraft(tid);
   if(draft && draft.answers){
     restoreSolveAnswers(qs, draft.answers);
@@ -5506,6 +5552,7 @@ function openStudentSolve(kind,tid){
   } else {
     showSolveDraftStatus(null);
   }
+  updateSolveProgress();        // 임시 저장 복구분까지 반영
   openModal('solve-modal');
 }
 function normalize(s){ return String(s||'').replace(/\s+/g,'').toLowerCase(); }
@@ -5531,9 +5578,19 @@ async function submitSolve(){
   const dueDate = t.due ? new Date(t.due) : null;
   const late = !!(dueDate && !isNaN(dueDate) && now > dueDate);
 
-  const unanswered = qs.length - answered;
+  const missing = [];
+  qs.forEach((q,i)=>{ if(!answers[q.qid]) missing.push(i+1); });
+
+  let missingMsg = '';
+  if(missing.length){
+    const nums = missing.length > 12
+      ? missing.slice(0,12).join(', ') + ` 외 ${missing.length-12}개`
+      : missing.join(', ');
+    missingMsg = `아직 답하지 않은 문제가 ${missing.length}개 있습니다.\n→ ${nums}번\n\n`;
+  }
+
   const confirmMsg = (late ? '⚠️ 마감일시가 지났습니다. 지각 제출로 기록됩니다.\n\n' : '')
-    + (answered && unanswered>0 ? `아직 답하지 않은 문제가 ${unanswered}개 있습니다.\n\n` : '')
+    + missingMsg
     + '제출하면 답안을 수정할 수 없습니다. 제출할까요?';
   if(!confirm(confirmMsg)) return;
 
