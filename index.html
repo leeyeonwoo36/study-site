@@ -6205,8 +6205,10 @@ function renderGradingTable(){
   const groups = [];
   ['hw','exam'].forEach(kind=>{
     if(kindFilter && kindFilter!==kind) return;
-    tasks[kind].forEach(t=>{
+       tasks[kind].forEach(t=>{
       if(taskFilter && taskFilter !== (kind+'|'+t.tid)) return;
+
+      const notStarted = !!(t.startAt && new Date(t.startAt) > new Date());
 
       const rows = [];
       let submitted=0, needs=0, total=0;
@@ -6230,7 +6232,10 @@ function renderGradingTable(){
         let mode, status, btn;
         if(!sub){
           mode='<span style="color:#8993AA;">-</span>';
-          status='<span class="badge warn">미제출</span>';
+          // 아직 시작 전이면 미제출이 아니라 '시작 전'으로 (학생 화면과 같은 기준)
+          status = notStarted
+            ? '<span class="badge muted">시작 전</span>'
+            : '<span class="badge warn">미제출</span>';
           btn=`<button class="btn small secondary" onclick="openOfflineGrade('${kind}','${t.tid}','${s.uid}')">현장 제출 기록</button>`;
         } else if(isOffline){
           mode='<span class="badge part">현장 제출</span>';
@@ -6259,7 +6264,8 @@ function renderGradingTable(){
       const key = kind+'|'+t.tid;
       const isOpen = gradeGroupOpen.has(key);
       const kindLabel = kind==='hw' ? '과제' : '시험';
-      const needsBadge = needs ? `<span class="badge part">채점 대기 ${needs}</span>` : '';
+      const needsBadge = needs ? `<span class="badge part">채점 대기 ${needs}</span>`
+                       : (notStarted ? '<span class="badge muted">시작 전</span>' : '');
 
       groups.push(`<div class="grade-group${isOpen?' open':''}">
         <div class="grade-group-head" onclick="toggleGradeGroup('${key}')">
