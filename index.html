@@ -1034,11 +1034,26 @@
       </div>
       <div class="tabpanel" id="tab-t-wrong">
   <div class="page-head"><div><h1>오답노트</h1><p>틀린 문제를 원본 그대로, 또는 AI가 만든 변형 문제로 계속 다시 풀어볼 수 있어요.</p></div></div>
-  <div class="card"><div id="wrong-note-list"></div></div>
-  <div style="margin-bottom:14px;">
-    <button class="btn secondary" onclick="toggleVariantList()">변형 문제 보기</button>
+
+  <div class="card">
+    <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+      <button class="btn secondary" onclick="toggleVariantList()">변형 문제 보기</button>
+      <span style="flex:1;"></span>
+      <select id="wrong-filter-status" onchange="renderWrongNote()" style="width:auto; min-width:120px;">
+        <option value="open">복습 필요만</option>
+        <option value="">전체 보기</option>
+        <option value="mastered">마스터만</option>
+      </select>
+      <select id="wrong-filter-kind" onchange="renderWrongNote()" style="width:auto; min-width:100px;">
+        <option value="">과제 · 시험</option>
+        <option value="hw">과제만</option>
+        <option value="exam">시험만</option>
+      </select>
+    </div>
   </div>
+
   <div id="variant-list-area"></div>
+  <div class="card"><div id="wrong-note-list"></div></div>
 </div>
       <div class="tabpanel" id="tab-t-video">
   <div class="page-head"><div><h1>수업 영상</h1><p>수업 영상을 시청하세요.</p></div></div>
