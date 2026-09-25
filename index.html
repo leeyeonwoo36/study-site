@@ -1995,6 +1995,7 @@ function removeAdminWrongItem(uid, qid){
 
 /* 다음 인쇄에 쓸 주소 라벨. printWithOptions가 한 번 쓰고 비운다. */
 let printPathLabel = '';
+let printAutoTitle = '';   // 자동으로 채워 넣은 제목 (직접 입력한 건 건드리지 않기 위해)
 function printWrongNote(includeMastered){
   if(!currentDetailUid){ alert('학생을 먼저 선택하세요.'); return; }
   const s = students.find(x=>x.uid===currentDetailUid);
@@ -2019,6 +2020,7 @@ function printWrongNote(includeMastered){
   $('print-options-count').textContent =
     `${title} · ${qs.length}문제${includeMastered?' (마스터 포함)':' (복습 필요)'}`;
   $('print-title').value = title;
+  printAutoTitle = title;              // 자동으로 넣은 제목임을 기억
   openModal('print-options-modal');
 }
 
@@ -3551,9 +3553,16 @@ function renderPdfBar(){
 function openPrintOptions(){
   const qs = pdfSelectedQids.map(id=>questions.find(x=>x.qid===id)).filter(Boolean);
   if(!qs.length){ alert('먼저 문제은행에서 문제를 선택하세요.'); return; }
-  printPathLabel = '';   // 문제은행에서 연 인쇄는 기본 라벨 사용
+
+  printPathLabel = '';                 // 문제은행에서 연 인쇄는 기본 주소 라벨
+  const cur = $('print-title').value.trim();
+  // 자동으로 채워진 제목이거나 비어 있으면 기본값으로 되돌린다 (직접 쓴 제목은 유지)
+  if(!cur || cur === printAutoTitle){
+    $('print-title').value = '문제지';
+    printAutoTitle = '문제지';
+  }
+
   $('print-options-count').textContent = `선택한 문제 ${qs.length}개`;
-  if(!$('print-title').value.trim()) $('print-title').value = '문제지';
   openModal('print-options-modal');
 }
 /* 인쇄용 새 창 열기.
