@@ -373,7 +373,18 @@
   width:0; transition:width .2s;}
 .solve-progress.done .sp-fill{background:var(--good);}
 .solve-progress.done .sp-count{color:var(--good);}
-    
+
+/* 나중에 볼 문제 표시 */
+.qnum-row{display:flex; align-items:flex-start; gap:10px;}
+.qnum-row .qnum{flex:1; min-width:0;}
+.flag-btn{background:none; border:1px solid var(--border); color:var(--muted);
+  width:34px; height:34px; min-width:34px; padding:0; border-radius:8px;
+  font-size:17px; line-height:1; cursor:pointer; flex-shrink:0;}
+.flag-btn:hover{border-color:var(--warn); color:var(--warn);}
+.flag-btn.on{background:var(--warn-soft); border-color:var(--warn); color:var(--warn);}
+.omr-q.flagged{border-left:3px solid var(--warn); padding-left:11px;}
+.sp-flag{background:var(--warn-soft); color:var(--warn); border:none; cursor:pointer;
+  padding:3px 10px; border-radius:20px; font-size:12px; font-weight:700; margin-left:8px;}
 </style>
 </head>
 <body>
@@ -1592,6 +1603,9 @@ if(!isAdmin && currentStudent){
 }
   // settings는 컬렉션 쿼리 대신 aiConfig 문서 하나만 구독한다.
   // (학생은 컬렉션 전체 읽기 권한이 없어 쿼리가 거부됨)
+  unsubs.push(onSnapshot(doc(db,'drafts', currentStudent), snap=>{
+    cloudDrafts = snap.exists() ? (snap.data().items || {}) : {};
+  }, err=>console.error('drafts 구독 에러:', err.code)));
   unsubs.push(onSnapshot(doc(db,'settings','aiConfig'), snap=>{
     sharedAiKey = snap.exists() ? (snap.data().geminiKey || '') : '';
   }, err=>console.error('aiConfig 구독 에러:', err.code)));
@@ -1666,7 +1680,7 @@ function stopSubscriptions(){
   tasks = { hw:[], exam:[] };
   submissions = {}; scores = { hw:{}, exam:{} };
   wrongItems = {};   // ← 추가
-  myVariants = []; variantListOpen = false;
+  myVariants = []; cloudDrafts = {}; variantListOpen = false;
   draftQids = { hw:[], exam:[] };
 }
 
@@ -5453,6 +5467,52 @@ function resetSolvePhotos(){
   solvePhotoFiles = [];
   renderSolvePhotoPreview();
 }
+/* ===== 임시 저장 기기 간 동기화 (drafts/{uid}) ===== */
+let cloudDrafts = {};            // { [tid]: {answers, flags, savedAt} }
+let cloudDraftTimer = null;
+let cloudDraftPending = null;
+
+/* 입력이 멈춘 뒤 3초에 한 번만 서버에 쓴다 (쓰기 횟수 절약) */
+function scheduleCloudDraft(tid, data){
+  if(previewingStudent || !currentStudent) return;
+  cloudDraftPending = { tid, data };
+  if(cloudDraftTimer) clearTimeout(cloudDraftTimer);
+  cloudDraftTimer = setTimeout(flushCloudDraft, 3000);
+}
+
+async function flushCloudDraft(){
+  if(cloudDraftTimer){ clearTimeout(cloudDraftTimer); cloudDraftTimer = null; }
+  const p = cloudDraftPending; cloudDraftPending = null;
+  if(!p || previewingStudent || !currentStudent) return;
+  const { db, doc, setDoc } = window.fb;
+  try{
+    await setDoc(doc(db,'drafts', currentStudent), { items: { [p.tid]: p.data } }, { merge:true });
+  }catch(e){ console.error('임시 저장 동기화 실패:', e.code || e.message); }
+}
+
+async function clearCloudDraft(tid){
+  if(cloudDraftTimer){ clearTimeout(cloudDraftTimer); cloudDraftTimer = null; }
+  cloudDraftPending = null;
+  if(previewingStudent || !currentStudent) return;
+  const { db, doc, setDoc, deleteField } = window.fb;
+  try{
+    await setDoc(doc(db,'drafts', currentStudent), { items: { [tid]: deleteField() } }, { merge:true });
+  }catch(e){ console.error('임시 저장 삭제 실패:', e.code || e.message); }
+}
+
+/* 이 브라우저와 서버 중 더 최근 것을 고른다 */
+function pickSolveDraft(tid){
+  const local = loadSolveDraft(tid);
+  const cloud = cloudDrafts[tid] || null;
+  if(local && cloud)
+    return (cloud.savedAt||0) > (local.savedAt||0) ? { ...cloud, fromCloud:true } : local;
+  if(cloud) return { ...cloud, fromCloud:true };
+  return local;
+}
+
+/* 탭을 닫거나 숨길 때 밀린 저장을 밀어냄 */
+document.addEventListener('visibilitychange', ()=>{ if(document.hidden) flushCloudDraft(); });
+window.addEventListener('beforeunload', flushCloudDraft);
 /* ---------- 풀이 임시 저장 (브라우저에 보관) ---------- */
 let solveDraftTimer = null;
 
@@ -5496,34 +5556,42 @@ function clearSolveDraft(tid){
   try{ localStorage.removeItem(solveDraftKey(tid)); }catch(e){}
 }
 
-function showSolveDraftStatus(savedAt, restored){
+function showSolveDraftStatus(savedAt, restored, fromCloud){
   const el = $('solve-draft-status'); if(!el) return;
   if(previewingStudent){ el.textContent = '미리보기 중에는 임시 저장되지 않습니다.'; return; }
-  if(!savedAt){ el.textContent = '답을 고르면 자동으로 임시 저장됩니다.'; return; }
+  if(!savedAt){ el.textContent = '답을 고르면 자동으로 저장되어 다른 기기에서도 이어 풀 수 있습니다.'; return; }
   const t = new Date(savedAt).toLocaleTimeString('ko-KR', {hour:'2-digit', minute:'2-digit'});
   el.innerHTML = restored
-    ? `💾 <b>${t}</b>에 풀던 답을 불러왔습니다. (첨부 파일은 다시 올려주세요)`
-    : `💾 ${t} 임시 저장됨`;
+    ? (fromCloud
+why        ? `💾 <b>다른 기기</b>에서 ${t}에 풀던 답을 불러왔습니다. (첨부 파일은 다시 올려주세요)`
+        : `💾 <b>${t}</b>에 풀던 답을 불러왔습니다. (첨부 파일은 다시 올려주세요)`)
+    : `💾 ${t} 저장됨`;
 }
-
 function saveSolveDraftNow(){
   if(!currentSolve || previewingStudent) return;
   const t = tasks[currentSolve.kind].find(x=>x.tid===currentSolve.tid); if(!t) return;
   const qs = (t.qids||[]).map(q=>questions.find(x=>x.qid===q)).filter(Boolean);
   const answers = collectSolveAnswers(qs);
-  const hasAny = Object.values(answers).some(Boolean);
+  const flags = [...solveFlags];
+  const hasAny = Object.values(answers).some(Boolean) || flags.length;
+  const tid = currentSolve.tid;
   try{
     if(hasAny){
       const savedAt = Date.now();
-      localStorage.setItem(solveDraftKey(currentSolve.tid), JSON.stringify({ answers, savedAt }));
+      const data = { answers, flags, savedAt };
+      localStorage.setItem(solveDraftKey(tid), JSON.stringify(data));
+      scheduleCloudDraft(tid, data);
       showSolveDraftStatus(savedAt, false);
     } else {
-      clearSolveDraft(currentSolve.tid);
+      clearSolveDraft(tid);
+      clearCloudDraft(tid);
       showSolveDraftStatus(null);
     }
   }catch(e){
+    // 이 브라우저가 저장소를 막아도 서버 저장은 계속 시도
+    scheduleCloudDraft(tid, { answers, flags, savedAt: Date.now() });
     const el = $('solve-draft-status');
-    if(el) el.textContent = '⚠️ 이 브라우저에서는 임시 저장을 쓸 수 없습니다.';
+    if(el) el.textContent = '⚠️ 이 브라우저에는 저장할 수 없어 서버에만 저장합니다.';
   }
 }
 
@@ -5535,6 +5603,55 @@ function scheduleSolveDraftSave(){
 function initSolveDraftHandlers(){
   const body = $('solve-body'); if(!body) return;
   ['input','change','click'].forEach(ev => body.addEventListener(ev, scheduleSolveDraftSave));
+}
+/* ===== 나중에 볼 문제 표시 ===== */
+let solveFlags = new Set();
+
+function flagKey(tid){ return 'solveflag_' + tid; }
+
+function loadSolveFlags(tid){
+  solveFlags = new Set();
+  if(previewingStudent) return;
+  try{
+    const raw = localStorage.getItem(flagKey(tid));
+    if(raw) solveFlags = new Set(JSON.parse(raw));
+  }catch(e){ /* 저장소를 못 읽어도 풀이에는 지장 없음 */ }
+}
+
+function saveSolveFlags(){
+  if(previewingStudent || !currentSolve) return;
+  try{
+    localStorage.setItem(flagKey(currentSolve.tid), JSON.stringify([...solveFlags]));
+  }catch(e){}
+}
+
+function clearSolveFlags(tid){
+  try{ localStorage.removeItem(flagKey(tid)); }catch(e){}
+  solveFlags = new Set();
+}
+
+function toggleSolveFlag(qid){
+  if(solveFlags.has(qid)) solveFlags.delete(qid);
+  else solveFlags.add(qid);
+  const btn  = $('flag_'+qid);
+  const wrap = $('qwrap_'+qid);
+  const on = solveFlags.has(qid);
+  if(btn){ btn.classList.toggle('on', on); btn.textContent = on ? '★' : '☆'; }
+  if(wrap) wrap.classList.toggle('flagged', on);
+    saveSolveDraftNow();
+  updateSolveProgress();
+}
+
+/* 표시한 문제 중 화면 위쪽부터 차례로 이동 */
+function jumpToFlagged(){
+  if(!solveFlags.size) return;
+  const els = [...solveFlags].map(q=>$('qwrap_'+q)).filter(Boolean);
+  if(!els.length) return;
+  els.sort((a,b)=>a.offsetTop-b.offsetTop);
+  const body = $('solve-body');
+  const cur  = body.scrollTop;
+  const next = els.find(el=>el.offsetTop > cur + 10) || els[0];   // 없으면 처음으로 순환
+  body.scrollTo({ top: Math.max(next.offsetTop - 70, 0), behavior:'smooth' });
 }
 /* 현재 풀이 중인 문항과 응답 상태 */
 function solveAnsweredInfo(){
@@ -5562,7 +5679,7 @@ function openStudentSolve(kind,tid){
   const t = tasks[kind].find(x=>x.tid===tid);
   if(!t){ alert('해당 과제/시험을 찾을 수 없습니다. 목록이 갱신되었을 수 있어요. 다시 시도해주세요.'); return; }
   if(submissions[tid+'|'+currentStudent]){
-    clearSolveDraft(tid);
+    clearSolveDraft(tid); clearSolveFlags(tid);
     openReview(kind,tid,currentStudent,false);
     return;
   }
@@ -5571,38 +5688,56 @@ function openStudentSolve(kind,tid){
     return;
   }
   currentSolve = {kind,tid};
+  loadSolveFlags(tid);
   $('solve-title').textContent = t.title + ' · 온라인 OMR 풀이';
   const qs = (t.qids||[]).map(q=>questions.find(x=>x.qid===q)).filter(Boolean);
 
   const progressHtml = qs.length ? `
     <div class="solve-progress" id="solve-progress">
-      <div class="sp-line"><span>답한 문제</span><span class="sp-count" id="sp-count">0 / ${qs.length}</span></div>
+      <div class="sp-line">
+        <span>답한 문제 <span id="sp-flagged"></span></span>
+        <span class="sp-count" id="sp-count">0 / ${qs.length}</span>
+      </div>
       <div class="sp-bar"><div class="sp-fill" id="sp-fill"></div></div>
     </div>` : '';
 
-  $('solve-body').innerHTML = qs.length ? progressHtml + qs.map((q,i)=>`
-    <div class="omr-q">
-      <div class="qnum">문제 ${i+1}. ${esc(q.body)}</div>
+  $('solve-body').innerHTML = qs.length ? progressHtml + qs.map((q,i)=>{
+    const on = solveFlags.has(q.qid);
+    return `
+    <div class="omr-q${on?' flagged':''}" id="qwrap_${q.qid}">
+      <div class="qnum-row">
+        <div class="qnum">문제 ${i+1}. ${esc(q.body)}</div>
+        <button type="button" class="flag-btn${on?' on':''}" id="flag_${q.qid}"
+          title="나중에 다시 볼 문제로 표시" onclick="toggleSolveFlag('${q.qid}')">${on?'★':'☆'}</button>
+      </div>
       ${renderPassageBoxHtml(getPassages(q))}
       ${q.type==='mc'
         ? omrChoicesHtml(q, 'ans_'+q.qid, '')
         : `<input type="text" id="ans_${q.qid}" placeholder="정답 입력">`}
-    </div>`).join('') : '<p class="empty-hint">등록된 문항이 없습니다. PDF를 내려받아 풀고 아래에 파일을 첨부해 제출해주세요.</p>';
+    </div>`;
+  }).join('') : '<p class="empty-hint">등록된 문항이 없습니다. PDF를 내려받아 풀고 아래에 파일을 첨부해 제출해주세요.</p>';
   resetSolvePhotos();
 
-  // 답을 고르거나 입력할 때마다 진행률 갱신 (이벤트 위임이라 문항이 몇 개든 동작)
   const bodyEl = $('solve-body');
   bodyEl.onchange = updateSolveProgress;
   bodyEl.oninput  = updateSolveProgress;
 
-  const draft = previewingStudent ? null : loadSolveDraft(tid);
-  if(draft && draft.answers){
-    restoreSolveAnswers(qs, draft.answers);
-    showSolveDraftStatus(draft.savedAt, true);
+   const draft = previewingStudent ? null : pickSolveDraft(tid);
+  if(draft && (draft.answers || draft.flags)){
+    if(draft.answers) restoreSolveAnswers(qs, draft.answers);
+    solveFlags = new Set(draft.flags || []);
+    showSolveDraftStatus(draft.savedAt, true, draft.fromCloud);
   } else {
+    solveFlags = new Set();
     showSolveDraftStatus(null);
   }
-  updateSolveProgress();        // 임시 저장 복구분까지 반영
+   qs.forEach(q=>{
+    const on = solveFlags.has(q.qid);
+    const btn = $('flag_'+q.qid), wrap = $('qwrap_'+q.qid);
+    if(btn){ btn.classList.toggle('on', on); btn.textContent = on ? '★' : '☆'; }
+    if(wrap) wrap.classList.toggle('flagged', on);
+  });
+  updateSolveProgress();
   openModal('solve-modal');
 }
 function normalize(s){ return String(s||'').replace(/\s+/g,'').toLowerCase(); }
@@ -5641,8 +5776,12 @@ async function submitSolve(){
 
   const confirmMsg = (late ? '⚠️ 마감일시가 지났습니다. 지각 제출로 기록됩니다.\n\n' : '')
     + missingMsg
+    + flagMsg
     + '제출하면 답안을 수정할 수 없습니다. 제출할까요?';
   if(!confirm(confirmMsg)) return;
+
+  const flagged = qs.filter(q=>solveFlags.has(q.qid)).length;
+  const flagMsg = flagged ? `★ 표시해 둔 문제가 ${flagged}개 있습니다. 확인하셨나요?\n\n` : '';
 
   let photos = [];
   if(photoFiles.length){
@@ -5688,7 +5827,9 @@ async function submitSolve(){
     await setDoc(doc(db,'scores', kind+'__'+tid), scorePayload, {merge:true});
     if(mode==='omr') await updateWrongBankAfterGrade(studentUid, kind, tid, t.title, qs, answers);
 
-    clearSolveDraft(tid);                    // ✅ 제출 성공 시에만 임시 저장본 삭제
+    clearSolveDraft(tid);
+    clearSolveFlags(tid);
+    clearCloudDraft(tid);
     closeModal('solve-modal');
     currentSolve = null;
     alert(
