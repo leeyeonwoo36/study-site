@@ -1367,7 +1367,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator{ margin-left:2px
   <!-- 인쇄 옵션 -->
 <div class="modal-bg" id="print-options-modal">
   <div class="modal">
-    <button class="modal-close" onclick="closeModal('print-options-modal')">✕</button>
+    <button class="modal-close" onclick="closePrintOptions()">✕</button>
     <h3>인쇄 옵션</h3>
     <p class="note" id="print-options-count"></p>
     <label>문제지 제목</label>
@@ -1381,7 +1381,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator{ margin-left:2px
       <label for="print-opt-explain" style="margin:0;">정답 · 해설</label></div>
     <div style="margin-top:14px;">
       <button class="btn" onclick="printWithOptions()">인쇄 창 열기</button>
-      <button class="btn ghost" onclick="closeModal('print-options-modal')">취소</button>
+      <button class="btn ghost" onclick="closePrintOptions()">취소</button>
     </div>
   </div>
 </div>
@@ -1996,6 +1996,15 @@ function removeAdminWrongItem(uid, qid){
 /* 다음 인쇄에 쓸 주소 라벨. printWithOptions가 한 번 쓰고 비운다. */
 let printPathLabel = '';
 let printAutoTitle = '';   // 자동으로 채워 넣은 제목 (직접 입력한 건 건드리지 않기 위해)
+let pdfSelectedBackup = null;   // 오답노트 인쇄 전 문제은행 선택 상태
+
+/* 오답노트 인쇄 때문에 바꿔둔 문제은행 선택을 원래대로 되돌린다 */
+function restoreBankSelection(){
+  if(pdfSelectedBackup === null) return;
+  pdfSelectedQids = pdfSelectedBackup;
+  pdfSelectedBackup = null;
+  renderBank();
+}
 function printWrongNote(includeMastered){
   if(!currentDetailUid){ alert('학생을 먼저 선택하세요.'); return; }
   const s = students.find(x=>x.uid===currentDetailUid);
@@ -2013,7 +2022,8 @@ function printWrongNote(includeMastered){
   const qs = entries.map(([qid])=>questions.find(x=>x.qid===qid)).filter(Boolean);
   const title = `${s?s.name:''} 오답노트`;
 
-  // 선택 목록을 잠시 바꿔서 기존 인쇄 옵션 창을 그대로 사용
+  // 선택 목록을 잠시 바꿔서 기존 인쇄 옵션 창을 그대로 사용 (닫을 때 되돌림)
+  if(pdfSelectedBackup === null) pdfSelectedBackup = pdfSelectedQids.slice();
   printPathLabel = `오답노트-${s ? s.name : ''}`;
   pdfSelectedQids = qs.map(q=>q.qid);
   renderBank();
@@ -3590,6 +3600,7 @@ function printWithOptions(){
   const title = $('print-title').value.trim() || '문제지';
 
   closeModal('print-options-modal');
+  restoreBankSelection();     // qs는 위에서 이미 복사했으므로 인쇄엔 영향 없음
 
   const sections = [];
   if(showQ){
@@ -3651,6 +3662,7 @@ ${sections.join('')}
 
   openPrintWindow(html, printPathLabel || '명덕외고-국제정치');
   printPathLabel = '';   // 다음 인쇄에 남지 않도록 비움
+  pdfSelectedBackup = null;    // 문제은행에서 직접 연 인쇄는 되돌릴 대상이 없음
 }
 
 function buildPrintQuestionHtml(q, n){
