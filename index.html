@@ -5561,11 +5561,10 @@ function showSolveDraftStatus(savedAt, restored, fromCloud){
   if(previewingStudent){ el.textContent = '미리보기 중에는 임시 저장되지 않습니다.'; return; }
   if(!savedAt){ el.textContent = '답을 고르면 자동으로 저장되어 다른 기기에서도 이어 풀 수 있습니다.'; return; }
   const t = new Date(savedAt).toLocaleTimeString('ko-KR', {hour:'2-digit', minute:'2-digit'});
-  el.innerHTML = restored
-    ? (fromCloud
-why        ? `💾 <b>다른 기기</b>에서 ${t}에 풀던 답을 불러왔습니다. (첨부 파일은 다시 올려주세요)`
-        : `💾 <b>${t}</b>에 풀던 답을 불러왔습니다. (첨부 파일은 다시 올려주세요)`)
-    : `💾 ${t} 저장됨`;
+  if(!restored){ el.innerHTML = `💾 ${t} 저장됨`; return; }
+  el.innerHTML = fromCloud
+    ? `💾 <b>다른 기기</b>에서 ${t}에 풀던 답을 불러왔습니다. (첨부 파일은 다시 올려주세요)`
+    : `💾 <b>${t}</b>에 풀던 답을 불러왔습니다. (첨부 파일은 다시 올려주세요)`;
 }
 function saveSolveDraftNow(){
   if(!currentSolve || previewingStudent) return;
