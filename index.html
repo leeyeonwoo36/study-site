@@ -1603,9 +1603,6 @@ if(!isAdmin && currentStudent){
 }
   // settings는 컬렉션 쿼리 대신 aiConfig 문서 하나만 구독한다.
   // (학생은 컬렉션 전체 읽기 권한이 없어 쿼리가 거부됨)
-  unsubs.push(onSnapshot(doc(db,'drafts', currentStudent), snap=>{
-    cloudDrafts = snap.exists() ? (snap.data().items || {}) : {};
-  }, err=>console.error('drafts 구독 에러:', err.code)));
   unsubs.push(onSnapshot(doc(db,'settings','aiConfig'), snap=>{
     sharedAiKey = snap.exists() ? (snap.data().geminiKey || '') : '';
   }, err=>console.error('aiConfig 구독 에러:', err.code)));
@@ -1614,6 +1611,9 @@ if(!isAdmin && currentStudent){
     schedules.sort((a,b)=> String(a.date) < String(b.date) ? -1 : 1);
     renderSchedules();
   });
+ unsubs.push(onSnapshot(doc(db,'drafts', currentStudent), snap=>{
+    cloudDrafts = snap.exists() ? (snap.data().items || {}) : {};
+  }, err=>console.error('drafts 구독 에러:', err.code)));
   sub('attendance', snap => {
     attendance = {};
     snap.docs.forEach(d => { attendance[d.id] = d.data(); });
