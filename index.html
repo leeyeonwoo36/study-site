@@ -5264,14 +5264,28 @@ function toggleWrongNoteDetail(qid){
 }
 function renderWrongNote(){
   const box = $('wrong-note-list'); if(!box) return;
-  // ✅ 삭제된 문제는 제외하고 계산
-  const entries = Object.entries(wrongItems).filter(([qid])=>questions.some(x=>x.qid===qid));
+
+  // 삭제된 문제는 제외
+  let entries = Object.entries(wrongItems).filter(([qid])=>questions.some(x=>x.qid===qid));
+
   if(!entries.length){
     box.innerHTML = '<p class="empty-hint">아직 등록된 오답이 없습니다. 과제·시험을 풀면 틀린 문제가 자동으로 여기 모입니다.</p>';
     return;
   }
-  const open = entries.filter(([,v])=>v.status!=='mastered');
+
+  const total = entries.length;
+  const fStatus = $('wrong-filter-status') ? $('wrong-filter-status').value : 'open';
+  const fKind   = $('wrong-filter-kind')   ? $('wrong-filter-kind').value   : '';
+
+  // 출처(과제/시험) 필터
+  if(fKind) entries = entries.filter(([,v])=>v.kind===fKind);
+
+  // 최근에 틀린 것부터
+  entries.sort((a,b)=>(b[1].addedAt||0)-(a[1].addedAt||0));
+
+  const open     = entries.filter(([,v])=>v.status!=='mastered');
   const mastered = entries.filter(([,v])=>v.status==='mastered');
+
   const row = ([qid,item])=>{
     const q = questions.find(x=>x.qid===qid);
     if(!q) return '';
@@ -5286,6 +5300,7 @@ function renderWrongNote(){
       <div class="bi-body">
         <span class="qset-tag type">${q.type==='mc'?'객관식':'단답형'}</span>
         <span class="qset-tag set">${esc(item.taskTitle||'')}</span>
+        ${item.kind==='exam'?'<span class="qset-tag ans">시험</span>':'<span class="qset-tag ans">과제</span>'}
         ${item.status==='mastered'?'<span class="badge good">마스터</span>':'<span class="badge warn">복습 필요</span>'}
         <div style="margin-top:6px; cursor:pointer;" onclick="toggleWrongNoteDetail('${qid}')">
           <b>${esc(q.body)}</b> <span style="color:var(--muted); font-size:12px;">${isOpen?'▲ 접기':'▼ 상세보기'}</span>
@@ -5298,10 +5313,30 @@ function renderWrongNote(){
       </div>
     </div>`;
   };
-  box.innerHTML =
-    (open.length ? `<h3 style="margin-bottom:8px;">복습 필요 (${open.length})</h3>` + open.map(row).join('')
-                 : '<p class="empty-hint">현재 복습이 필요한 문제가 없습니다. 잘하고 있어요!</p>')
-    + (mastered.length ? `<h3 style="margin:18px 0 8px;">마스터 완료 (${mastered.length})</h3>` + mastered.map(row).join('') : '');
+
+  const showOpen     = (fStatus !== 'mastered');
+  const showMastered = (fStatus !== 'open');
+  const parts = [];
+
+  if(showOpen){
+    parts.push(open.length
+      ? `<h3 style="margin-bottom:8px;">복습 필요 (${open.length})</h3>` + open.map(row).join('')
+      : '<p class="empty-hint">현재 복습이 필요한 문제가 없습니다. 잘하고 있어요!</p>');
+  }
+  if(showMastered && mastered.length){
+    parts.push(`<h3 style="margin:${showOpen?'18px':'0'} 0 8px;">마스터 완료 (${mastered.length})</h3>` + mastered.map(row).join(''));
+  }
+  if(showMastered && !mastered.length && !showOpen){
+    parts.push('<p class="empty-hint">아직 마스터한 문제가 없습니다.</p>');
+  }
+
+  // 필터 때문에 가려진 게 있으면 알려준다
+  const shown = (showOpen ? open.length : 0) + (showMastered ? mastered.length : 0);
+  if(shown < total){
+    parts.push(`<p class="note" style="margin-top:12px;">전체 ${total}개 중 ${shown}개를 보고 있습니다. 위 필터를 바꾸면 나머지도 볼 수 있어요.</p>`);
+  }
+
+  box.innerHTML = parts.join('');
 }
 function fillMyInfo(){
   const s = (!adminViewAll && currentStudent) ? students.find(x=>x.uid===currentStudent) : null;
