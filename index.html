@@ -5890,6 +5890,9 @@ async function submitSolve(){
     missingMsg = `아직 답하지 않은 문제가 ${missing.length}개 있습니다.\n→ ${nums}번\n\n`;
   }
 
+  const flagged = qs.filter(q=>solveFlags.has(q.qid)).length;
+  const flagMsg = flagged ? `★ 표시해 둔 문제가 ${flagged}개 있습니다. 확인하셨나요?\n\n` : '';
+
   const confirmMsg = (late ? '⚠️ 마감일시가 지났습니다. 지각 제출로 기록됩니다.\n\n' : '')
     + missingMsg
     + flagMsg
