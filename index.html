@@ -408,6 +408,12 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator{ margin-left:2px
 @media (min-width:761px) and (max-width:1024px){
   .dt-grid{ grid-template-columns:1fr; gap:8px; }
 }
+.ex-table{border-collapse:collapse; width:100%;}
+.ex-table td{border:1px solid var(--border); padding:0;}
+.ex-table tr:first-child td{background:var(--brand-soft);}
+.ex-table input{border:none; border-radius:0; padding:6px 8px; font-size:13px;
+  width:100%; min-width:90px; background:transparent;}
+.ex-table input:focus{outline:2px solid var(--brand); outline-offset:-2px;}
 </style>
 </head>
 <body>
@@ -4222,6 +4228,47 @@ function changeExtractedType(i, type){
   }
   renderExtractedQuestionsPreview();
 }
+/* ===== 추출 결과의 표 편집 ===== */
+function exTable(i){
+  const q = extractedQuestionsCache[i];
+  return (q && Array.isArray(q.table)) ? q.table : null;
+}
+function exTableWidth(i){
+  const t = exTable(i);
+  return t && t.length ? t[0].cells.length : 0;
+}
+function toggleExtractedTable(i, on){
+  const q = extractedQuestionsCache[i]; if(!q) return;
+  q.hasTable = on;
+  if(on && (!Array.isArray(q.table) || !q.table.length)){
+    q.table = [ {cells:['','','']}, {cells:['','','']} ];   // 기본 2행 3열
+  }
+  renderExtractedQuestionsPreview();
+}
+function updateExtractedCell(i, r, c, v){
+  const t = exTable(i); if(!t || !t[r]) return;
+  t[r].cells[c] = v;          // 다시 그리지 않아 입력 중 커서가 튀지 않음
+}
+function addExtractedRow(i){
+  const t = exTable(i); if(!t) return;
+  t.push({ cells: Array.from({length: exTableWidth(i) || 1}, ()=>'') });
+  renderExtractedQuestionsPreview();
+}
+function addExtractedCol(i){
+  const t = exTable(i); if(!t) return;
+  t.forEach(row => row.cells.push(''));
+  renderExtractedQuestionsPreview();
+}
+function delExtractedRow(i){
+  const t = exTable(i); if(!t || t.length<=1) return;
+  t.pop();
+  renderExtractedQuestionsPreview();
+}
+function delExtractedCol(i){
+  const t = exTable(i); if(!t || exTableWidth(i)<=1) return;
+  t.forEach(row => row.cells.pop());
+  renderExtractedQuestionsPreview();
+}
 function toggleExtractedPassage(i, on){
   const q = exQ(i); if(!q) return;
   q.hasPassage = on;
@@ -4311,6 +4358,29 @@ function renderExtractedQuestionsPreview(){
       <div class="passage-editor" contenteditable="true"
         oninput="updateExtracted(${i},'passage',this.innerHTML)">${q.passage||''}</div>` : '';
 
+          const t = Array.isArray(q.table) ? q.table : null;
+    const tableHtml = `
+      <div class="check-line" style="margin-top:10px;">
+        <input type="checkbox" id="ex-tb-${i}" ${q.hasTable?'checked':''} onchange="toggleExtractedTable(${i},this.checked)">
+        <label for="ex-tb-${i}" style="margin:0;">보기 표 사용</label>
+      </div>
+      ${q.hasTable && t ? `
+        <div style="overflow-x:auto; margin:6px 0;">
+          <table class="ex-table">
+            ${t.map((row,r)=>`<tr>${row.cells.map((c,ci)=>`
+              <td><input type="text" value="${esc(c)}"
+                placeholder="${r===0?'머리글':''}"
+                oninput="updateExtractedCell(${i},${r},${ci},this.value)"></td>`).join('')}</tr>`).join('')}
+          </table>
+        </div>
+        <div style="display:flex; gap:5px; flex-wrap:wrap;">
+          <button type="button" class="btn small secondary" onclick="addExtractedRow(${i})">+ 행</button>
+          <button type="button" class="btn small secondary" onclick="addExtractedCol(${i})">+ 열</button>
+          <button type="button" class="btn small ghost" onclick="delExtractedRow(${i})">− 행</button>
+          <button type="button" class="btn small ghost" onclick="delExtractedCol(${i})">− 열</button>
+          <span class="note" style="align-self:center; margin:0;">${t.length}행 × ${exTableWidth(i)}열 · 첫 행은 머리글</span>
+        </div>` : ''}`;
+
     const imgSrc = q.extractedImageUrl;
     const imageHtml = `
       <label style="margin-top:10px;">보기 이미지</label>
@@ -4368,6 +4438,7 @@ function renderExtractedQuestionsPreview(){
           <label for="ex-hp-${i}" style="margin:0;">&lt;보기&gt; 글 사용</label>
         </div>
         ${passageHtml}
+        ${tableHtml}
         ${imageHtml}
         ${choicesHtml}
 
@@ -4386,17 +4457,21 @@ function nextOrderInSet(set){
 }
 
 /* 추출된 문제 → Firestore 저장 형태 */
-/* 추출된 문제 → Firestore 저장 형태 */
 function extractedToQuestionData(q, set, order){
   const text = q.hasPassage ? (q.passage||'') : '';
   const hasText = !!text.replace(/<[^>]*>/g,'').trim();
   const hasImg = !!q.extractedImageUrl;
-  const passages = (hasText || hasImg) ? [{
+  const tbl = (q.hasTable && Array.isArray(q.table) && q.table.length)
+    ? q.table.map(r => ({ cells: (r.cells||[]).map(c => String(c||'')) }))
+    : null;
+
+  const passages = (hasText || hasImg || tbl) ? [{
     text: hasText ? text : '',
     imageUrl: q.extractedImageUrl || '',
-    hideTitle: hasText ? !!q.hideTitle : true,   // 그림만 있으면 라벨 숨김
-    table: null
+    hideTitle: (hasText || tbl) ? !!q.hideTitle : true,   // 그림만 있으면 라벨 숨김
+    table: tbl
   }] : [];
+
   return {
     set,
     order,
@@ -4447,6 +4522,23 @@ async function saveAllExtractedQuestions(){
   renderExtractedQuestionsPreview();
 }
 
+/* AI가 준 표를 {cells:[]} 배열로 정돈한다 (칸 수를 가장 긴 행에 맞춤) */
+function normalizeExtractedTable(q){
+  if(!q.hasTable || !Array.isArray(q.table) || !q.table.length){
+    q.hasTable = false; q.table = null; return;
+  }
+  const rows = q.table
+    .map(r => Array.isArray(r) ? r : (Array.isArray(r && r.cells) ? r.cells : []))
+    .map(cells => cells.map(c => String(c ?? '')));
+  const width = rows.reduce((m,r)=>Math.max(m, r.length), 0);
+  if(!width){ q.hasTable = false; q.table = null; return; }
+  // 행마다 칸 수가 다르면 빈 칸으로 채워 직사각형으로 만든다
+  q.table = rows.map(cells => ({
+    cells: Array.from({length: width}, (_,i)=> cells[i] ?? '')
+  }));
+  q.hasTable = true;
+}
+    
 let extractedQuestionsCache = [];
 let extractWarnings = [];
 /* 추출 결과 정렬
@@ -4628,6 +4720,12 @@ async function extractQuestionsFromPdf(){
             hasPassage: { type: "boolean" },
             passage:    { type: "string" },
             hideTitle:  { type: "boolean" },
+            hasTable:   { type: "boolean" },
+            table:      { type: "array", items: {
+                            type: "object",
+                            properties: { cells: { type: "array", items: { type: "string" } } },
+                            required: ["cells"]
+                          } },
             choices:    { type: "array", items: { type: "string" }, minItems: 5, maxItems: 5 },
             answer:     { type: "string" },
             explain:    { type: "string" },
@@ -4637,7 +4735,7 @@ async function extractQuestionsFromPdf(){
             imageDesc:  { type: "string" }
           },
           required: ["number","questionPage","type","body","hasPassage","passage","answer","explain","hasImage"],
-          propertyOrdering: ["number","questionPage","type","body","hasPassage","passage","choices","answer","explain","hasImage","imagePage","imageBox2d","imageDesc"]
+          propertyOrdering: ["number","questionPage","type","body","hasPassage","passage","hasTable","table","choices","answer","explain","hasImage","imagePage","imageBox2d","imageDesc"]
         }
       }
     },
@@ -4664,6 +4762,15 @@ async function extractQuestionsFromPdf(){
 - 지문 박스에 원본에서 "<보기>"라는 표시가 없으면(예: 그냥 제시문, (가)(나) 글, 자료 박스) hideTitle을 true, "<보기>"라고 적혀 있으면 false로 하라.
 - passage 안에서 원본에 밑줄이 있으면 <u></u>로 감싸라. body와 choices에는 <u>를 넣지 마라.
 
+[표 규칙]
+- 문제에 글자와 숫자로 이루어진 표가 있으면 hasTable을 true로 하고, table에 내용을 채워라.
+- table은 행의 배열이고 각 행은 {"cells": ["칸1","칸2", ...]} 형태다. 첫 행은 머리글 행으로 넣어라.
+- 모든 행의 칸 개수를 같게 맞춰라. 병합된 칸은 같은 내용을 반복해 채우거나 빈 문자열("")로 두어라.
+- 표는 그림이 아니다. 표가 있다고 해서 hasImage를 true로 하지 마라.
+- 표 위아래에 설명 문장이 있으면 그 문장만 passage에 넣고, 표 자체는 passage에 글자로 옮기지 마라.
+- 그래프·지도·도식처럼 그림으로 된 자료는 표가 아니다. 그건 그림 규칙을 따르라.
+- 표가 없으면 hasTable을 false로 하고 table은 생략하라.
+
 [그림 규칙 — 매우 중요]
 - 문제에 그림·사진·그래프·지도·삽화·도식 같은 이미지 요소가 있으면 hasImage를 true로 하라. 글자로만 된 표는 이미지가 아니다.
 - imagePage: 그림이 있는 문제지 PDF 페이지 번호(1부터).
@@ -4674,6 +4781,9 @@ async function extractQuestionsFromPdf(){
 - explain에는 정답지 해설을 우선 추출하라. 없으면 고2 국제정치 교과 수준으로 간단히 작성하라.
 - 반드시 지정된 JSON 스키마 형식으로만 응답하라.`;
 
+    const { list: questionsList, warnings } = sortExtractedByNumber(parsed.questions || []);
+    questionsList.forEach(normalizeExtractedTable);
+    
   try {
     const examBase64 = await fileToBase64(examFile);
     const answerBase64 = await fileToBase64(answerFile);
