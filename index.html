@@ -5937,11 +5937,15 @@ async function submitSolve(){
   const scorePayload = {}; scorePayload[currentStudent] = rec;
   const studentUid = currentStudent;
 
+   let step = '';
   try{
-    // 제출물 → 점수 → 오답노트 순서 (보안 규칙이 제출물 존재를 확인함)
+    step = '제출물';
     await setDoc(doc(db,'submissions', tid+'|'+studentUid), subData);
+    step = '점수';
     await setDoc(doc(db,'scores', kind+'__'+tid), scorePayload, {merge:true});
+    step = '오답노트';
     if(mode==='omr') await updateWrongBankAfterGrade(studentUid, kind, tid, t.title, qs, answers);
+    step = '';
 
     clearSolveDraft(tid);
     clearSolveFlags(tid);
@@ -5961,7 +5965,7 @@ async function submitSolve(){
         : '파일이 제출되었습니다. 관리자가 확인한 뒤 점수가 반영됩니다.')
       + (late ? '\n(지각 제출로 기록되었습니다)' : ''));
   }catch(e){
-    console.error(e);
+        console.error('제출 실패 단계:', step, e);
     alert('제출 실패: '+e.message+'\n\n풀던 답은 임시 저장되어 있으니 잠시 후 다시 시도해주세요.');
   }
 }
