@@ -5898,10 +5898,7 @@ async function submitSolve(){
     + flagMsg
     + '제출하면 답안을 수정할 수 없습니다. 제출할까요?';
   if(!confirm(confirmMsg)) return;
-
-  const flagged = qs.filter(q=>solveFlags.has(q.qid)).length;
-  const flagMsg = flagged ? `★ 표시해 둔 문제가 ${flagged}개 있습니다. 확인하셨나요?\n\n` : '';
-
+    
   let photos = [];
   if(photoFiles.length){
     try{
