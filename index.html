@@ -3559,7 +3559,10 @@ function renderPdfBar(){
   const bar = $('pdf-select-bar'); if(!bar) return;
   bar.textContent = pdfSelectedQids.length ? `선택한 문제 ${pdfSelectedQids.length}개` : '선택한 문제: 없음';
 }
-
+function closePrintOptions(){
+  closeModal('print-options-modal');
+  restoreBankSelection();
+}
 function openPrintOptions(){
   const qs = pdfSelectedQids.map(id=>questions.find(x=>x.qid===id)).filter(Boolean);
   if(!qs.length){ alert('먼저 문제은행에서 문제를 선택하세요.'); return; }
