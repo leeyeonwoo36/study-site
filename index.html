@@ -4790,12 +4790,10 @@ ${refCount ? `- 첨부된 참고 자료 ${refCount}개의 내용을 최대한 �
 주제/지시사항: ${prompt || '(첨부된 참고 자료를 기반으로 출제)'}`;
 
   try {
-        const parts = [{ text: sysPrompt }];
+    const parts = [{ text: sysPrompt }];
     for(const f of aiRefFiles){
       const base64 = await fileToBase64(f);
-      parts.push({
-        text: `[참고 자료: ${f.name}]`,          // 어느 자료인지 모델이 구분하도록
-        });
+      parts.push({ text: `[참고 자료: ${f.name}]` });
       parts.push({ inline_data: { mime_type: f.type || 'application/octet-stream', data: base64 } });
     }
     // ✅ [수정 완료] URL 변수명(apiKey) 수정, fetch 함수 복구, gemini-3.6-flash 적용
