@@ -1433,7 +1433,11 @@ window.ADMIN_UIDS = [
 ];
 /* ===== 텔레그램 알림 (Apps Script 중계) ===== */
 const TG_RELAY_URL = 'https://script.google.com/macros/s/AKfycbyYesIRJcl9rqK3H7JWBH4iI3U1kGwPxzIYIvc8doXHjVHOIJeFVdJsyNmeqwh_C5EkyA/exec';
-
+/* 텔레그램 HTML 서식용 이스케이프. 학생 이름·과제명에 < > &가 있어도 안전하게 */
+function tgEsc(s){
+  return String(s==null ? '' : s)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
 /* 알림은 부가 기능이므로 실패해도 본래 동작을 막지 않는다 (await 하지 않음) */
 function notifyTelegram(text){
   if(!TG_RELAY_URL || TG_RELAY_URL.startsWith('여기에')) return;
@@ -1446,6 +1450,64 @@ function notifyTelegram(text){
       body: JSON.stringify({ text })
     }).catch(e=>console.warn('텔레그램 알림 실패:', e.message));
   }catch(e){ console.warn('텔레그램 알림 실패:', e.message); }
+}
+/* ===== 마감된 과제·시험 리포트 (관리자 화면이 열려 있을 때 한 번씩 확인) ===== */
+let dueReportRunning = false;
+
+async function checkDueReports(){
+  if(dueReportRunning || previewingStudent) return;
+  if(currentStudent) return;    // 학생 세션에서는 보내지 않음
+  if(!students.length || !window.fb) return;                                 // 데이터가 아직 안 옴
+  dueReportRunning = true;
+
+  const now = Date.now();
+  const THREE_DAYS = 3 * 24 * 3600 * 1000;
+  const { db, doc, updateDoc } = window.fb;
+
+  try{
+    for(const kind of ['hw','exam']){
+      for(const t of tasks[kind]){
+        if(t.reportSent) continue;
+        if(!t.due) continue;
+        const due = new Date(t.due).getTime();
+        if(isNaN(due) || due > now) continue;          // 아직 마감 전
+
+        // 기능을 붙이기 전에 이미 끝난 오래된 과제는 조용히 표시만 하고 넘어간다
+        if(now - due > THREE_DAYS){
+          await updateDoc(doc(db,'tasks', t.tid), { reportSent: true });
+          continue;
+        }
+
+        const targets = taskTargetStudents(t);
+        const done = [], miss = [];
+        targets.forEach(s=>{
+          const sub = submissions[t.tid+'|'+s.uid];
+          if(sub) done.push(s.name + (sub.late ? ' (지각)' : ''));
+          else miss.push(s.name);
+        });
+
+        const isExam = (kind === 'exam');
+        const lines = [
+          `${isExam ? '📕' : '📘'} <b>마감 리포트 · ${isExam ? '시험' : '과제'}</b>`,
+          `<b>${tgEsc(t.title)}</b>`,
+          `🕗 마감 ${tgEsc(fmtDue(t.due))}`,
+          '',
+          `✅ <b>제출 ${done.length}/${targets.length}</b>`,
+          done.length ? tgEsc(done.join(', ')) : '<i>없음</i>',
+          '',
+          `❌ <b>미제출 ${miss.length}명</b>`,
+          miss.length ? tgEsc(miss.join(', ')) : '<i>없음</i>'
+        ];
+
+        notifyTelegram(lines.join('\n'));
+        await updateDoc(doc(db,'tasks', t.tid), { reportSent: true });   // 중복 발송 방지
+      }
+    }
+  }catch(e){
+    console.error('마감 리포트 실패:', e.message);
+  }finally{
+    dueReportRunning = false;
+  }
 }
 /* ---------- 공통 유틸 ---------- */
 let _seq = 1;
@@ -1629,6 +1691,10 @@ function startSubscriptions(isAdmin, ownerUid){
       snap.docs.forEach(d => { memosByUid[d.id] = d.data().memos || []; });
       renderMemos();
     });
+
+    // 마감된 과제 리포트: 데이터가 들어온 뒤 한 번, 이후 10분마다 확인
+    setTimeout(checkDueReports, 8000);
+    unsubs.push((id => () => clearInterval(id))(setInterval(checkDueReports, 10*60*1000)));
 
   } else if(currentStudent){
     // 학생은 본인 문서만 읽을 수 있으므로 컬렉션이 아니라 문서 하나만 구독
@@ -6061,11 +6127,22 @@ async function submitSolve(){
     clearSolveFlags(tid);
     clearCloudDraft(tid);
     const meName = (students.find(x=>x.uid===studentUid)||{}).name || '학생';
+    const isExam = (kind === 'exam');
+    const head   = isExam ? '📕' : '📘';
+    const kindKo = isExam ? '시험' : '과제';
+
+    const gradeLine = (mode==='omr')
+      ? `✅ 자동채점 · <b>${correct} / ${qs.length}</b>`
+      : `📎 파일 제출 ${photos.length}개 · <b>채점 필요</b>`;
+
+    const d = now;
+    const p = n => String(n).padStart(2,'0');
+    const dateLine = `🕗 ${d.getFullYear()}.${p(d.getMonth()+1)}.${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+
     notifyTelegram(
-      `📝 ${meName} · ${t.title}\n` +
-      (mode==='omr' ? `자동채점 ${correct}/${qs.length}` : `파일 제출 ${photos.length}개 (채점 필요)`) +
-      (late ? '\n⚠️ 지각 제출' : '') +
-      `\n${now.toLocaleString('ko-KR')}`
+      `${head} <b>${tgEsc(meName)}</b> — <b>${tgEsc(t.title)}</b> ${kindKo}\n` +
+      gradeLine + (late ? '  ⚠️ <b>지각</b>' : '') + '\n' +
+      dateLine
     );
     closeModal('solve-modal');
     currentSolve = null;
