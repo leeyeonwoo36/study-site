@@ -1425,7 +1425,22 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator{ margin-left:2px
 window.ADMIN_UIDS = [
   'MdFLPZCpGib4AsdOwoaTptQqk7k2'
 ];
+/* ===== 텔레그램 알림 (Apps Script 중계) ===== */
+const TG_RELAY_URL = 'https://script.google.com/macros/s/AKfycbyYesIRJcl9rqK3H7JWBH4iI3U1kGwPxzIYIvc8doXHjVHOIJeFVdJsyNmeqwh_C5EkyA/exec';
 
+/* 알림은 부가 기능이므로 실패해도 본래 동작을 막지 않는다 (await 하지 않음) */
+function notifyTelegram(text){
+  if(!TG_RELAY_URL || TG_RELAY_URL.startsWith('여기에')) return;
+  if(previewingStudent) return;              // 미리보기 중에는 보내지 않음
+  try{
+    fetch(TG_RELAY_URL, {
+      method: 'POST',
+      mode: 'no-cors',                       // 응답을 읽지 않는 단방향 전송
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ text })
+    }).catch(e=>console.warn('텔레그램 알림 실패:', e.message));
+  }catch(e){ console.warn('텔레그램 알림 실패:', e.message); }
+}
 /* ---------- 공통 유틸 ---------- */
 let _seq = 1;
 const uid = p => p + (_seq++) + '_' + Date.now().toString(36);
@@ -5931,6 +5946,13 @@ async function submitSolve(){
     clearSolveDraft(tid);
     clearSolveFlags(tid);
     clearCloudDraft(tid);
+    const meName = (students.find(x=>x.uid===studentUid)||{}).name || '학생';
+    notifyTelegram(
+      `📝 ${meName} · ${t.title}\n` +
+      (mode==='omr' ? `자동채점 ${correct}/${qs.length}` : `파일 제출 ${photos.length}개 (채점 필요)`) +
+      (late ? '\n⚠️ 지각 제출' : '') +
+      `\n${now.toLocaleString('ko-KR')}`
+    );
     closeModal('solve-modal');
     currentSolve = null;
     alert(
