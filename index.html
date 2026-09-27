@@ -709,6 +709,11 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator{ margin-left:2px
             <input type="text" id="new-qset-name" placeholder="새 세트 이름 (예: 4주차 세트)">
             <button class="btn secondary" style="white-space:nowrap;" onclick="addQSet()">세트 추가</button>
           </div>
+        <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:10px;">
+          <input type="text" id="qset-search" placeholder="세트 이름 검색"
+            oninput="renderQSetList()" style="flex:1; min-width:160px;">
+          <button class="btn small ghost" onclick="collapseAllQSets()">모두 접기</button>
+            </div>
           <div id="qset-list"></div>
         </div>
 
@@ -3006,18 +3011,46 @@ async function onQDrop(e){
     await updateDoc(doc(db,'questions', other.qid), { order: qOrder });
   } catch(e){ alert('순서 변경 실패: '+e.message); }
 }
+let qsetShowAll = false;          // 세트 목록 전체 보기 여부
+const QSET_PREVIEW = 3;           // 기본으로 보여줄 세트 수
+
+function toggleQSetShowAll(){
+  qsetShowAll = !qsetShowAll;
+  renderQSetList();
+}
+function collapseAllQSets(){
+  document.querySelectorAll('.qset-block.open').forEach(el=>el.classList.remove('open'));
+}
+
 function renderQSetList(){
   const wrap=$('qset-list'); if(!wrap) return;
+
+  // 펼쳐둔 세트는 다시 그려도 유지 (이름 기준이라 목록이 걸러져도 안전)
   const openSets = new Set();
   wrap.querySelectorAll('.qset-block.open').forEach(el=>{
-    const idx = Number(el.id.replace('qset-block-',''));
-    if(questionSets[idx]) openSets.add(questionSets[idx]);
+    const name = el.dataset.set;
+    if(name) openSets.add(name);
   });
-  wrap.innerHTML = questionSets.length ? questionSets.map((set,si)=>{
-        const qs = questions.filter(q=>q.set===set).sort((a,b)=>(a.order??0)-(b.order??0));
-        const items = qs.length ? qs.map((q,n)=>qsetQuestionHtml(q,n,qs.length)).join('')
+
+  const kw = ($('qset-search') ? $('qset-search').value : '').trim().toLowerCase();
+  const matched = kw
+    ? questionSets.filter(s => String(s).toLowerCase().includes(kw))
+    : questionSets;
+
+  if(!questionSets.length){ wrap.innerHTML = '<p class="note">등록된 세트가 없습니다.</p>'; return; }
+  if(!matched.length){ wrap.innerHTML = `<p class="note">"${esc(kw)}"와 일치하는 세트가 없습니다.</p>`; return; }
+
+  // 검색 중에는 전부 보여준다 (걸러낸 결과를 또 접을 이유가 없음)
+  const showAll = qsetShowAll || !!kw;
+  const shown = showAll ? matched : matched.slice(0, QSET_PREVIEW);
+  const hidden = matched.length - shown.length;
+
+  wrap.innerHTML = shown.map(set=>{
+    const si = questionSets.indexOf(set);
+    const qs = questions.filter(q=>q.set===set).sort((a,b)=>(a.order??0)-(b.order??0));
+    const items = qs.length ? qs.map((q,n)=>qsetQuestionHtml(q,n,qs.length)).join('')
       : '<p class="note">이 세트에 등록된 문제가 없습니다.</p>';
-        return `<div class="qset-block${openSets.has(set)?' open':''}" id="qset-block-${si}">
+    return `<div class="qset-block${openSets.has(set)?' open':''}" id="qset-block-${si}" data-set="${esc(set)}">
       <div class="qset-head" onclick="document.getElementById('qset-block-${si}').classList.toggle('open')">
         <span>${esc(set)}<span class="qset-count">${qs.length}문제 · 클릭하여 펼치기</span></span>
         <span style="display:flex; gap:6px;">
@@ -3025,7 +3058,14 @@ function renderQSetList(){
           <button class="btn small danger" onclick="event.stopPropagation();removeQSet('${jsq(set)}')">삭제</button>
         </span>
       </div><div class="qset-body">${items}</div></div>`;
-  }).join('') : '<p class="note">등록된 세트가 없습니다.</p>';
+  }).join('');
+
+  if(!kw && (hidden > 0 || qsetShowAll)){
+    wrap.innerHTML += `<button class="btn secondary" style="width:100%; margin-top:8px;"
+      onclick="toggleQSetShowAll()">${
+        qsetShowAll ? `▲ 접기 (최근 ${QSET_PREVIEW}개만 보기)` : `▼ 세트 ${hidden}개 더 보기`
+      }</button>`;
+  }
 }
 function qsetQuestionHtml(q,n,total){
   return `<div class="qset-q" draggable="true" data-qid="${q.qid}"
