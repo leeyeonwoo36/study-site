@@ -1463,6 +1463,27 @@ function notifyTelegram(text){
     }).catch(e=>console.warn('텔레그램 알림 실패:', e.message));
   }catch(e){ console.warn('텔레그램 알림 실패:', e.message); }
 }
+/* Cloudinary URL에서 public_id를 뽑는다.
+   예) https://res.cloudinary.com/xxx/image/upload/v1712345678/abcd1234.png → abcd1234 */
+function cloudinaryPublicId(url){
+  if(!url || url.indexOf('res.cloudinary.com') < 0) return '';
+  const m = String(url).match(/\/upload\/(?:v\d+\/)?(.+)$/);
+  if(!m) return '';
+  return m[1].replace(/\.[a-z0-9]+$/i, '');      // 확장자 제거
+}
+
+/* 파일 삭제 요청. 실패해도 본래 삭제 동작을 막지 않는다 */
+function deleteCloudinaryFiles(urls){
+  const ids = (urls||[]).map(cloudinaryPublicId).filter(Boolean);
+  if(!ids.length || !TG_RELAY_URL || TG_RELAY_URL.startsWith('여기에')) return;
+  try{
+    fetch(TG_RELAY_URL, {
+      method:'POST', mode:'no-cors',
+      headers:{ 'Content-Type':'text/plain;charset=utf-8' },
+      body: JSON.stringify({ action:'cloudinaryDelete', publicIds: ids, resourceType:'image' })
+    }).catch(e=>console.warn('파일 삭제 요청 실패:', e.message));
+  }catch(e){ console.warn('파일 삭제 요청 실패:', e.message); }
+}
 /* ===== 마감된 과제·시험 리포트 (관리자 화면이 열려 있을 때 한 번씩 확인) ===== */
 let dueReportRunning = false;
 
@@ -5343,14 +5364,24 @@ function cancelTaskEdit(kind){
 }
 function removeTask(kind,tid){
   const t = tasks[kind].find(x=>x.tid===tid);
-  if(!confirm(`"${t?t.title:''}"을(를) 삭제할까요?\n관련 성적·제출 기록과, 이 ${kind==='hw'?'과제':'시험'}에서 생긴 오답노트 항목도 함께 삭제됩니다.`)) return;
+  if(!confirm(`"${t?t.title:''}"을(를) 삭제할까요?\n관련 성적·제출 기록과, 이 ${kind==='hw'?'과제':'시험'}에서 생긴 오답노트 항목도 함께 삭제됩니다.\n첨부 PDF와 학생 제출 파일도 저장소에서 삭제됩니다.`)) return;
+
+  // 지울 파일 주소를 문서 삭제 전에 모아둔다
+  const files = [];
+  if(t && t.pdfUrl) files.push(t.pdfUrl);
+  students.forEach(s=>{
+    const sub = submissions[tid+'|'+s.uid];
+    if(sub && Array.isArray(sub.photos)) sub.photos.forEach(p=>{ if(p && p.url) files.push(p.url); });
+  });
+
   const { db, doc, deleteDoc } = window.fb;
   deleteDoc(doc(db,'tasks',tid)).catch(e=>alert('삭제 실패: '+e.message));
   deleteDoc(doc(db,'scores', kind+'__'+tid)).catch(()=>{});
   students.forEach(s=>{
     deleteDoc(doc(db,'submissions', tid+'|'+s.uid)).catch(()=>{});
   });
-  cleanWrongBankItems((qid, item) => item.taskId===tid);   // ✅ 이 과제에서 생긴 오답만 정리
+  cleanWrongBankItems((qid, item) => item.taskId===tid);
+  deleteCloudinaryFiles(files);
 }
 /* 과제·시험의 실제 대상 학생 (승인된 학생 중 배정된 학생만) */
 function taskTargetStudents(t){
