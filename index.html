@@ -735,7 +735,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator{ margin-left:2px
         </div>
         
 
-        <div class="card">
+        <div class="card" id="q-form-card">
           <h3 id="q-form-title">새 문제 등록</h3>
           <div class="form-grid">
             <div><label>문제 유형</label>
@@ -1244,6 +1244,12 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator{ margin-left:2px
     <div id="picker-list" style="max-height:44vh; overflow:auto; margin-bottom:12px;"></div>
     <button class="btn" onclick="applyPicker()">선택한 문제 담기</button>
     <button class="btn ghost" onclick="closeModal('picker-modal')">닫기</button>
+  </div>
+</div>
+<div class="modal-bg" id="q-edit-modal">
+  <div class="modal" style="max-width:880px;">
+    <button class="modal-close" onclick="cancelQuestionEdit()">✕</button>
+    <div id="q-edit-modal-slot"></div>
   </div>
 </div>
 <!-- 관리자 오답노트 문제 추가 -->
@@ -2487,19 +2493,31 @@ function saveScheduleEdit(){
   const { db, doc, updateDoc } = window.fb;
   updateDoc(doc(db,'schedules', editScheduleSid), data).catch(e=>alert('수정 실패: '+e.message));
 }
-  function findNearestSessionSid(){
+function findNearestSessionSid(){
   const today = new Date(); today.setHours(0,0,0,0);
-  let best = null, bestDiff = Infinity;
+
+  let near = null, nearDiff = Infinity;   // 오늘 ±1일 이내 (진행 중이거나 코앞인 수업)
+  let past = null, pastDiff = Infinity;   // 오늘 포함 지난 수업 중 가장 최근
+  let next = null, nextDiff = Infinity;   // 지난 수업이 없을 때 쓸 가장 가까운 예정 수업
+
   schedules.forEach(s=>{
     const d = new Date(s.date+'T00:00:00');
     if(isNaN(d)) return;
-    const diffDays = Math.round((d - today)/86400000);
-    if(Math.abs(diffDays) <= 1 && Math.abs(diffDays) < bestDiff){
-      bestDiff = Math.abs(diffDays);
-      best = s.sid;
+    const diff = Math.round((d - today)/86400000);   // 음수면 과거
+
+    if(Math.abs(diff) <= 1 && Math.abs(diff) < nearDiff){
+      nearDiff = Math.abs(diff); near = s.sid;
+    }
+    if(diff <= 0 && -diff < pastDiff){               // 마지막으로 진행한 수업
+      pastDiff = -diff; past = s.sid;
+    }
+    if(diff > 0 && diff < nextDiff){
+      nextDiff = diff; next = s.sid;
     }
   });
-  return best;
+
+  // 오늘 전후 → 마지막 수업 → (과거가 없으면) 가장 가까운 예정 수업
+  return near || past || next;
 }
 function renderSchedules(){
   const tb = $('schedule-table'); if(!tb) return;
@@ -3457,6 +3475,33 @@ function clearQuestionForm(){
   [1,2,3,4,5].forEach(n=>$('q-c'+n).value='');
   $('q-answer-short').value=''; setFormMcAnswer('');
 }
+/* 문제 수정 폼을 모달로 옮겼다가 원래 자리로 되돌린다.
+   폼을 복제하지 않고 DOM 노드째 이동하므로 입력칸 id와 기존 함수가 그대로 동작한다. */
+let qFormHome = null;
+
+function moveQFormToModal(){
+  const card = $('q-form-card'), slot = $('q-edit-modal-slot');
+  if(!card || !slot) return;
+  if(!qFormHome) qFormHome = { parent: card.parentNode, next: card.nextSibling };
+  card.style.margin = '0';
+  card.style.background = 'transparent';
+  card.style.border = 'none';
+  card.style.padding = '0';
+  slot.appendChild(card);
+  openModal('q-edit-modal');
+}
+
+function moveQFormHome(){
+  const card = $('q-form-card');
+  closeModal('q-edit-modal');
+  if(!card || !qFormHome) return;
+  card.style.margin = '';
+  card.style.background = '';
+  card.style.border = '';
+  card.style.padding = '';
+  qFormHome.parent.insertBefore(card, qFormHome.next);
+  qFormHome = null;
+}
 function editQuestion(qid){
   const q=questions.find(x=>x.qid===qid); if(!q) return;
   editingQid=qid;
@@ -3483,14 +3528,14 @@ function editQuestion(qid){
   $('q-form-title').textContent='문제 수정';
   $('q-submit-btn').textContent='수정 저장';
   $('q-cancel-btn').style.display='inline-block';
-  setAdminTab('a-questions');
-  if($('q-form-title').scrollIntoView) $('q-form-title').scrollIntoView({behavior:'smooth', block:'center'});
+  moveQFormToModal();
 }
 function cancelQuestionEdit(){
   editingQid=null; clearQuestionForm();
-  $('q-form-title').textContent='새 문제 등록';
+  $('q-form-title').textContent='문제 등록';
   $('q-submit-btn').textContent='문제 등록';
   $('q-cancel-btn').style.display='none';
+  moveQFormHome();
 }
 function renderQuestions(){
   const tb = $('q-table'); if(!tb) return;
