@@ -883,13 +883,14 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator{ margin-left:2px
           <div id="bank-count" class="note" style="margin-bottom:10px;"></div>
   <div style="display:flex; align-items:center; gap:8px; margin-bottom:10px; flex-wrap:wrap;">
   <label style="display:flex; align-items:center; gap:6px; font-size:12.5px; font-weight:600; color:var(--ink-soft);">
-    <input type="checkbox" id="bank-select-all" onchange="toggleBankSelectAll()"> 전체 선택 (현재 목록 기준)
+    <input type="checkbox" id="bank-select-all" onchange="toggleBankSelectAll()"> 전체 선택 (검색·필터에 걸린 문제 전부)
   </label>
   <span id="pdf-select-bar" class="badge muted">선택한 문제: 없음</span>
   <button class="btn small secondary" onclick="clearPdfSelection()">선택 초기화</button>
   <button class="btn small" onclick="openPrintOptions()">인쇄하기</button>
 </div>
           <div id="bank-list"></div>
+        <div id="bank-pager" style="display:flex; align-items:center; justify-content:center; gap:6px; flex-wrap:wrap; margin-top:12px;"></div>
         </div>
       </div>
 <!-- AI 문제 생성 -->
@@ -3706,19 +3707,83 @@ function sortBankList(arr){
   }
   return list;
 }
+/* ===== 문제은행 페이지 넘김 ===== */
+let bankPage = 1;
+let bankPageSize = 5;
+let bankLastSig = '';        // 필터가 바뀌면 1페이지로 되돌리기 위한 값
+
+function setBankPage(n){
+  bankPage = n;
+  renderBank();
+  const el = $('bank-list');
+  if(el && el.scrollIntoView) el.scrollIntoView({behavior:'smooth', block:'start'});
+}
+function setBankPageSize(n){
+  bankPageSize = Number(n) || 5;
+  bankPage = 1;
+  renderBank();
+}
+
+/* 1 … 4 [5] 6 … 20 형태로 버튼을 만든다 */
+function renderBankPager(total, pages){
+  const box = $('bank-pager'); if(!box) return;
+  if(total === 0){ box.innerHTML = ''; return; }
+
+  const btn = (n, label, cur) =>
+    `<button class="btn small ${cur?'':'secondary'}" ${cur?'disabled':''}
+      onclick="setBankPage(${n})" style="min-width:34px;">${label}</button>`;
+  const gap = '<span style="color:var(--muted); padding:0 2px;">…</span>';
+
+  let nums = [];
+  if(pages <= 7){
+    nums = Array.from({length:pages}, (_,i)=>i+1);
+  } else {
+    const set = new Set([1, pages, bankPage-1, bankPage, bankPage+1]);
+    nums = [...set].filter(n=>n>=1 && n<=pages).sort((a,b)=>a-b);
+  }
+
+  let html = btn(Math.max(1, bankPage-1), '‹', bankPage===1);
+  let prev = 0;
+  nums.forEach(n=>{
+    if(prev && n - prev > 1) html += gap;
+    html += btn(n, n, n===bankPage);
+    prev = n;
+  });
+  html += btn(Math.min(pages, bankPage+1), '›', bankPage===pages);
+
+  html += `<span class="note" style="margin:0 0 0 8px;">${total}문제 중 ${bankPage}/${pages}쪽</span>
+    <select onchange="setBankPageSize(this.value)" style="width:auto; margin-left:6px;">
+      ${[5,10,20,50].map(n=>`<option value="${n}" ${n===bankPageSize?'selected':''}>${n}개씩</option>`).join('')}
+    </select>`;
+
+  box.innerHTML = html;
+}
 function renderBank(){
   const list = $('bank-list'); if(!list) return;
 
   // 삭제된 문제는 선택 목록에서 제거
   pdfSelectedQids = pdfSelectedQids.filter(id=>questions.some(q=>q.qid===id));
 
-  const arr = sortBankList(
-    filterQuestions($('bank-set-filter').value, $('bank-type-filter').value, $('bank-search').value)
-  );
-  updateBankSelectAllState(arr);
-  renderPdfBar();        // ← 선택 개수 표시도 항상 같이 갱신
+  const setF  = $('bank-set-filter').value;
+  const typeF = $('bank-type-filter').value;
+  const kw    = $('bank-search').value;
+  const sortF = $('bank-sort') ? $('bank-sort').value : 'recent';
 
-  $('bank-count').textContent = `전체 ${questions.length}문제 중 ${arr.length}문제 표시 중 · 과제/시험 등록 화면의 "문제 골라 담기"에서 낱개 선택이 가능합니다.`;
+  // 필터·정렬이 바뀌면 1쪽으로
+  const sig = [setF, typeF, kw, sortF].join('\u0001');
+  if(sig !== bankLastSig){ bankLastSig = sig; bankPage = 1; }
+
+  const all = sortBankList(filterQuestions(setF, typeF, kw));
+
+  const pages = Math.max(1, Math.ceil(all.length / bankPageSize));
+  if(bankPage > pages) bankPage = pages;
+  const arr = all.slice((bankPage-1) * bankPageSize, bankPage * bankPageSize);
+
+  updateBankSelectAllState(all);     // 전체 선택은 '걸러진 전체' 기준
+  renderPdfBar();
+
+  $('bank-count').textContent = `전체 ${questions.length}문제 중 ${all.length}문제 표시 중 · 과제/시험 등록 화면의 "문제 골라 담기"에서 낱개 선택이 가능합니다.`;
+
   list.innerHTML = arr.length ? arr.map(q=>`
     <div class="bank-item">
       <input type="checkbox" onchange="togglePdfPick('${q.qid}', this.checked)"
@@ -3740,6 +3805,8 @@ function renderBank(){
         </div>
       </div>
     </div>`).join('') : '<p class="empty-hint">조건에 맞는 문제가 없습니다.</p>';
+
+  renderBankPager(all.length, pages);
 }
   function toggleBankSelectAll(){
   const arr = filterQuestions($('bank-set-filter').value, $('bank-type-filter').value, $('bank-search').value);
