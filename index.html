@@ -552,6 +552,9 @@ body.quiet-preview .sidebar{ padding-top:22px; }
   body.quiet-preview .main{ padding-top:16px; }
   body.quiet-preview .sidebar{ padding-top:0; }
 }
+/* 사이드바 스크롤바 숨기기 (스크롤 자체는 동작) */
+.sidebar nav{ scrollbar-width:none; -ms-overflow-style:none; }
+.sidebar nav::-webkit-scrollbar{ width:0; height:0; display:none; }
 </style>
 </head>
 <body>
