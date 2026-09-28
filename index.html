@@ -441,9 +441,30 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator{ margin-left:2px
 .ex-table input{border:none; border-radius:0; padding:6px 8px; font-size:13px;
   width:100%; min-width:90px; background:transparent;}
 .ex-table input:focus{outline:2px solid var(--brand); outline-offset:-2px;}
+/* 로그인 확인이 끝날 때까지 화면을 가린다 (로그인 창이 잠깐 스치는 것 방지) */
+body.booting .app-shell,
+body.booting #preview-banner{ display:none !important; }
+body.booting{ background:linear-gradient(160deg,#35695A 0%,#2F5D50 45%,#24483E 100%); }
+#boot-splash{
+  position:fixed; inset:0; z-index:100;
+  display:none; align-items:center; justify-content:center; flex-direction:column; gap:14px;
+  color:rgba(255,255,255,.85); font-size:13.5px;
+}
+body.booting #boot-splash{ display:flex; }
+#boot-splash .bs-dot{
+  width:26px; height:26px; border-radius:50%;
+  border:3px solid rgba(255,255,255,.25); border-top-color:#fff;
+  animation:bs-spin .8s linear infinite;
+}
+@keyframes bs-spin{ to{ transform:rotate(360deg); } }
 </style>
 </head>
 <body>
+<body class="booting">
+<div id="boot-splash">
+  <div class="bs-dot"></div>
+  <div>불러오는 중…</div>
+</div>
 <div id="preview-banner">
   <span id="preview-banner-text">학생 화면 미리보기 중</span>
   <button onclick="exitStudentPreview()">관리자로 돌아가기</button>
@@ -1892,9 +1913,22 @@ function stopSubscriptions(){
 /* =========================================================
    로그인 · 회원가입 · 계정
    ========================================================= */
+/* 인증 확인이 끝나면 화면을 보여준다 */
+function finishBoot(){
+  document.body.classList.remove('booting');
+}
+/* 8초 안에 인증 확인이 안 끝나면 일단 로그인 화면이라도 보여준다 */
+setTimeout(()=>{
+  if(document.body.classList.contains('booting')){
+    console.warn('인증 확인이 지연되어 로그인 화면을 표시합니다.');
+    finishBoot();
+    switchSite('login');
+  }
+}, 8000);
 /* Firebase 세션이 끊겼을 때(로그아웃, 승인 거절, 토큰 만료) 공통 정리 */
 function handleSignedOut(){
-  if(subsOwner === null && !currentStudent && !currentUserIsAdmin) return;
+  finishBoot();
+  if(subsOwner === null && !currentStudent && !currentUserIsAdmin){ switchSite('login'); return; }
   stopSubscriptions();
   currentStudent = null;
   currentUserIsAdmin = false;
@@ -7427,6 +7461,7 @@ onAuthStateChanged(auth, async user => {
   console.log("로그인 유지 중:", user.uid);
   try { await window.routeAfterAuth(user); }
   catch(e){ console.error('자동 로그인 라우팅 실패:', e); }
+  finally { document.body.classList.remove('booting'); }
 });
 
 console.log("✅ Firebase 연결됨");
