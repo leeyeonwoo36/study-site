@@ -1616,12 +1616,10 @@ function switchSite(site){
   if(site==='student') renderStudentSite();
   if(site==='admin') syncNavSects();
 }
-/* 대분류 아코디언 — 한 번에 하나만 열림 */
+/* 대분류 펼치기/접기 — 여러 개를 동시에 열어둘 수 있다 */
 function toggleNavSect(id){
   const el = $(id); if(!el) return;
-  const willOpen = !el.classList.contains('open');
-  document.querySelectorAll('#shell-admin .nav-sect').forEach(s=>s.classList.remove('open'));
-  if(willOpen) el.classList.add('open');
+  el.classList.toggle('open');
 }
 
 /* 현재 탭이 속한 대분류를 펼치고 표시한다 */
