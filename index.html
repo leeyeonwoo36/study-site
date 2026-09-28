@@ -34,27 +34,42 @@
   .sidebar nav button{display:block; width:100%; text-align:left; padding:11px 20px; background:none;
   border:none; color:#DCE7FF; font-size:14px; cursor:pointer; border-left:3px solid transparent; font-family:inherit;}
   .sidebar nav button.active{color:#fff; background:rgba(255,255,255,.14); border-left-color:#fff; font-weight:700;}
-   /* ---------- 관리자 사이드바 대분류 (PC) ---------- */
+  /* ---------- 관리자 사이드바 대분류 (PC) ---------- */
+  .sidebar nav .nav-sect{ margin-bottom:2px; }
+
   .sidebar nav .nav-group{
-    display:flex; align-items:center; justify-content:space-between;
-    width:100%; padding:11px 20px; border:none; background:none; cursor:pointer;
-    font-size:11px; font-weight:700; color:rgba(255,255,255,.55);
-    letter-spacing:.09em; text-transform:uppercase; text-align:left;
-    font-family:inherit; border-left:3px solid transparent; transition:color .12s;
+    display:flex; align-items:center; gap:8px;
+    width:100%; padding:12px 18px; border:none; background:none; cursor:pointer;
+    font-family:inherit; font-size:15px; font-weight:700; letter-spacing:-.01em;
+    color:rgba(255,255,255,.62); text-align:left;
+    border-left:3px solid transparent;
+    transition:color .12s, background .12s;
   }
-  .sidebar nav .nav-group:hover{color:#fff;}
-  .sidebar nav .ng-arrow{font-size:10px; transition:transform .15s;}
-  .sidebar nav .nav-sect.open .ng-arrow{transform:rotate(180deg);}
-  .sidebar nav .nav-sect.open .nav-group{color:#fff;}
+  .sidebar nav .nav-group:hover{ color:#fff; background:rgba(255,255,255,.06); }
 
-  .sidebar nav .nav-sub{display:none;}
-  .sidebar nav .nav-sect.open .nav-sub{display:block;}
+  /* 펼쳐진 그룹: 배경으로 묶어서 어디가 열렸는지 한눈에 */
+  .sidebar nav .nav-sect.open{ background:rgba(0,0,0,.14); }
+  .sidebar nav .nav-sect.open .nav-group{ color:#fff; }
 
-  /* 닫혀 있어도 현재 탭이 속한 그룹은 표시 */
-  .sidebar nav .nav-sect.has-active .nav-group{color:#fff;}
-  .sidebar nav .nav-sect.has-active .nav-group::before{
-    content:''; width:4px; height:4px; border-radius:50%;
-    background:#fff; margin-right:7px; flex-shrink:0;
+  /* 현재 보고 있는 탭이 속한 그룹: 왼쪽 굵은 선 + 밝게 */
+  .sidebar nav .nav-sect.has-active .nav-group{
+    color:#fff; border-left-color:#fff; background:rgba(255,255,255,.10);
+  }
+
+  .sidebar nav .ng-arrow{
+    margin-left:auto; font-size:11px; opacity:.7;
+    transition:transform .15s;
+  }
+  .sidebar nav .nav-sect.open .ng-arrow{ transform:rotate(180deg); opacity:1; }
+
+  /* 세부 탭: 들여쓰고 조금 작게 */
+  .sidebar nav .nav-sub{ display:none; padding-bottom:6px; }
+  .sidebar nav .nav-sect.open .nav-sub{ display:block; }
+  .sidebar nav .nav-sub .admin-nav{
+    padding-left:34px; font-size:13.5px; color:rgba(255,255,255,.78);
+  }
+  .sidebar nav .nav-sub .admin-nav.active{
+    color:#fff; font-weight:700; background:rgba(255,255,255,.16);
   }
   .sidebar nav button{transition:background .12s;}
   .sidebar nav button:hover{background:rgba(255,255,255,.07);}
