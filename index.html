@@ -532,20 +532,23 @@ body.booting #boot-splash{ display:flex; min-height:100vh; }
 .role-card .rc-desc{ font-size:12.5px; color:var(--ink-soft); line-height:1.6; }
 
 /* 학생 보기 모드(조용한 미리보기) — 배너 대신 오른쪽 위 복귀 버튼 */
-#quiet-exit{
-  display:none; position:fixed; top:14px; right:14px; z-index:60;
-  background:rgba(31,41,55,.85); color:#fff; border:none; border-radius:20px;
-  padding:8px 15px; font-size:12.5px; font-family:inherit; cursor:pointer;
-  box-shadow:0 2px 10px rgba(0,0,0,.2);
+/* 학생 보기 모드: 사이드바 로그아웃 자리를 '관리자 화면으로'가 대신한다 */
+#quiet-return{ display:none; }
+body.quiet-preview #quiet-return{
+  display:block; color:#fff; font-weight:700;
+  border-top:1px solid rgba(255,255,255,.18); margin-top:16px; padding-top:14px;
 }
-#quiet-exit:hover{ background:rgba(31,41,55,1); }
-body.quiet-preview #quiet-exit{ display:block; }
+body.quiet-preview .hide-in-quiet{ display:none !important; }
+
 body.quiet-preview #preview-banner{ display:none !important; }
 body.quiet-preview .main{ padding-top:30px; }
 body.quiet-preview .sidebar{ padding-top:22px; }
 
 @media (max-width:760px){
-  #quiet-exit{ top:auto; bottom:62px; right:10px; padding:7px 13px; font-size:11.5px; }
+  body.quiet-preview #quiet-return{
+    margin-top:0; padding-top:8px; border-top:none;
+    border-left:1px solid rgba(255,255,255,.18);
+  }
   body.quiet-preview .main{ padding-top:16px; }
   body.quiet-preview .sidebar{ padding-top:0; }
 }
@@ -586,7 +589,6 @@ body.quiet-preview .sidebar{ padding-top:22px; }
 <div id="preview-banner">
   <span id="preview-banner-text">학생 화면 미리보기 중</span>
   <button onclick="exitStudentPreview()">관리자로 돌아가기</button>
-  <button id="quiet-exit" onclick="exitQuietPreview()">↩ 관리자 화면으로</button>
 </div>
 <div class="site-switch" style="display:none;">
   <button id="switch-login" class="active" onclick="switchSite('login')">학생 로그인</button>
@@ -5681,16 +5683,26 @@ function chooseRole(which){
   if(which === 'student') startQuietPreview();
 }
 /* 복귀 버튼을 body 맨 끝에 직접 만든다 (HTML 배치 실수를 없애기 위해) */
+/* 학생 사이드바에 '관리자 화면으로'를 넣고, 로그아웃은 숨긴다 */
 function ensureQuietExitBtn(){
-  let b = document.getElementById('quiet-exit');
+  const nav = document.querySelector('#shell-student .sidebar nav');
+  if(!nav) return;
+
+  // 학생 화면의 로그아웃 버튼 찾아 표시해두기 (선택자에 의존하지 않도록 onclick으로 판별)
+  nav.querySelectorAll('button').forEach(b=>{
+    const h = b.getAttribute('onclick') || '';
+    if(h.indexOf('logout') >= 0) b.classList.add('hide-in-quiet');
+  });
+
+  let b = document.getElementById('quiet-return');
   if(!b){
     b = document.createElement('button');
-    b.id = 'quiet-exit';
+    b.id = 'quiet-return';
+    b.className = 'student-nav';
     b.textContent = '↩ 관리자 화면으로';
     b.onclick = exitQuietPreview;
-    document.body.appendChild(b);
+    nav.appendChild(b);
   }
-  return b;
 }
 /* 학생 화면 보기 — 관리자 전체 보기와 같되 주황 배너 없이 */
 function startQuietPreview(){
