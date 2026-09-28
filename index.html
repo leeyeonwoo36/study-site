@@ -460,16 +460,47 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator{ margin-left:2px
 body.booting .app-shell,
 body.booting #preview-banner{ display:none !important; }
 body.booting{ background:linear-gradient(160deg,#35695A 0%,#2F5D50 45%,#24483E 100%); }
-#boot-splash{
-  position:fixed; inset:0; z-index:100;
-  display:none; align-items:center; justify-content:center; flex-direction:column; gap:14px;
-  color:rgba(255,255,255,.85); font-size:13.5px;
+/* ---------- 부팅 스켈레톤 ---------- */
+body.booting .app-shell,
+body.booting #preview-banner{ display:none !important; }
+body.booting{ background:var(--paper); }
+
+#boot-splash{ display:none; }
+body.booting #boot-splash{ display:flex; min-height:100vh; }
+
+#boot-splash .bs-side{
+  width:210px; flex-shrink:0; background:var(--brand);
+  padding:22px 18px; display:flex; flex-direction:column; gap:10px;
 }
-body.booting #boot-splash{ display:flex; }
-#boot-splash .bs-dot{
-  width:26px; height:26px; border-radius:50%;
-  border:3px solid rgba(255,255,255,.25); border-top-color:#fff;
-  animation:bs-spin .8s linear infinite;
+#boot-splash .bs-main{ flex:1; padding:30px 38px; max-width:1000px; }
+
+.bs-bar{ border-radius:6px; background:rgba(255,255,255,.16); }
+.bs-block{ border-radius:8px; background:var(--paper-line); }
+
+/* 은은하게 반짝이는 효과 */
+.bs-bar, .bs-block{
+  position:relative; overflow:hidden;
+}
+.bs-bar::after, .bs-block::after{
+  content:''; position:absolute; inset:0;
+  background:linear-gradient(90deg, transparent, rgba(255,255,255,.45), transparent);
+  transform:translateX(-100%);
+  animation:bs-shimmer 1.4s infinite;
+}
+@keyframes bs-shimmer{ to{ transform:translateX(100%); } }
+
+#boot-splash .bs-card{
+  background:#fff; border:1px solid var(--border); border-radius:var(--radius);
+  padding:18px 20px; margin-bottom:14px;
+}
+
+@media (max-width:760px){
+  body.booting #boot-splash{ flex-direction:column; }
+  #boot-splash .bs-side{
+    order:2; width:100%; height:56px; padding:0;
+    flex-direction:row; align-items:center; gap:14px; padding:0 14px;
+  }
+  #boot-splash .bs-main{ order:1; padding:16px 14px; }
 }
 @keyframes bs-spin{ to{ transform:rotate(360deg); } }
 </style>
@@ -477,8 +508,34 @@ body.booting #boot-splash{ display:flex; }
 <body>
 <body class="booting">
 <div id="boot-splash">
-  <div class="bs-dot"></div>
-  <div>불러오는 중…</div>
+  <div class="bs-side">
+    <div class="bs-bar" style="height:20px; width:70%; margin-bottom:14px;"></div>
+    <div class="bs-bar" style="height:14px; width:45%;"></div>
+    <div class="bs-bar" style="height:12px; width:80%;"></div>
+    <div class="bs-bar" style="height:12px; width:65%;"></div>
+    <div class="bs-bar" style="height:12px; width:72%;"></div>
+    <div class="bs-bar" style="height:14px; width:45%; margin-top:10px;"></div>
+    <div class="bs-bar" style="height:12px; width:68%;"></div>
+    <div class="bs-bar" style="height:12px; width:58%;"></div>
+  </div>
+
+  <div class="bs-main">
+    <div class="bs-block" style="height:26px; width:200px; margin-bottom:8px;"></div>
+    <div class="bs-block" style="height:14px; width:320px; margin-bottom:24px;"></div>
+
+    <div class="bs-card">
+      <div class="bs-block" style="height:16px; width:120px; margin-bottom:14px;"></div>
+      <div class="bs-block" style="height:12px; width:100%; margin-bottom:8px;"></div>
+      <div class="bs-block" style="height:12px; width:88%; margin-bottom:8px;"></div>
+      <div class="bs-block" style="height:12px; width:94%;"></div>
+    </div>
+
+    <div class="bs-card">
+      <div class="bs-block" style="height:16px; width:150px; margin-bottom:14px;"></div>
+      <div class="bs-block" style="height:12px; width:96%; margin-bottom:8px;"></div>
+      <div class="bs-block" style="height:12px; width:80%;"></div>
+    </div>
+  </div>
 </div>
 <div id="preview-banner">
   <span id="preview-banner-text">학생 화면 미리보기 중</span>
