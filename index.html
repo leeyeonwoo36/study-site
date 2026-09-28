@@ -503,6 +503,16 @@ body.booting #boot-splash{ display:flex; min-height:100vh; }
   #boot-splash .bs-main{ order:1; padding:16px 14px; }
 }
 @keyframes bs-spin{ to{ transform:rotate(360deg); } }
+#role-choice-modal .modal{
+  width:100vw; max-width:none; height:100vh; max-height:none;
+  border-radius:0; margin:0;
+  display:flex; flex-direction:column; align-items:center; justify-content:center;
+  padding:40px 24px;
+}
+#role-choice-modal .role-pick{ max-width:620px; width:100%; }
+#role-choice-modal h3{ font-size:22px; }
+#role-choice-modal .role-card{ padding:26px 22px; }
+#role-choice-modal .role-card .rc-title{ font-size:18px; }
 /* 로그인 직후 역할 선택 */
 .role-pick{
   display:flex; gap:12px; flex-wrap:wrap; margin-top:6px;
@@ -518,7 +528,7 @@ body.booting #boot-splash{ display:flex; min-height:100vh; }
 
 /* 학생 보기 모드(조용한 미리보기) — 배너 대신 오른쪽 위 복귀 버튼 */
 #quiet-exit{
-  display:none; position:fixed; top:14px; right:14px; z-index:45;
+  display:none; position:fixed; top:14px; right:14px; z-index:60;
   background:rgba(31,41,55,.85); color:#fff; border:none; border-radius:20px;
   padding:8px 15px; font-size:12.5px; font-family:inherit; cursor:pointer;
   box-shadow:0 2px 10px rgba(0,0,0,.2);
@@ -1310,7 +1320,7 @@ body.quiet-preview .sidebar{ padding-top:22px; }
 
 <!-- ============ 모달 ============ -->
 <div class="modal-bg" id="role-choice-modal">
-  <div class="modal" style="max-width:520px;">
+  <div class="modal">
     <h3 style="margin-top:0;">어떤 화면으로 들어갈까요?</h3>
     <p class="note" style="margin-bottom:16px;">언제든 사이드바에서 바꿀 수 있습니다.</p>
     <div class="role-pick">
@@ -5665,7 +5675,18 @@ function chooseRole(which){
   closeModal('role-choice-modal');
   if(which === 'student') startQuietPreview();
 }
-
+/* 복귀 버튼을 body 맨 끝에 직접 만든다 (HTML 배치 실수를 없애기 위해) */
+function ensureQuietExitBtn(){
+  let b = document.getElementById('quiet-exit');
+  if(!b){
+    b = document.createElement('button');
+    b.id = 'quiet-exit';
+    b.textContent = '↩ 관리자 화면으로';
+    b.onclick = exitQuietPreview;
+    document.body.appendChild(b);
+  }
+  return b;
+}
 /* 학생 화면 보기 — 관리자 전체 보기와 같되 주황 배너 없이 */
 function startQuietPreview(){
   loadPreviewWrongNote(null);
@@ -5673,13 +5694,22 @@ function startQuietPreview(){
   adminViewAll = true;
   currentStudent = '__admin_view__';
   document.body.classList.add('previewing', 'quiet-preview');
-  setPreviewBanner(null);          // 배너는 띄우지 않는다
+  setPreviewBanner(null);
+  ensureQuietExitBtn();            // 버튼 보장
   switchSite('student');
 }
 
 function exitQuietPreview(){
   document.body.classList.remove('quiet-preview');
-  exitStudentPreview();            // 기존 복귀 로직 재사용
+  loadPreviewWrongNote(null);
+  previewingStudent = false;
+  adminViewAll = false;
+  currentStudent = null;
+  fillMyInfo();
+  document.body.classList.remove('previewing');
+  setPreviewBanner(null);
+  switchSite('admin');
+  setAdminTab('a-schedule');       // 학생 화면 보기 탭이 아니라 관리자 첫 화면으로
 }
     
 function startAdminPreview(){
