@@ -1610,11 +1610,11 @@ function switchSite(site){
   document.querySelectorAll('.app-shell').forEach(el=>{ el.style.display='none'; });
   const shell = $('shell-'+site);
   shell.style.display = (site==='login') ? 'block' : 'flex';
-  // 로그인 화면에서만 그라데이션 배경
   document.body.classList.toggle('on-login', site==='login');
   document.querySelectorAll('.site-switch button').forEach(b=>b.classList.remove('active'));
   const sw = $('switch-'+site); if(sw) sw.classList.add('active');
   if(site==='student') renderStudentSite();
+  if(site==='admin') syncNavSects();
 }
 /* 대분류 아코디언 — 한 번에 하나만 열림 */
 function toggleNavSect(id){
@@ -1646,9 +1646,6 @@ function setAdminTab(id){
   if(id==='a-bank') renderBank();
   if(id==='a-ai') renderAiSetOptions();
   if(id==='a-grading') renderGradingTable();
-  if(site==='student') renderStudentSite();
-  if(site==='admin') syncNavSects();
-}
   syncNavSects();
 }
 function setStudentTab(id){
