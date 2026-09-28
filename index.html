@@ -34,9 +34,28 @@
   .sidebar nav button{display:block; width:100%; text-align:left; padding:11px 20px; background:none;
   border:none; color:#DCE7FF; font-size:14px; cursor:pointer; border-left:3px solid transparent; font-family:inherit;}
   .sidebar nav button.active{color:#fff; background:rgba(255,255,255,.14); border-left-color:#fff; font-weight:700;}
-  .sidebar nav .nav-group{padding:14px 20px 5px; font-size:10.5px; font-weight:700;
-  color:rgba(255,255,255,.5); letter-spacing:.09em; text-transform:uppercase;}
-  .sidebar nav .nav-group:first-child{padding-top:2px;}
+   /* ---------- 관리자 사이드바 대분류 (PC) ---------- */
+  .sidebar nav .nav-group{
+    display:flex; align-items:center; justify-content:space-between;
+    width:100%; padding:11px 20px; border:none; background:none; cursor:pointer;
+    font-size:11px; font-weight:700; color:rgba(255,255,255,.55);
+    letter-spacing:.09em; text-transform:uppercase; text-align:left;
+    font-family:inherit; border-left:3px solid transparent; transition:color .12s;
+  }
+  .sidebar nav .nav-group:hover{color:#fff;}
+  .sidebar nav .ng-arrow{font-size:10px; transition:transform .15s;}
+  .sidebar nav .nav-sect.open .ng-arrow{transform:rotate(180deg);}
+  .sidebar nav .nav-sect.open .nav-group{color:#fff;}
+
+  .sidebar nav .nav-sub{display:none;}
+  .sidebar nav .nav-sect.open .nav-sub{display:block;}
+
+  /* 닫혀 있어도 현재 탭이 속한 그룹은 표시 */
+  .sidebar nav .nav-sect.has-active .nav-group{color:#fff;}
+  .sidebar nav .nav-sect.has-active .nav-group::before{
+    content:''; width:4px; height:4px; border-radius:50%;
+    background:#fff; margin-right:7px; flex-shrink:0;
+  }
   .sidebar nav button{transition:background .12s;}
   .sidebar nav button:hover{background:rgba(255,255,255,.07);}
   .sidebar nav .nav-logout{margin-top:16px; padding-top:14px;
@@ -333,10 +352,15 @@
 
     /* 배지 여백 축소 */
     .badge{padding:2px 6px; font-size:11px;}
-  }
 
-     /* 하단 탭바에서는 배너용 여백이 필요 없음 (배너는 화면 위에 뜬다) */
+    /* 하단 탭바에서는 배너용 여백이 필요 없음 (배너는 화면 위에 뜬다) */
     body.previewing .sidebar{padding-top:0;}
+
+    /* 하단 탭바에서는 대분류를 숨기고 버튼만 한 줄로 흐르게 */
+    .sidebar nav .nav-group{display:none;}
+    .sidebar nav .nav-sect,
+    .sidebar nav .nav-sub{display:contents;}
+  }
 
   /* ---------- 문제 세트 드래그 ---------- */
   .qset-q{cursor:grab;}
@@ -462,28 +486,44 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator{ margin-left:2px
   <div class="layout">
     <div class="sidebar">
       <div class="brand"><h3 style="color:#fff; font-size:16px; margin:0;">관리자</h3><small>명덕외고 국제정치 스터디</small></div>
-            <nav>
-        <div class="nav-group">수업</div>
-        <button class="admin-nav active" data-tab="a-schedule" onclick="setAdminTab('a-schedule')">수업 일정</button>
-        <button class="admin-nav" data-tab="a-attendance" onclick="setAdminTab('a-attendance')">출석 체크</button>
-        <button class="admin-nav" data-tab="a-students" onclick="setAdminTab('a-students')">학생 관리</button>
-        <button class="admin-nav" data-tab="a-notice" onclick="setAdminTab('a-notice')">공지사항</button>
+      <nav>
+        <div class="nav-sect" id="sect-class">
+          <button type="button" class="nav-group" onclick="toggleNavSect('sect-class')">수업<span class="ng-arrow">▾</span></button>
+          <div class="nav-sub">
+            <button class="admin-nav active" data-tab="a-schedule" onclick="setAdminTab('a-schedule')">수업 일정</button>
+            <button class="admin-nav" data-tab="a-attendance" onclick="setAdminTab('a-attendance')">출석 체크</button>
+            <button class="admin-nav" data-tab="a-students" onclick="setAdminTab('a-students')">학생 관리</button>
+            <button class="admin-nav" data-tab="a-notice" onclick="setAdminTab('a-notice')">공지사항</button>
+          </div>
+        </div>
 
-        <div class="nav-group">출제</div>
-        <button class="admin-nav" data-tab="a-hw" onclick="setAdminTab('a-hw')">과제 관리</button>
-        <button class="admin-nav" data-tab="a-exam" onclick="setAdminTab('a-exam')">시험 관리</button>
-        <button class="admin-nav" data-tab="a-video" onclick="setAdminTab('a-video')">동영상 관리</button>
+        <div class="nav-sect" id="sect-make">
+          <button type="button" class="nav-group" onclick="toggleNavSect('sect-make')">출제<span class="ng-arrow">▾</span></button>
+          <div class="nav-sub">
+            <button class="admin-nav" data-tab="a-hw" onclick="setAdminTab('a-hw')">과제 관리</button>
+            <button class="admin-nav" data-tab="a-exam" onclick="setAdminTab('a-exam')">시험 관리</button>
+            <button class="admin-nav" data-tab="a-video" onclick="setAdminTab('a-video')">동영상 관리</button>
+          </div>
+        </div>
 
-        <div class="nav-group">문제</div>
-        <button class="admin-nav" data-tab="a-questions" onclick="setAdminTab('a-questions')">문제 등록</button>
-        <button class="admin-nav" data-tab="a-bank" onclick="setAdminTab('a-bank')">문제은행</button>
-        <button class="admin-nav" data-tab="a-ai" onclick="setAdminTab('a-ai')">AI 문제 생성</button>
+        <div class="nav-sect" id="sect-question">
+          <button type="button" class="nav-group" onclick="toggleNavSect('sect-question')">문제<span class="ng-arrow">▾</span></button>
+          <div class="nav-sub">
+            <button class="admin-nav" data-tab="a-questions" onclick="setAdminTab('a-questions')">문제 등록</button>
+            <button class="admin-nav" data-tab="a-bank" onclick="setAdminTab('a-bank')">문제은행</button>
+            <button class="admin-nav" data-tab="a-ai" onclick="setAdminTab('a-ai')">AI 문제 생성</button>
+          </div>
+        </div>
 
-        <div class="nav-group">채점 · 확인</div>
-        <button class="admin-nav" data-tab="a-grading" onclick="setAdminTab('a-grading')">채점 확인 <span id="nav-grading-badge"></span></button>
-        <button class="admin-nav" data-tab="a-scores" onclick="setAdminTab('a-scores')">성적 관리</button>
-        <button class="admin-nav" data-tab="a-preview" onclick="setAdminTab('a-preview')">학생 화면 보기</button>
-        <button class="admin-nav" data-tab="a-firebase" onclick="setAdminTab('a-firebase')">운영 안내</button>
+        <div class="nav-sect" id="sect-grade">
+          <button type="button" class="nav-group" onclick="toggleNavSect('sect-grade')">채점 · 확인<span class="ng-arrow">▾</span></button>
+          <div class="nav-sub">
+            <button class="admin-nav" data-tab="a-grading" onclick="setAdminTab('a-grading')">채점 확인 <span id="nav-grading-badge"></span></button>
+            <button class="admin-nav" data-tab="a-scores" onclick="setAdminTab('a-scores')">성적 관리</button>
+            <button class="admin-nav" data-tab="a-preview" onclick="setAdminTab('a-preview')">학생 화면 보기</button>
+            <button class="admin-nav" data-tab="a-firebase" onclick="setAdminTab('a-firebase')">운영 안내</button>
+          </div>
+        </div>
 
         <button class="admin-nav nav-logout" onclick="logout()">로그아웃</button>
       </nav>
@@ -703,7 +743,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator{ margin-left:2px
 
       <!-- 문제 등록 -->
       <div class="tabpanel" id="tab-a-questions">
-        <div class="page-head"><div><h1>문제 등록</h1><p>물음과 &lt;보기&gt;를 따로 등록하고, 객관식(5지선다)·단답형 문제와 해설을 관리합니다</p></div></div>
+        <div class="page-head"><div><h1>문제 등록</h1><p>물음과 &lt;보기&gt;를 따로 등록하고, 객관식(5지선다)·단답형 문제와 해설을 관리합니다.</p></div></div>
 
         <div class="card">
           <h3>문제 세트 관리</h3>
@@ -871,7 +911,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator{ margin-left:2px
 
       <!-- 문제은행 -->
       <div class="tabpanel" id="tab-a-bank">
-        <div class="page-head"><div><h1>문제은행</h1><p>등록된 모든 문제를 세트와 무관하게 한 곳에서 검색·확인하고, 과제·시험에 낱개로 담을 수 있습니다</p></div></div>
+        <div class="page-head"><div><h1>문제은행</h1><p>등록된 모든 문제를 세트와 무관하게 한 곳에서 검색·확인하고, 과제·시험에 낱개로 담을 수 있습니다.</p></div></div>
         <div class="card">
                     <div class="form-grid">
             <div><label>세트 필터</label><select id="bank-set-filter" onchange="renderBank()"></select></div>
@@ -947,7 +987,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator{ margin-left:2px
 </div>
             <!-- 채점 확인 -->
       <div class="tabpanel" id="tab-a-grading">
-        <div class="page-head"><div><h1>채점 · 제출 확인</h1><p>학생이 제출한 온라인 OMR 답안은 자동으로 채점됩니다</p></div></div>
+        <div class="page-head"><div><h1>채점 · 제출 확인</h1><p>학생이 제출한 온라인 OMR 답안은 자동으로 채점됩니다.</p></div></div>
         <div class="card">
           <div class="form-grid three">
             <div><label>구분</label><select id="grading-kind-filter" onchange="renderGradingTable()">
@@ -968,7 +1008,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator{ margin-left:2px
 
       <!-- 성적 관리 -->
       <div class="tabpanel" id="tab-a-scores">
-        <div class="page-head"><div><h1>성적 관리</h1><p>과제·시험별로 학생 점수를 직접 입력해 누적 관리합니다</p></div></div>
+        <div class="page-head"><div><h1>성적 관리</h1><p>과제·시험별로 학생 점수를 직접 입력해 누적 관리합니다.</p></div></div>
         <div class="card">
           <h3>과제별 성적 · 수행 여부</h3>
           <div class="form-grid full"><div><label>과제 선택</label><select id="score-hw-select" onchange="renderScoreTable('hw')"></select></div></div>
@@ -1576,6 +1616,22 @@ function switchSite(site){
   const sw = $('switch-'+site); if(sw) sw.classList.add('active');
   if(site==='student') renderStudentSite();
 }
+/* 대분류 아코디언 — 한 번에 하나만 열림 */
+function toggleNavSect(id){
+  const el = $(id); if(!el) return;
+  const willOpen = !el.classList.contains('open');
+  document.querySelectorAll('#shell-admin .nav-sect').forEach(s=>s.classList.remove('open'));
+  if(willOpen) el.classList.add('open');
+}
+
+/* 현재 탭이 속한 대분류를 펼치고 표시한다 */
+function syncNavSects(){
+  document.querySelectorAll('#shell-admin .nav-sect').forEach(sect=>{
+    const has = !!sect.querySelector('.admin-nav.active');
+    sect.classList.toggle('has-active', has);
+    if(has) sect.classList.add('open');
+  });
+}
 function setAdminTab(id){
   document.querySelectorAll('#shell-admin .tabpanel').forEach(p=>p.classList.remove('active'));
   $('tab-'+id).classList.add('active');
@@ -1586,10 +1642,14 @@ function setAdminTab(id){
   if(id==='a-attendance') renderAttendance();
   if(id==='a-video') renderVideos();
   if(id==='a-notice') renderNotices();
-    if(id==='a-preview') renderPreviewStudentSelect();
+  if(id==='a-preview') renderPreviewStudentSelect();
   if(id==='a-bank') renderBank();
   if(id==='a-ai') renderAiSetOptions();
   if(id==='a-grading') renderGradingTable();
+  if(site==='student') renderStudentSite();
+  if(site==='admin') syncNavSects();
+}
+  syncNavSects();
 }
 function setStudentTab(id){
   document.querySelectorAll('#shell-student .tabpanel').forEach(p=>p.classList.remove('active'));
