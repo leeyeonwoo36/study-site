@@ -503,14 +503,19 @@ body.booting #boot-splash{ display:flex; min-height:100vh; }
   #boot-splash .bs-main{ order:1; padding:16px 14px; }
 }
 @keyframes bs-spin{ to{ transform:rotate(360deg); } }
+/* 선택 전에는 뒤 화면이 보이지도, 눌리지도 않게 */
+#role-choice-modal{
+  background:#fff;            /* 반투명 검정 → 불투명 흰색 */
+  backdrop-filter:none;
+}
 #role-choice-modal .modal{
-  width:100vw; max-width:none; height:100vh; max-height:none;
-  border-radius:0; margin:0;
+  width:100%; max-width:640px; height:100vh; max-height:none;
+  border-radius:0; margin:0; box-shadow:none; background:transparent;
   display:flex; flex-direction:column; align-items:center; justify-content:center;
   padding:40px 24px;
 }
-#role-choice-modal .role-pick{ max-width:620px; width:100%; }
-#role-choice-modal h3{ font-size:22px; }
+#role-choice-modal h3{ font-size:23px; }
+#role-choice-modal .role-pick{ width:100%; }
 #role-choice-modal .role-card{ padding:26px 22px; }
 #role-choice-modal .role-card .rc-title{ font-size:18px; }
 /* 로그인 직후 역할 선택 */
@@ -5709,7 +5714,7 @@ function exitQuietPreview(){
   document.body.classList.remove('previewing');
   setPreviewBanner(null);
   switchSite('admin');
-  setAdminTab('a-schedule');       // 학생 화면 보기 탭이 아니라 관리자 첫 화면으로
+  setAdminTab('a-schedule');
 }
     
 function startAdminPreview(){
