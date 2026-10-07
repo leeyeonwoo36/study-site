@@ -4592,13 +4592,13 @@ function clearDraft(kind){ draftQids[kind]=[]; renderDraft(kind); }
    ========================================================= */
 // 앞에서부터 순서대로 시도합니다. 실제로 쓸 수 있는 모델 이름으로 채워주세요.
 const GEMINI_MODELS = [
+  'gemini-3.5-flash-lite',
+  'gemini-3.1-flash-lite',
   'gemini-3.5-flash',
   'gemini-3.6-flash',
   'gemini-3.7-flash',
   'gemini-3.8-flash',
   'gemini-flash-latest',
-  'gemini-3.5-flash-lite',
-  'gemini-3.1-flash-lite',
   'gemini-3.0-flash',
   'gemini-3.1-pro',
 ];
