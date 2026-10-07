@@ -555,6 +555,24 @@ body.quiet-preview .sidebar{ padding-top:22px; }
 /* 사이드바 스크롤바 숨기기 (스크롤 자체는 동작) */
 .sidebar nav{ scrollbar-width:none; -ms-overflow-style:none; }
 .sidebar nav::-webkit-scrollbar{ width:0; height:0; display:none; }
+  /* ---------- 수업 · 주차 ---------- */
+  .class-row{display:flex; align-items:center; justify-content:space-between; gap:10px; padding:12px 14px;
+    border:1.5px solid var(--border); border-radius:12px; margin-bottom:8px; cursor:pointer; background:#fff;}
+  .class-row:hover{border-color:#B8C7C1;}
+  .class-row.sel{border-color:var(--brand); background:var(--brand-soft);}
+  .class-row .cr-name{font-weight:800;}
+  .class-row .cr-meta{font-size:12.5px; color:var(--muted); margin-top:2px;}
+  .class-students{display:grid; grid-template-columns:repeat(auto-fill,minmax(190px,1fr)); gap:8px;}
+  .class-students label{display:flex; align-items:center; gap:8px; margin:0; padding:9px 12px; border:1.5px solid var(--border);
+    border-radius:10px; cursor:pointer; font-size:13.5px; font-weight:600; color:var(--ink); background:#fff;}
+  .class-students label.on{border-color:var(--brand); background:var(--brand-soft);}
+  .class-students label small{display:block; font-weight:500; color:var(--muted); font-size:11.5px;}
+  .class-students input{width:auto; margin:0;}
+  .week-tabs{display:flex; gap:6px; flex-wrap:wrap; margin-bottom:14px;}
+  .week-row td{background:var(--brand-soft); color:var(--brand); font-weight:800; font-size:13px; text-align:left !important;}
+  .week-head{margin:18px 0 8px; font-size:15px; color:var(--brand);}
+  .wc-row{display:flex; align-items:center; justify-content:space-between; gap:8px; padding:9px 0; border-bottom:1px solid var(--paper-line);}
+  .wc-row:last-child{border-bottom:none;}
 </style>
 <link rel="stylesheet" href="theme-v2.css">
 </head>
@@ -637,7 +655,7 @@ body.quiet-preview .sidebar{ padding-top:22px; }
         <div class="nav-sect" id="sect-class">
           <button type="button" class="nav-group" onclick="toggleNavSect('sect-class')">수업<span class="ng-arrow">▾</span></button>
           <div class="nav-sub">
-            <button class="admin-nav active" data-tab="a-schedule" onclick="setAdminTab('a-schedule')">수업 일정</button>
+            <button class="admin-nav active" data-tab="a-schedule" onclick="setAdminTab('a-schedule')">수업 · 주차</button>
             <button class="admin-nav" data-tab="a-attendance" onclick="setAdminTab('a-attendance')">출석 체크</button>
             <button class="admin-nav" data-tab="a-students" onclick="setAdminTab('a-students')">학생 관리</button>
             <button class="admin-nav" data-tab="a-notice" onclick="setAdminTab('a-notice')">공지사항</button>
@@ -678,28 +696,50 @@ body.quiet-preview .sidebar{ padding-top:22px; }
     <div class="main">
 
           
-      <!-- 수업 일정 -->
+      <!-- 수업 · 주차 -->
       <div class="tabpanel active" id="tab-a-schedule">
-        <div class="page-head"><div><h1>수업 일정</h1><p>날짜 · 요일 · 시간 · 교실 · 예상 진도를 등록하고 출석 대상을 지정합니다.</p></div></div>
+        <div class="page-head"><div><h1>수업 · 주차</h1><p>수업을 개설하고 학생을 배정한 뒤, 수업별로 주차와 회차(요일·시간·교실)를 등록합니다. 과제·시험·영상은 주차를 골라 부여합니다.</p></div></div>
         <div class="card">
-          <h3>일정 추가</h3>
-          <div class="form-grid">
-            <div><label>날짜</label><input type="date" id="sch-date"></div>
-            <div><label>시간</label><input type="text" id="sch-time" placeholder="예: 18:30-20:00"></div>
-            <div><label>교실</label><input type="text" id="sch-room" placeholder="예: 본관 401호"></div>
-            <div><label>예상 진도</label><input type="text" id="sch-topic" placeholder="예: 국제기구 1~2장"></div>
+          <h3>수업 개설</h3>
+          <div style="display:flex; gap:8px; margin-bottom:12px;">
+            <input type="text" id="class-new-name" placeholder="새 수업 이름 (예: 국제정치 A반)" onkeydown="if(event.key==='Enter')addClass()">
+            <button class="btn" style="white-space:nowrap;" onclick="addClass()">수업 개설</button>
           </div>
-          <div class="field-section">
-            <span class="section-label">출석 대상 학생</span>
-            <button class="btn secondary" style="width:100%;" onclick="openAssignPicker('sch')">학생 지정</button>
-            <div class="picked-list" id="sch-assignees" style="margin-top:8px;">대상 학생: 전체</div>
-          </div>
-          <button class="btn" style="width:100%; margin-top:16px;" onclick="addSchedule()">일정 등록</button>
+          <div id="class-list"></div>
         </div>
-        <div class="card">
-          <h3>등록된 일정</h3>
-          <table class="schedule-table"><tr><th>날짜</th><th>요일</th><th>시간</th><th>교실</th><th>예상 진도</th><th colspan="2"></th></tr>
-            <tbody id="schedule-table"></tbody></table>
+        <div id="class-detail" style="display:none;">
+          <div class="card">
+            <h3 id="class-detail-title">수업</h3>
+            <span class="section-label">① 학생 배정 <span style="font-weight:500; color:var(--muted);">(한 학생은 한 수업에만 소속됩니다)</span></span>
+            <div style="display:flex; gap:6px; margin:8px 0;">
+              <button class="btn small ghost" onclick="setAllClassStudents(true)">전체 선택</button>
+              <button class="btn small ghost" onclick="setAllClassStudents(false)">전체 해제</button>
+            </div>
+            <div id="class-students" class="class-students"></div>
+            <button class="btn" style="width:100%; margin-top:12px;" onclick="saveClassStudents()">배정 저장</button>
+          </div>
+          <div class="card">
+            <h3>② 주차 · 회차</h3>
+            <div id="week-tabs" class="week-tabs"></div>
+            <div class="form-grid">
+              <div><label>날짜 (요일은 자동)</label><input type="date" id="sch-date"></div>
+              <div><label>시간</label><input type="text" id="sch-time" placeholder="예: 18:30-20:00"></div>
+              <div><label>교실</label><input type="text" id="sch-room" placeholder="예: 본관 401호"></div>
+              <div><label>예상 진도</label><input type="text" id="sch-topic" placeholder="예: 국제기구 1~2장"></div>
+            </div>
+            <button class="btn" style="width:100%;" onclick="addSchedule()">이 주차에 회차 추가</button>
+            <table class="schedule-table" style="margin-top:14px;"><tr><th>날짜</th><th>요일</th><th>시간</th><th>교실</th><th>예상 진도</th><th></th></tr>
+              <tbody id="schedule-table"></tbody></table>
+          </div>
+          <div class="card">
+            <h3 id="week-content-title">③ 이 주차의 과제 · 시험 · 영상</h3>
+            <div id="week-content"></div>
+            <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:12px;">
+              <button class="btn secondary" onclick="goAddForWeek('hw')">+ 과제 부여</button>
+              <button class="btn secondary" onclick="goAddForWeek('exam')">+ 시험 부여</button>
+              <button class="btn secondary" onclick="goAddForWeek('video')">+ 영상 부여</button>
+            </div>
+          </div>
         </div>
       </div>
       <!-- 출석 체크 -->
@@ -727,7 +767,7 @@ body.quiet-preview .sidebar{ padding-top:22px; }
         <div class="card">
           <h3>학생 목록</h3>
           <table>
-            <tr><th>이름</th><th>학년</th><th>학교</th><th>전화번호</th><th>미제출</th><th></th></tr>
+            <tr><th>이름</th><th>학년</th><th>학교</th><th>전화번호</th><th>수업</th><th>미제출</th><th></th></tr>
             <tbody id="student-table"></tbody>
           </table>
         </div>
@@ -764,9 +804,12 @@ body.quiet-preview .sidebar{ padding-top:22px; }
           </div>
 
           <div class="field-section">
-            <span class="section-label">대상 학생</span>
-            <button class="btn secondary" style="width:100%;" onclick="openAssignPicker('hw')">학생 지정</button>
-            <div class="picked-list" id="hw-assignees" style="margin-top:8px;">대상 학생: 전체</div>
+            <span class="section-label">수업 · 주차</span>
+            <div class="form-grid">
+              <div><label>수업</label><select id="hw-class" onchange="fillWeekSelect('hw')"></select></div>
+              <div><label>주차</label><select id="hw-week"></select></div>
+            </div>
+            <p class="note" style="margin-top:6px;">선택한 수업에 배정된 학생이 자동으로 대상이 됩니다.</p>
           </div>
 
           <div class="field-section">
@@ -815,9 +858,12 @@ body.quiet-preview .sidebar{ padding-top:22px; }
           </div>
 
           <div class="field-section">
-            <span class="section-label">대상 학생</span>
-            <button class="btn secondary" style="width:100%;" onclick="openAssignPicker('exam')">학생 지정</button>
-            <div class="picked-list" id="exam-assignees" style="margin-top:8px;">대상 학생: 전체</div>
+            <span class="section-label">수업 · 주차</span>
+            <div class="form-grid">
+              <div><label>수업</label><select id="ex-class" onchange="fillWeekSelect('ex')"></select></div>
+              <div><label>주차</label><select id="ex-week"></select></div>
+            </div>
+            <p class="note" style="margin-top:6px;">선택한 수업에 배정된 학생이 자동으로 대상이 됩니다.</p>
           </div>
 
           <div class="field-section">
@@ -874,10 +920,13 @@ body.quiet-preview .sidebar{ padding-top:22px; }
       <div><label>설명 (선택)</label><textarea id="video-desc" placeholder="영상에 대한 설명이나 안내사항"></textarea></div>
     </div>
     <div class="field-section">
-      <span class="section-label">대상 학생</span>
-      <button class="btn secondary" style="width:100%;" onclick="openAssignPicker('video')">학생 지정</button>
-      <div class="picked-list" id="video-assignees" style="margin-top:8px;">대상 학생: 전체</div>
-    </div>
+            <span class="section-label">수업 · 주차</span>
+            <div class="form-grid">
+              <div><label>수업</label><select id="video-class" onchange="fillWeekSelect('video')"></select></div>
+              <div><label>주차</label><select id="video-week"></select></div>
+            </div>
+            <p class="note" style="margin-top:6px;">선택한 수업에 배정된 학생이 자동으로 대상이 됩니다.</p>
+          </div>
     <button class="btn" id="video-submit-btn" style="width:100%; margin-top:16px;" onclick="addVideo()">영상 등록</button>
     <button class="btn ghost" id="video-cancel-btn" style="width:100%; margin-top:8px; display:none;" onclick="cancelVideoEdit()">수정 취소</button>
   </div>
@@ -1406,11 +1455,6 @@ body.quiet-preview .sidebar{ padding-top:22px; }
       <div><label>교실</label><input type="text" id="esc-room" placeholder="예: 본관 401호"></div>
       <div><label>예상 진도</label><input type="text" id="esc-topic" placeholder="예: 국제기구 1~2장"></div>
     </div>
-        <div class="field-section">
-      <span class="section-label">출석 대상 학생</span>
-      <button class="btn secondary" style="width:100%;" onclick="openAssignPicker('sch-edit')">학생 지정</button>
-      <div class="picked-list" id="sch-edit-assignees" style="margin-top:8px;">대상 학생: 전체</div>
-    </div>
     <button class="btn" onclick="saveScheduleEdit()">저장</button>
     <button class="btn ghost" onclick="closeModal('schedule-edit-modal')">취소</button>
   </div>
@@ -1861,13 +1905,26 @@ let draftAssignees = {hw:null, exam:null, sch:null, 'sch-edit':null, video:null,
 /* 구독 관리 — 로그인 후에만 켜고, 계정이 바뀌거나 로그아웃하면 반드시 해제 */
 let unsubs = [];
 let sharedAiKey = '';
+
+/* ---------- 수업 · 주차 ---------- */
+let classes = [];              // [{cid, name, weekCount}]  (관리자만 구독)
+let selClassId = null;         // 관리자: '수업 · 주차' 탭에서 보고 있는 수업
+let selWeek = 1;               // 보고 있는 주차 (1부터)
+function classOf(cid){ return classes.find(c=>c.cid===cid) || null; }
+function classNameOf(cid){ const c = classOf(cid); return c ? c.name : ''; }
+function studentClassId(uid){ const st = students.find(x=>x.uid===uid); return st ? (st.classId||null) : null; }
+/* 일정·과제·시험·영상이 이 학생의 수업에 속하는가 */
+function inClass(x, uid){ return !!(x && x.classId) && studentClassId(uid)===x.classId; }
+function classStudentsOf(cid){ return students.filter(st=>st.approved && cid && st.classId===cid); }
+function weekText(n){ return (Number(n)||1)+'주차'; }
+function classWeekText(x){ return (classNameOf(x.classId) || '(삭제된 수업)') + ' · ' + weekText(x.week); }
 let subsOwner = null;   // 현재 구독을 시작한 계정 uid (계정 전환 감지용)
 
 function ensureScoreSlots(){
   ['hw','exam'].forEach(kind=>{
     tasks[kind].forEach(t=>{
       scores[kind][t.tid] = scores[kind][t.tid] || {};
-      const targets = Array.isArray(t.assignedTo) ? students.filter(s=>t.assignedTo.includes(s.uid)) : students;
+      const targets = students.filter(s=>s.classId && s.classId===t.classId);
       targets.forEach(s=>{
         if(!scores[kind][t.tid][s.uid]) scores[kind][t.tid][s.uid] = {score:'', status:'미완료'};
         if(scores[kind][t.tid][s.uid].status===undefined) scores[kind][t.tid][s.uid].status='미완료';
@@ -1934,7 +1991,7 @@ function startSubscriptions(isAdmin, ownerUid){
     sub('students', snap => {
       students = snap.docs.map(d => ({ uid:d.id, ...d.data() }));
       ensureScoreSlots();
-      renderStudents(); renderAttendance();
+      renderStudents(); renderAttendance(); renderClassAdmin();
       renderScoreTable('hw'); renderScoreTable('exam'); renderGradingTable();
     });
 
@@ -1976,10 +2033,20 @@ if(!isAdmin && currentStudent){
   unsubs.push(onSnapshot(doc(db,'settings','aiConfig'), snap=>{
     sharedAiKey = snap.exists() ? (snap.data().geminiKey || '') : '';
   }, err=>console.error('aiConfig 구독 에러:', err.code)));
+  if(isAdmin){
+    sub('classes', snap => {
+      classes = snap.docs.map(d => ({ cid:d.id, ...d.data() }));
+      classes.sort((a,b)=> (a.createdAt||0)-(b.createdAt||0));
+      if(selClassId && !classOf(selClassId)) selClassId = null;
+      if(!selClassId && classes.length) selClassId = classes[0].cid;
+      renderClassAdmin(); renderStudents(); renderTasks(); renderVideos(); renderSchedules();
+    });
+  }
   sub('schedules', snap => {
-    schedules = snap.docs.map(d => ({ sid:d.id, ...d.data() }));
+    schedules = snap.docs.map(d => ({ sid:d.id, ...d.data() })).filter(x=>x.classId);   // 수업 지정 전 이전 데이터는 숨김
     schedules.sort((a,b)=> String(a.date) < String(b.date) ? -1 : 1);
     renderSchedules();
+    if(isAdmin) renderClassAdmin();
   });
   sub('attendance', snap => {
     attendance = {};
@@ -1987,9 +2054,10 @@ if(!isAdmin && currentStudent){
     renderAttendance(); renderStudentSchedule();
   });
   sub('videos', snap => {
-  videos = snap.docs.map(d => ({ vid:d.id, ...d.data() }));
+  videos = snap.docs.map(d => ({ vid:d.id, ...d.data() })).filter(x=>x.classId);
   videos.sort((a,b)=> (b.createdAt||0) - (a.createdAt||0));
   renderVideos(); renderStudentVideos();
+  if(isAdmin) renderClassAdmin();
 });
   sub('notices', snap => {
     notices = snap.docs.map(d => ({ nid:d.id, ...d.data() }));
@@ -2008,13 +2076,14 @@ if(!isAdmin && currentStudent){
     renderWrongNote();
   });
     sub('tasks', snap => {
-    const all = snap.docs.map(d => ({ tid:d.id, ...d.data() }));
+    const all = snap.docs.map(d => ({ tid:d.id, ...d.data() })).filter(x=>x.classId);
     tasks.hw   = all.filter(t=>t.kind==='hw');
     tasks.exam = all.filter(t=>t.kind==='exam');
     ensureScoreSlots();
     renderTasks(); renderScoreSelects();
     renderScoreTable('hw'); renderScoreTable('exam');
     renderStudentSite(); renderGradingTable();
+    if(isAdmin) renderClassAdmin();
   });
  const submissionsRef = isAdmin
   ? collection(db,'submissions')
@@ -2042,7 +2111,7 @@ function stopSubscriptions(){
   unsubs.forEach(fn => { try{ fn(); }catch(e){} });
   unsubs = [];
   subsOwner = null;
-  students = []; schedules = []; attendance = {}; videos = []; notices = [];
+  students = []; schedules = []; attendance = {}; videos = []; notices = []; classes = []; selClassId = null;
   questionSets = []; questions = [];
   tasks = { hw:[], exam:[] };
   submissions = {}; scores = { hw:{}, exam:{} };
@@ -2209,7 +2278,7 @@ function pendingCountForStudent(uid){
   let n = 0;
   ['hw','exam'].forEach(kind=>{
     tasks[kind].forEach(t=>{
-      if(Array.isArray(t.assignedTo) && !t.assignedTo.includes(uid)) return;
+      if(!inClass(t,uid)) return;
       if(t.startAt && new Date(t.startAt) > now) return;     // 아직 시작 안 한 건 제외
       if(!submissions[t.tid+'|'+uid]) n++;
     });
@@ -2246,6 +2315,7 @@ function renderStudents(){
     <tr>
       <td><a href="#" onclick="openStudentDetail('${s.uid}'); return false;">${esc(s.name)}</a></td>
       <td>${esc(s.grade)}</td><td>${esc(s.school)}</td><td>${esc(s.phone)}</td>
+      <td>${s.classId ? esc(classNameOf(s.classId) || s.className || '-') : '<span class="badge warn">미배정</span>'}</td>
       <td>${pendCell}</td>
       <td class="row-actions">
         <button class="btn small secondary" onclick="openStudentEdit('${s.uid}')">수정</button>
@@ -2253,7 +2323,7 @@ function renderStudents(){
         <button class="btn small danger" onclick="removeStudent('${s.uid}')">삭제</button>
       </td>
     </tr>`;
-  }).join('') || '<tr><td colspan="6" class="empty-hint">등록된 학생이 없습니다.</td></tr>';
+  }).join('') || '<tr><td colspan="7" class="empty-hint">등록된 학생이 없습니다.</td></tr>';
 }
 function approveStudent(u){
   const { db, doc, updateDoc } = window.fb;
@@ -2570,7 +2640,7 @@ function renderStudentTaskStatus(u){
   $('detail-task-detail').innerHTML = '';
 
   const row = (kind, t) => {
-    if(Array.isArray(t.assignedTo) && !t.assignedTo.includes(u)) return '';
+    if(!inClass(t,u)) return '';
     const sub = submissions[t.tid+'|'+u];
     const rec = (scores[kind][t.tid]||{})[u] || {};
     let status;
@@ -2598,7 +2668,7 @@ function renderStudentTaskStatus(u){
 }
   function renderStudentAttendanceStatus(u){
   const box = $('detail-attendance-status'); if(!box) return;
-  const visible = schedules.filter(s => !Array.isArray(s.assignedTo) || s.assignedTo.includes(u));
+  const visible = schedules.filter(s => inClass(s,u));
   if(!visible.length){ box.innerHTML = '<p class="empty-hint">배정된 수업 일정이 없습니다.</p>'; return; }
 
   let pCount=0, lCount=0, aCount=0, nCount=0;
@@ -2716,16 +2786,211 @@ function fmtPeriod(t){
   if(t.startAt) return fmtDue(t.startAt)+' 부터';
   return '미정';
 }
+/* =========================================================
+   수업 · 주차 (관리자)
+   ========================================================= */
+let classDraft = null;   // {cid, set:Set(uid)} — 학생 배정 체크 상태(저장 전)
+
+function fbErr(what){
+  return e => alert(what + ' 실패: ' + e.message + (/permission|insufficient/i.test(e.message||'') ? '\n(Firestore 규칙에서 해당 컬렉션 쓰기 권한을 확인하세요)' : ''));
+}
+function addClass(){
+  const name = $('class-new-name').value.trim();
+  if(!name){ alert('수업 이름을 입력하세요.'); return; }
+  if(classes.some(c=>c.name===name)){ alert('같은 이름의 수업이 이미 있습니다.'); return; }
+  const { db, collection, doc, setDoc } = window.fb;
+  const ref = doc(collection(db,'classes'));
+  selClassId = ref.id; selWeek = 1; classDraft = null;
+  $('class-new-name').value = '';
+  setDoc(ref, { name, weekCount:1, createdAt:Date.now() }).catch(fbErr('수업 개설'));
+}
+function selectClass(cid){
+  selClassId = cid; selWeek = 1; classDraft = null;
+  renderClassAdmin(); renderSchedules();
+}
+function renameClass(cid){
+  const c = classOf(cid); if(!c) return;
+  const name = (prompt('새 수업 이름', c.name) || '').trim();
+  if(!name || name===c.name) return;
+  if(classes.some(x=>x.name===name)){ alert('같은 이름의 수업이 이미 있습니다.'); return; }
+  const { db, doc, updateDoc } = window.fb;
+  updateDoc(doc(db,'classes',cid), { name }).catch(fbErr('이름 변경'));
+  students.filter(st=>st.classId===cid).forEach(st=>{
+    updateDoc(doc(db,'students',st.uid), { className:name }).catch(()=>{});
+  });
+}
+function classItemCount(cid){
+  return schedules.filter(x=>x.classId===cid).length
+    + tasks.hw.filter(x=>x.classId===cid).length
+    + tasks.exam.filter(x=>x.classId===cid).length
+    + videos.filter(x=>x.classId===cid).length;
+}
+function deleteClass(cid){
+  const c = classOf(cid); if(!c) return;
+  const n = classItemCount(cid);
+  if(n){ alert(`이 수업에는 일정·과제·시험·영상이 ${n}개 등록되어 있습니다.\n먼저 삭제한 뒤 수업을 지워주세요.`); return; }
+  const members = students.filter(st=>st.classId===cid);
+  if(!confirm(`"${c.name}" 수업을 삭제할까요?` + (members.length ? `\n소속 학생 ${members.length}명은 '수업 미배정' 상태가 됩니다.` : ''))) return;
+  const { db, doc, updateDoc, deleteDoc } = window.fb;
+  members.forEach(st=>updateDoc(doc(db,'students',st.uid), { classId:null, className:'' }).catch(()=>{}));
+  deleteDoc(doc(db,'classes',cid)).catch(fbErr('삭제'));
+}
+function toggleClassStudent(uid, on){
+  if(!classDraft) return;
+  if(on) classDraft.set.add(uid); else classDraft.set.delete(uid);
+  const lab = document.querySelector('#class-students label[data-uid="'+uid+'"]');
+  if(lab) lab.classList.toggle('on', !!on);
+}
+function setAllClassStudents(on){
+  if(!classDraft) return;
+  students.filter(st=>st.approved).forEach(st=>{ if(on) classDraft.set.add(st.uid); else classDraft.set.delete(st.uid); });
+  renderClassAdmin();
+}
+function saveClassStudents(){
+  const c = classOf(selClassId); if(!c || !classDraft) return;
+  const { db, doc, updateDoc } = window.fb;
+  const moves = students.filter(st=>st.approved && classDraft.set.has(st.uid) && st.classId && st.classId!==c.cid);
+  if(moves.length && !confirm(`다른 수업에 속한 학생 ${moves.length}명(${moves.map(m=>m.name).join(', ')})을 "${c.name}"으로 옮길까요?`)) return;
+  const jobs = [];
+  students.filter(st=>st.approved).forEach(st=>{
+    const want = classDraft.set.has(st.uid);
+    if(want && st.classId!==c.cid) jobs.push(updateDoc(doc(db,'students',st.uid), { classId:c.cid, className:c.name }));
+    else if(!want && st.classId===c.cid) jobs.push(updateDoc(doc(db,'students',st.uid), { classId:null, className:'' }));
+  });
+  if(!jobs.length){ alert('변경된 배정이 없습니다.'); return; }
+  Promise.all(jobs).then(()=>{ classDraft = null; alert('학생 배정을 저장했습니다.'); }).catch(fbErr('배정 저장'));
+}
+function selectWeek(n){ selWeek = n; renderClassAdmin(); renderSchedules(); }
+function addWeek(){
+  const c = classOf(selClassId); if(!c) return;
+  const n = Math.max(1, c.weekCount||1) + 1;
+  selWeek = n;
+  const { db, doc, updateDoc } = window.fb;
+  updateDoc(doc(db,'classes',c.cid), { weekCount:n }).catch(fbErr('주차 추가'));
+}
+function weekItemCount(cid, w){
+  return schedules.filter(x=>x.classId===cid && (x.week||1)===w).length
+    + tasks.hw.filter(x=>x.classId===cid && (x.week||1)===w).length
+    + tasks.exam.filter(x=>x.classId===cid && (x.week||1)===w).length
+    + videos.filter(x=>x.classId===cid && (x.week||1)===w).length;
+}
+function removeLastWeek(){
+  const c = classOf(selClassId); if(!c) return;
+  const n = Math.max(1, c.weekCount||1);
+  if(n<=1) return;
+  if(weekItemCount(c.cid, n)){ alert(`${weekText(n)}에 등록된 회차·과제·시험·영상이 있습니다. 먼저 삭제해주세요.`); return; }
+  if(!confirm(`${weekText(n)}를 삭제할까요?`)) return;
+  selWeek = n-1;
+  const { db, doc, updateDoc } = window.fb;
+  updateDoc(doc(db,'classes',c.cid), { weekCount:n-1 }).catch(fbErr('주차 삭제'));
+}
+function goAddForWeek(kind){
+  const c = classOf(selClassId); if(!c) return;
+  const pfx = kind==='exam' ? 'ex' : kind;
+  setClassWeek(pfx, c.cid, selWeek);
+  setAdminTab('a-'+kind);
+}
+/* 과제·시험·영상 폼의 수업/주차 선택 */
+function renderClassSelects(){
+  ['hw','ex','video'].forEach(pfx=>{
+    const cs = $(pfx+'-class'); if(!cs) return;
+    const prevC = cs.value, prevW = ($(pfx+'-week')||{}).value;
+    cs.innerHTML = classes.length
+      ? classes.map(c=>`<option value="${c.cid}">${esc(c.name)}</option>`).join('')
+      : '<option value="">(먼저 수업을 개설하세요)</option>';
+    if(prevC && classOf(prevC)) cs.value = prevC;
+    else if(selClassId && classOf(selClassId)) cs.value = selClassId;
+    fillWeekSelect(pfx, prevW);
+  });
+}
+function fillWeekSelect(pfx, keep){
+  const cs = $(pfx+'-class'), ws = $(pfx+'-week'); if(!cs || !ws) return;
+  const c = classOf(cs.value);
+  const n = c ? Math.max(1, c.weekCount||1) : 0;
+  let html = '';
+  for(let i=1;i<=n;i++) html += `<option value="${i}">${weekText(i)}</option>`;
+  ws.innerHTML = html || '<option value="">-</option>';
+  if(keep && Number(keep)>=1 && Number(keep)<=n) ws.value = String(keep);
+}
+function setClassWeek(pfx, cid, week){
+  const cs = $(pfx+'-class'); if(!cs) return;
+  if(cid && classOf(cid)) cs.value = cid;
+  fillWeekSelect(pfx, week);
+}
+function readClassWeek(pfx){
+  const cs = $(pfx+'-class'), ws = $(pfx+'-week');
+  const cid = cs ? cs.value : '', week = Number(ws ? ws.value : 0);
+  if(!cid || !classOf(cid) || !week){
+    alert('수업과 주차를 선택하세요. ("수업 · 주차" 탭에서 먼저 수업을 개설해야 합니다)');
+    return null;
+  }
+  return { classId:cid, week };
+}
+function renderClassAdmin(){
+  const list = $('class-list'); if(!list) return;
+  renderClassSelects();
+  list.innerHTML = classes.map(c=>{
+    const cnt = students.filter(st=>st.approved && st.classId===c.cid).length;
+    return `<div class="class-row ${c.cid===selClassId?'sel':''}" onclick="selectClass('${c.cid}')">
+      <div><div class="cr-name">${esc(c.name)}</div>
+        <div class="cr-meta">학생 ${cnt}명 · ${Math.max(1,c.weekCount||1)}주차 · 일정·과제·시험·영상 ${classItemCount(c.cid)}개</div></div>
+      <div style="display:flex; gap:6px;">
+        <button class="btn small secondary" onclick="event.stopPropagation();renameClass('${c.cid}')">이름 수정</button>
+        <button class="btn small danger" onclick="event.stopPropagation();deleteClass('${c.cid}')">삭제</button>
+      </div></div>`;
+  }).join('') || '<p class="empty-hint">개설된 수업이 없습니다. 위에서 수업을 먼저 개설하세요.</p>';
+
+  const c = classOf(selClassId), detail = $('class-detail');
+  if(!c){ detail.style.display = 'none'; return; }
+  detail.style.display = 'block';
+  $('class-detail-title').textContent = c.name;
+
+  // ① 학생 배정 체크리스트 (저장 전 체크 상태는 유지)
+  if(!classDraft || classDraft.cid!==c.cid){
+    classDraft = { cid:c.cid, set:new Set(students.filter(st=>st.approved && st.classId===c.cid).map(st=>st.uid)) };
+  }
+  const approved = students.filter(st=>st.approved).slice().sort((a,b)=>String(a.name).localeCompare(String(b.name),'ko'));
+  $('class-students').innerHTML = approved.map(st=>{
+    const on = classDraft.set.has(st.uid);
+    const other = st.classId && st.classId!==c.cid ? `다른 수업: ${esc(classNameOf(st.classId)||st.className||'')}` : esc(st.grade||'');
+    return `<label class="${on?'on':''}" data-uid="${st.uid}"><input type="checkbox" ${on?'checked':''} onchange="toggleClassStudent('${st.uid}',this.checked)">
+      <span>${esc(st.name)}<small>${other}</small></span></label>`;
+  }).join('') || '<p class="empty-hint">승인된 학생이 없습니다.</p>';
+
+  // ② 주차 탭
+  const n = Math.max(1, c.weekCount||1);
+  if(selWeek>n) selWeek = n;
+  let tabs = '';
+  for(let i=1;i<=n;i++) tabs += `<button class="btn small ${i===selWeek?'':'ghost'}" onclick="selectWeek(${i})">${weekText(i)}</button>`;
+  tabs += `<button class="btn small secondary" onclick="addWeek()">+ 주차 추가</button>`;
+  if(n>1) tabs += `<button class="btn small danger" onclick="removeLastWeek()">마지막 주차 삭제</button>`;
+  $('week-tabs').innerHTML = tabs;
+  renderWeekContent();
+}
+function renderWeekContent(){
+  const box = $('week-content'); if(!box) return;
+  const c = classOf(selClassId);
+  if(!c){ box.innerHTML = ''; return; }
+  $('week-content-title').textContent = `③ ${weekText(selWeek)}의 과제 · 시험 · 영상`;
+  const rows = [];
+  tasks.hw.filter(t=>t.classId===c.cid && (t.week||1)===selWeek).forEach(t=>rows.push(
+    `<div class="wc-row"><span><span class="badge muted">과제</span> ${esc(t.title)} <span style="color:var(--muted); font-size:12px;">${fmtPeriod(t)}</span></span>
+     <button class="btn small secondary" onclick="startTaskEdit('hw','${t.tid}')">수정</button></div>`));
+  tasks.exam.filter(t=>t.classId===c.cid && (t.week||1)===selWeek).forEach(t=>rows.push(
+    `<div class="wc-row"><span><span class="badge part">시험</span> ${esc(t.title)} <span style="color:var(--muted); font-size:12px;">${fmtPeriod(t)}</span></span>
+     <button class="btn small secondary" onclick="startTaskEdit('exam','${t.tid}')">수정</button></div>`));
+  videos.filter(v=>v.classId===c.cid && (v.week||1)===selWeek).forEach(v=>rows.push(
+    `<div class="wc-row"><span><span class="badge good">영상</span> ${esc(v.title)}</span>
+     <button class="btn small secondary" onclick="editVideo('${v.vid}')">수정</button></div>`));
+  box.innerHTML = rows.join('') || `<p class="empty-hint">${weekText(selWeek)}에 부여된 과제·시험·영상이 없습니다.</p>`;
+}
+
 function addSchedule(){
   const v = id => $(id).value.trim();
   if(!v('sch-date')||!v('sch-time')||!v('sch-room')){ alert('날짜·시간·교실을 입력해주세요.'); return; }
-  const assignedTo = draftAssignees['sch'];
-  if(Array.isArray(assignedTo) && !assignedTo.length){
-    alert('출석 대상 학생이 없습니다. 학생을 선택하거나 전체 선택을 체크해주세요.'); return;
-  }
-  const data = {date:v('sch-date'), time:v('sch-time'), room:v('sch-room'), topic:v('sch-topic'), assignedTo};
+  if(!selClassId || !classOf(selClassId)){ alert('먼저 수업을 선택하세요.'); return; }
+  const data = {date:v('sch-date'), time:v('sch-time'), room:v('sch-room'), topic:v('sch-topic'), classId:selClassId, week:selWeek};
   ['sch-date','sch-time','sch-room','sch-topic'].forEach(i=>$(i).value='');
-  draftAssignees['sch'] = null; renderAssigneeSummary('sch');
   const { db, collection, doc, setDoc } = window.fb;
   setDoc(doc(collection(db,'schedules')), data).catch(e=>alert('등록 실패: '+e.message));
 }
@@ -2742,19 +3007,13 @@ function openScheduleEdit(sid){
   $('esc-time').value = s.time||'';
   $('esc-room').value = s.room||'';
   $('esc-topic').value = s.topic||'';
-  draftAssignees['sch-edit'] = Array.isArray(s.assignedTo) ? s.assignedTo.slice() : null;
-  renderAssigneeSummary('sch-edit');
   openModal('schedule-edit-modal');
 }
 function saveScheduleEdit(){
   if(!editScheduleSid) return;
   const date = $('esc-date').value.trim(), time = $('esc-time').value.trim(), room = $('esc-room').value.trim();
   if(!date || !time || !room){ alert('날짜·시간·교실을 입력해주세요.'); return; }
-  const assignedTo = draftAssignees['sch-edit'];
-  if(Array.isArray(assignedTo) && !assignedTo.length){
-    alert('출석 대상 학생이 없습니다. 학생을 선택하거나 전체 선택을 체크해주세요.'); return;
-  }
-  const data = { date, time, room, topic: $('esc-topic').value.trim(), assignedTo };
+  const data = { date, time, room, topic: $('esc-topic').value.trim() };
   closeModal('schedule-edit-modal');
   const { db, doc, updateDoc } = window.fb;
   updateDoc(doc(db,'schedules', editScheduleSid), data).catch(e=>alert('수정 실패: '+e.message));
@@ -2786,11 +3045,12 @@ function findNearestSessionSid(){
   return near || past || next;
 }
 function renderSchedules(){
-  const tb = $('schedule-table'); if(!tb) return;
-  tb.innerHTML = schedules.map(s=>{
-    const f = fmtDate(s.date);
-    const targetLabel = Array.isArray(s.assignedTo) ? `${s.assignedTo.length}명 지정` : '전체';
-    return `<tr>
+  const tb = $('schedule-table');
+  if(tb){
+    const list = schedules.filter(x=>x.classId===selClassId && (x.week||1)===selWeek);
+    tb.innerHTML = list.map(s=>{
+      const f = fmtDate(s.date);
+      return `<tr>
       <td>${f.label}</td><td>${f.day}</td><td>${esc(s.time)}</td>
       <td>${esc(s.room)}</td><td>${esc(s.topic)||'-'}</td>
       <td class="row-actions">
@@ -2798,12 +3058,13 @@ function renderSchedules(){
         <button class="btn small danger" onclick="deleteSchedule('${s.sid}')">삭제</button>
       </td>
     </tr>`;
-  }).join('') || '<tr><td colspan="6" class="empty-hint">등록된 일정이 없습니다.</td></tr>';
+    }).join('') || `<tr><td colspan="6" class="empty-hint">${weekText(selWeek)}에 등록된 회차가 없습니다.</td></tr>`;
+  }
 
   const sel=$('att-session'), prev=sel.value;
   sel.innerHTML = schedules.map(s=>{
     const f=fmtDate(s.date);
-    return `<option value="${s.sid}">${f.label} (${f.day}) ${esc(s.time)} · ${esc(s.room)}</option>`;
+    return `<option value="${s.sid}">[${esc(classNameOf(s.classId))} ${weekText(s.week)}] ${f.label} (${f.day}) ${esc(s.time)} · ${esc(s.room)}</option>`;
   }).join('');
   if(prev && sel.querySelector('option[value="'+prev+'"]')){
     sel.value=prev;
@@ -2811,7 +3072,7 @@ function renderSchedules(){
     const nearest = findNearestSessionSid();
     if(nearest && sel.querySelector('option[value="'+nearest+'"]')) sel.value = nearest;
   }
-  renderAttendance(); renderStudentSchedule();
+  renderAttendance(); renderStudentSchedule(); renderWeekContent();
 }
 function setAttendance(sid, u, status){
   const cur = (attendance[sid]||{})[u] ? attendance[sid][u].status : null;
@@ -2847,9 +3108,7 @@ async function setAllAttendance(status){
   const sid = $('att-session').value;
   const sch = schedules.find(s=>s.sid===sid);
   if(!sid || !sch){ alert('회차를 먼저 선택하세요.'); return; }
-  const targets = Array.isArray(sch.assignedTo)
-    ? students.filter(s=>s.approved && sch.assignedTo.includes(s.uid))
-    : students.filter(s=>s.approved);
+  const targets = students.filter(s=>s.approved && s.classId && s.classId===sch.classId);
   if(!targets.length){ alert('출석 대상 학생이 없습니다.'); return; }
   if(status===null && !confirm(`${targets.length}명의 출석 기록을 모두 지울까요?\n(사유도 함께 지워집니다)`)) return;
 
@@ -2873,9 +3132,7 @@ function renderAttendance(){
     const sum0 = $('att-summary'); if(sum0) sum0.textContent = '';
     return;
   }
-  const targets = Array.isArray(sch.assignedTo)
-    ? students.filter(s=>s.approved && sch.assignedTo.includes(s.uid))
-    : students.filter(s=>s.approved);
+  const targets = students.filter(s=>s.approved && s.classId && s.classId===sch.classId);
   tb.innerHTML = targets.map(st=>{
     const rec=(attendance[sid]||{})[st.uid];
     const s = rec ? rec.status : null;
@@ -2906,15 +3163,20 @@ function renderAttendance(){
 }
 function renderStudentSchedule(){
   const tb=$('t-schedule-table'); if(!tb || !currentStudent) return;
-    const visible = adminViewAll ? schedules.slice()
-    : schedules.filter(s => !Array.isArray(s.assignedTo) || s.assignedTo.includes(currentStudent));
+    const visible = (adminViewAll ? schedules.slice()
+    : schedules.filter(s => inClass(s,currentStudent)))
+    .sort((a,b)=> (a.week||1)-(b.week||1) || (String(a.date)<String(b.date)?-1:1));
+  let lastWeek = null;
   tb.innerHTML = visible.map(s=>{
+    const wk = s.week||1;
+    const weekHead = wk!==lastWeek ? `<tr class="week-row"><td colspan="7">${weekText(wk)}</td></tr>` : '';
+    lastWeek = wk;
     const f=fmtDate(s.date), rec=(attendance[s.sid]||{})[currentStudent];
     const st = rec? rec.status : null;
     const b = st ? `<span class="att-badge ${st}">${st==='p'?'출석':st==='l'?'지각':'결석'}</span>`
                  : '<span class="att-badge n">-</span>';
     const reason = (rec && rec.reason) ? esc(rec.reason).replace(/\n/g,'<br>') : '-';
-    return `<tr><td><b>${f.label}</b></td><td>${f.day}</td><td>${esc(s.time)}</td><td>${esc(s.room)}</td>
+    return weekHead + `<tr><td><b>${f.label}</b></td><td>${f.day}</td><td>${esc(s.time)}</td><td>${esc(s.room)}</td>
       <td>${esc(s.topic)||'-'}</td><td>${b}</td><td style="font-size:12px;">${reason}</td></tr>`;
   }).join('') || '<tr><td colspan="7" class="empty-hint">등록된 일정이 없습니다.</td></tr>';
 }
@@ -3039,19 +3301,15 @@ function addVideo(){
   const yid = extractYoutubeId(url);
   if(!title){ alert('제목을 입력하세요.'); return; }
   if(!yid){ alert('올바른 유튜브 URL이 아닙니다.'); return; }
-  const assignedTo = draftAssignees['video'];
-  if(Array.isArray(assignedTo) && !assignedTo.length){
-    alert('대상 학생이 없습니다. 학생을 선택하거나 전체 선택을 체크해주세요.'); return;
-  }
+  const cw = readClassWeek('video'); if(!cw) return;
   const data = {
     title, youtubeId: yid, url,
     desc: $('video-desc').value.trim(),
-    assignedTo,
+    classId: cw.classId, week: cw.week,
     createdAt: Date.now()
   };
   const editId = editingVideoId;
   $('video-title').value=''; $('video-url').value=''; $('video-desc').value='';
-  draftAssignees['video'] = null; renderAssigneeSummary('video');
   cancelVideoEdit();
 
   const { db, collection, doc, setDoc, updateDoc } = window.fb;
@@ -3066,8 +3324,7 @@ function editVideo(vid){
   $('video-title').value = v.title||'';
   $('video-url').value = v.url||'';
   $('video-desc').value = v.desc||'';
-  draftAssignees['video'] = Array.isArray(v.assignedTo) ? v.assignedTo.slice() : null;
-  renderAssigneeSummary('video');
+  setClassWeek('video', v.classId, v.week);
   $('video-form-title').textContent = '영상 수정';
   $('video-submit-btn').textContent = '수정 저장';
   $('video-cancel-btn').style.display = 'block';
@@ -3087,7 +3344,7 @@ function removeVideo(vid){
 function renderVideos(){
   const tb = $('video-table'); if(!tb) return;
   tb.innerHTML = videos.map(v=>{
-    const targetLabel = Array.isArray(v.assignedTo) ? `${v.assignedTo.length}명 지정` : '전체';
+    const targetLabel = classWeekText(v);
     return `<tr>
       <td>${esc(v.title)}${v.desc?`<div style="font-size:12px; color:var(--muted); margin-top:2px;">${esc(v.desc)}</div>`:''}</td>
       <td><img src="https://img.youtube.com/vi/${v.youtubeId}/mqdefault.jpg" style="width:110px; border-radius:6px;"></td>
@@ -3102,14 +3359,20 @@ function renderVideos(){
 let lastStudentVideoKey = '';
 function renderStudentVideos(){
   const box = $('t-video-list'); if(!box || !currentStudent) return;
-  const list = videos.filter(v => adminViewAll || !Array.isArray(v.assignedTo) || v.assignedTo.includes(currentStudent));
+  const list = videos.filter(v => adminViewAll || inClass(v,currentStudent))
+    .sort((a,b)=> (a.week||1)-(b.week||1) || (b.createdAt||0)-(a.createdAt||0));
 
   // 영상 목록이 그대로면 다시 그리지 않음 (재생 끊김 방지)
-  const key = currentStudent + '::' + list.map(v=>[v.vid, v.youtubeId, v.title, v.desc||''].join('|')).join(',');
+  const key = currentStudent + '::' + list.map(v=>[v.vid, v.youtubeId, v.title, v.desc||'', v.week||1].join('|')).join(',');
   if(key === lastStudentVideoKey && box.innerHTML) return;
   lastStudentVideoKey = key;
 
-  box.innerHTML = list.length ? list.map(v=>`
+  let lastVW = null;
+  box.innerHTML = list.length ? list.map(v=>{
+    const vw = v.week||1;
+    const vHead = vw!==lastVW ? `<h3 class="week-head">${weekText(vw)}</h3>` : '';
+    lastVW = vw;
+    return vHead + `
     <div class="card">
       <h3 style="margin-bottom:6px;">${esc(v.title)}</h3>
       ${v.desc?`<p class="note" style="margin-bottom:10px;">${esc(v.desc)}</p>`:''}
@@ -3119,7 +3382,8 @@ function renderStudentVideos(){
           allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
           allowfullscreen></iframe>
       </div>
-    </div>`).join('') : '<div class="card"><p class="empty-hint">등록된 영상이 없습니다.</p></div>';
+    </div>`;
+  }).join('') : '<div class="card"><p class="empty-hint">등록된 영상이 없습니다.</p></div>';
 }
 /* =========================================================
    문제 세트 · 문제 등록
@@ -4283,7 +4547,7 @@ function buildStudentReportHtml(uid){
   const s = students.find(x=>x.uid===uid);
   if(!s) return null;
 
-  const visibleSch = schedules.filter(sc => !Array.isArray(sc.assignedTo) || sc.assignedTo.includes(uid));
+  const visibleSch = schedules.filter(sc => inClass(sc,uid));
   let p=0,l=0,a=0,n=0;
   visibleSch.forEach(sc=>{
     const st=(attendance[sc.sid]||{})[uid];
@@ -4293,12 +4557,12 @@ function buildStudentReportHtml(uid){
   const checked = p+l+a;
   const rate = checked ? Math.round(p/checked*100) : null;
 
-  const hwRows = tasks.hw.filter(t=>!Array.isArray(t.assignedTo)||t.assignedTo.includes(uid)).map(t=>{
+  const hwRows = tasks.hw.filter(t=>inClass(t,uid)).map(t=>{
     const rec = (scores.hw[t.tid]||{})[uid] || {score:'',status:'미완료'};
     return `<tr><td>${esc(t.title)}</td><td>${fmtPeriod(t)}</td><td>${esc(rec.status||'미완료')}</td><td>${esc(rec.score)||'-'}</td></tr>`;
   }).join('') || '<tr><td colspan="4" style="color:#8993AA;">배정된 과제가 없습니다.</td></tr>';
 
-  const examRows = tasks.exam.filter(t=>!Array.isArray(t.assignedTo)||t.assignedTo.includes(uid)).map(t=>{
+  const examRows = tasks.exam.filter(t=>inClass(t,uid)).map(t=>{
     const rec = (scores.exam[t.tid]||{})[uid] || {score:''};
     return `<tr><td>${esc(t.title)}</td><td>${fmtPeriod(t)}</td><td>${esc(rec.score)||'-'}</td></tr>`;
   }).join('') || '<tr><td colspan="3" style="color:#8993AA;">배정된 시험이 없습니다.</td></tr>';
@@ -5538,8 +5802,7 @@ function startTaskEdit(kind, tid){
   $(prefix+'-due').value = t.due || '';
   draftQids[kind] = (t.qids||[]).slice();
   renderDraft(kind);
-  draftAssignees[kind] = Array.isArray(t.assignedTo) ? t.assignedTo.slice() : null;
-  renderAssigneeSummary(kind);
+  setClassWeek(prefix, t.classId, t.week);
 
   $(kind+'-form-title').textContent = (kind==='hw'?'과제':'시험') + ' 수정';
   $(kind+'-submit-btn').textContent = '수정 저장';
@@ -5551,7 +5814,6 @@ function cancelTaskEdit(kind){
   const prefix = kind==='hw' ? 'hw' : 'ex';
   $(prefix+'-title').value=''; $(prefix+'-start').value=''; $(prefix+'-due').value='';
   draftQids[kind]=[]; renderDraft(kind);
-  draftAssignees[kind]=null; renderAssigneeSummary(kind);
   $(kind+'-form-title').textContent = (kind==='hw'?'과제':'시험') + ' 등록';
   $(kind+'-submit-btn').textContent = (kind==='hw'?'과제':'시험') + ' 등록';
   $(kind+'-cancel-btn').style.display = 'none';
@@ -5561,10 +5823,7 @@ function cancelTaskEdit(kind){
   const title = $(prefix+'-title').value.trim();
   if(!title){ alert('제목을 입력하세요.'); return; }
   if(!draftQids[kind].length && !confirm('담긴 문제가 없습니다. 그래도 등록할까요?')) return;
-  const assignedTo = draftAssignees[kind];
-  if(Array.isArray(assignedTo) && !assignedTo.length){
-    alert('지정된 학생이 없습니다. 학생을 선택하거나 전체 선택을 체크해주세요.'); return;
-  }
+  const cw = readClassWeek(prefix); if(!cw) return;
 
   const editId = editTaskId[kind];
   const existing = editId ? tasks[kind].find(x=>x.tid===editId) : null;
@@ -5582,13 +5841,12 @@ function cancelTaskEdit(kind){
     startAt: $(prefix+'-start').value || '',
     due: $(prefix+'-due').value || '',
     qids: draftQids[kind].slice(), pdfName, pdfUrl,
-    assignedTo: assignedTo
+    classId: cw.classId, week: cw.week
   };
 
   $(prefix+'-title').value=''; $(prefix+'-start').value=''; $(prefix+'-due').value='';
   $(prefix+'-pdf').value='';
   draftQids[kind]=[]; renderDraft(kind);
-  draftAssignees[kind]=null; renderAssigneeSummary(kind);
 
   const { db, collection, doc, setDoc, updateDoc } = window.fb;
   if(editId){
@@ -5624,8 +5882,7 @@ function removeTask(kind,tid){
 }
 /* 과제·시험의 실제 대상 학생 (승인된 학생 중 배정된 학생만) */
 function taskTargetStudents(t){
-  return students.filter(s => s.approved &&
-    (!Array.isArray(t.assignedTo) || t.assignedTo.includes(s.uid)));
+  return students.filter(s => s.approved && s.classId && s.classId===t.classId);
 }
 function submitCount(t){
   return taskTargetStudents(t).filter(s => submissions[t.tid+'|'+s.uid]).length;
@@ -5772,7 +6029,7 @@ function renderTasks(){
   const hwt = $('hw-table'), ext = $('exam-table'); if(!hwt||!ext) return;
   const row = (kind,t) => {
     const targetCount = taskTargetStudents(t).length;
-    const targetLabel = Array.isArray(t.assignedTo) ? `${targetCount}명 지정` : '전체';
+    const targetLabel = classWeekText(t) + ' · ' + targetCount + '명';
     return `
     <tr><td>${esc(t.title)}</td><td>${fmtPeriod(t)}</td><td>${(t.qids||[]).length}문항</td>
     <td>${pdfCell(t)}</td>
@@ -5792,14 +6049,10 @@ function renderTasks(){
 function showAssignedStudents(kind, tid){
   const t = tasks[kind].find(x=>x.tid===tid);
   if(!t) return;
-  const list = Array.isArray(t.assignedTo)
-    ? students.filter(s=>t.assignedTo.includes(s.uid))
-    : students.filter(s=>s.approved);
+  const list = classStudentsOf(t.classId);
 
   $('view-assignees-title').textContent = t.title;
-  $('view-assignees-count').textContent = Array.isArray(t.assignedTo)
-    ? `지정된 학생 ${list.length}명`
-    : `전체 학생 ${list.length}명 (전체 대상)`;
+  $('view-assignees-count').textContent = `${classWeekText(t)} · 학생 ${list.length}명`;
 
     $('view-assignees-list').innerHTML = list.length
     ? list.map(s => `
@@ -5862,12 +6115,12 @@ function renderStudentDashboard(s){
 
   // 인사
   const g = $('stu-greeting');
-  if(g) g.textContent = adminViewAll ? '관리자 전체 보기' : `안녕하세요, ${s.name}님`;
+  if(g) g.textContent = adminViewAll ? '관리자 전체 보기' : `안녕하세요, ${s.name}님` + (s.classId ? (s.className ? ' · '+s.className : '') : ' · 아직 수업에 배정되지 않았어요');
 
   const myHw   = tasks.hw.filter(isAssignedToMe);
   const myExam = tasks.exam.filter(isAssignedToMe);
   const mySch  = adminViewAll ? schedules.slice()
-    : schedules.filter(sc=>!Array.isArray(sc.assignedTo)||sc.assignedTo.includes(currentStudent));
+    : schedules.filter(sc=>inClass(sc,currentStudent));
 
   // 과제 완료 여부: 학생은 본인 제출, 관리자는 대상 학생 전원 제출
   const unsubmittedCount = t => adminViewAll
@@ -5914,7 +6167,7 @@ function renderStudentDashboard(s){
     let p=0,l=0,a=0,n=0;
     mySch.forEach(sc=>{
       const who = adminViewAll
-        ? students.filter(st=>st.approved && (!Array.isArray(sc.assignedTo)||sc.assignedTo.includes(st.uid))).map(st=>st.uid)
+        ? students.filter(st=>st.approved && st.classId && st.classId===sc.classId).map(st=>st.uid)
         : [currentStudent];
       who.forEach(u=>{
         const v = ((attendance[sc.sid]||{})[u]||{}).status;
@@ -5980,11 +6233,11 @@ function renderStudentDashboard(s){
 }
 function isAssignedToMe(t){
   if(adminViewAll) return true;   // 관리자 전체보기: 모든 항목 통과
-  return !Array.isArray(t.assignedTo) || t.assignedTo.includes(currentStudent);
+  return inClass(t, currentStudent);
 }
 function renderStudentTasks(kind){
   const tb = $(kind==='hw'?'t-hw-table':'t-exam-table'); if(!tb) return;
-  tb.innerHTML = tasks[kind].filter(isAssignedToMe).map(t=>{
+  tb.innerHTML = tasks[kind].filter(isAssignedToMe).slice().sort((a,b)=>(a.week||1)-(b.week||1)).map(t=>{
     const sub = submissions[t.tid+'|'+currentStudent];
     const rec = (scores[kind][t.tid]||{})[currentStudent] || {};
     let status, btn;
@@ -6014,7 +6267,7 @@ function renderStudentTasks(kind){
 
     const doneCell = kind==='hw' ? `<td>${statusBadge(rec.status||'미완료')}</td>` : '';
     const dbadge = sub ? '' : ' ' + ddayBadge(t.due);
-    return `<tr><td>${esc(t.title)}${dbadge}</td><td>${fmtPeriod(t)}</td><td>${studentPdfCell(t)}</td>${doneCell}
+    return `<tr><td><span class="badge muted">${weekText(t.week)}</span> ${esc(t.title)}${dbadge}</td><td>${fmtPeriod(t)}</td><td>${studentPdfCell(t)}</td>${doneCell}
       <td>${status}</td><td>${btn}</td></tr>`;
   }).join('') || `<tr><td colspan="${kind==='hw'?6:5}" class="empty-hint">등록된 항목이 없습니다.</td></tr>`;
 }
@@ -7084,9 +7337,7 @@ function renderScoreTable(kind){
   if(!tid){ tb.innerHTML=`<tr><td colspan="${colspan}" class="empty-hint">등록된 항목이 없습니다.</td></tr>`; return; }
   ensureScoreSlots();
   const t = tasks[kind].find(x=>x.tid===tid);
-  const targetStudents = (t && Array.isArray(t.assignedTo))
-    ? students.filter(s=>t.assignedTo.includes(s.uid))
-    : students.filter(s=>s.approved);
+  const targetStudents = t ? students.filter(s=>s.approved && s.classId && s.classId===t.classId) : [];
 
   tb.innerHTML = targetStudents.map(s=>{
     const rec = (scores[kind][tid]||{})[s.uid] || {score:'',status:'미완료'};
@@ -7426,7 +7677,7 @@ function backupScoresCsv(){
     const row = [s.name, s.grade, s.school, s.phone];
     let done=0, pend=0;
     cols.forEach(({kind,t})=>{
-      const assigned = !Array.isArray(t.assignedTo) || t.assignedTo.includes(s.uid);
+      const assigned = !!(t.classId && s.classId===t.classId);
       if(!assigned){ row.push('-'); return; }          // 배정 안 된 항목
       const sub = submissions[t.tid+'|'+s.uid];
       const rec = (scores[kind][t.tid]||{})[s.uid] || {};
@@ -7466,7 +7717,7 @@ function backupAttendanceCsv(){
     const row = [s.name, s.grade];
     let p=0,l=0,a=0,n=0;
     schedules.forEach(sc=>{
-      const assigned = !Array.isArray(sc.assignedTo) || sc.assignedTo.includes(s.uid);
+      const assigned = !!(sc.classId && s.classId===sc.classId);
       if(!assigned){ row.push('-'); return; }
       const rec = (attendance[sc.sid]||{})[s.uid];
       const st = rec ? rec.status : null;
