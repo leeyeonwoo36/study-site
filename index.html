@@ -1872,7 +1872,12 @@ let questionSets = [];
 let questions = [];
 let tasks = { hw: [], exam: [] };
 let submissions = {};             // submissions[tid+'|'+uid]
-let scores = { hw:{}, exam:{} };  // scores[kind][tid][uid] = {score, status}
+let scores = { hw:{}, exam:{} };  // scores[kind][tid][uid] = {score, status}  ← 화면용(계산값 + 관리자 기록)
+let rawScores = { hw:{}, exam:{} }; // 관리자가 직접 기록한 점수 문서만 (학생은 쓸 수 없음)
+let legacyDocs = { att:[], scores:[] }; // 이전 형식(회차·과제 1문서) 문서 — 1회 이전용
+let subsIsAdmin = false;
+const scoreDocId = (kind,tid,uid) => kind+'__'+tid+'__'+uid;
+const attDocId   = (sid,uid) => sid+'__'+uid;
 let aiGenerated = []; // 생성된 문제 임시 배열
 let currentStudent = null;
 let currentUserIsAdmin = false;
@@ -1920,6 +1925,47 @@ function weekText(n){ return (Number(n)||1)+'주차'; }
 function classWeekText(x){ return (classNameOf(x.classId) || '(삭제된 수업)') + ' · ' + weekText(x.week); }
 let subsOwner = null;   // 현재 구독을 시작한 계정 uid (계정 전환 감지용)
 
+/* 온라인 OMR 제출을 답안과 정답으로 채점 (저장된 correct 값은 쓰지 않는다) */
+function gradeOmr(sub){
+  const t = tasks.hw.concat(tasks.exam).find(x=>x.tid===sub.taskId);
+  if(!t) return null;
+  const byId = new Map(questions.map(q=>[q.qid,q]));
+  const qs = (t.qids||[]).map(id=>byId.get(id)).filter(Boolean);
+  if(!qs.length) return null;
+  const ans = sub.answers || {};
+  let correct = 0;
+  qs.forEach(q=>{ const v = ans[q.qid]; if(isCorrect(q, v===undefined ? '' : v)) correct++; });
+  return { correct, total: qs.length };
+}
+/* 화면에 쓰는 scores를 다시 만든다:
+   ① 관리자가 기록한 점수  ② 온라인 OMR은 답안에서 계산  ③ 파일 제출은 '채점중' — 관리자 기록이 있으면 그것이 우선 */
+function rebuildScores(){
+  const out = { hw:{}, exam:{} };
+  ['hw','exam'].forEach(kind=>{
+    Object.keys(rawScores[kind]).forEach(tid=>{ out[kind][tid] = Object.assign({}, rawScores[kind][tid]); });
+  });
+  Object.keys(submissions).forEach(key=>{
+    const sub = submissions[key]; if(!sub) return;
+    const kind = sub.kind, tid = sub.taskId, uid = sub.studentUid;
+    if(!out[kind] || !tid || !uid) return;
+    let auto = null;
+    if(sub.mode==='omr'){
+      const g = gradeOmr(sub);
+      if(g){
+        sub.correct = g.correct; sub.total = g.total;
+        auto = { score: g.correct+'/'+g.total,
+                 status: g.correct===g.total ? '완료' : (g.correct>0 ? '일부완료' : '미완료'), taskId: tid };
+      }
+    } else if(sub.mode==='photo'){
+      auto = { score:'', status:'채점중', taskId: tid };
+    }
+    if(!auto) return;
+    out[kind][tid] = out[kind][tid] || {};
+    out[kind][tid][uid] = Object.assign({}, auto, (rawScores[kind][tid]||{})[uid]);
+  });
+  scores = out;
+  ensureScoreSlots();
+}
 function ensureScoreSlots(){
   ['hw','exam'].forEach(kind=>{
     tasks[kind].forEach(t=>{
@@ -1973,6 +2019,8 @@ function startSubscriptions(isAdmin, ownerUid){
   if(subsOwner !== null) stopSubscriptions(); // 계정이 바뀌었으면 이전 구독을 먼저 끊는다
   if(!window.fb){ setTimeout(()=>startSubscriptions(isAdmin, ownerUid), 120); return; }
   subsOwner = ownerUid;
+  subsIsAdmin = !!isAdmin;
+  migFlags = {att:false, scores:false, subs:false, tasks:false, sch:false, started:false};
   const { db, collection, doc, onSnapshot, query, where } = window.fb;
 
   const sub = (name, handler, customRef) => {
@@ -2047,12 +2095,21 @@ if(!isAdmin && currentStudent){
     schedules.sort((a,b)=> String(a.date) < String(b.date) ? -1 : 1);
     renderSchedules();
     if(isAdmin) renderClassAdmin();
+    tryMigrate('sch');
   });
+  // 학생은 본인 문서만 구독 (규칙에서도 uid 일치 조건으로 막음)
+  const ownedRef = name => isAdmin ? collection(db,name) : query(collection(db,name), where('uid','==', ownerUid));
   sub('attendance', snap => {
-    attendance = {};
-    snap.docs.forEach(d => { attendance[d.id] = d.data(); });
-    renderAttendance(); renderStudentSchedule();
-  });
+    attendance = {}; legacyDocs.att = [];
+    snap.docs.forEach(d => {
+      const x = d.data();
+      if(x && x.sid && x.uid){
+        (attendance[x.sid] = attendance[x.sid] || {})[x.uid] = { status:x.status, reason:x.reason||'' };
+      } else if(isAdmin){ legacyDocs.att.push({ id:d.id, data:x||{} }); }
+    });
+    renderAttendance(); renderStudentSchedule(); renderStudentSite();
+    tryMigrate('att');
+  }, ownedRef('attendance'));
   sub('videos', snap => {
   videos = snap.docs.map(d => ({ vid:d.id, ...d.data() })).filter(x=>x.classId);
   videos.sort((a,b)=> (b.createdAt||0) - (a.createdAt||0));
@@ -2071,6 +2128,7 @@ if(!isAdmin && currentStudent){
   });
   sub('questions', snap => {
     questions = snap.docs.map(d => ({ qid:d.id, ...d.data() }));
+    rebuildScores();
     renderQuestions(); renderQSetList(); renderBank();
     renderDraft('hw'); renderDraft('exam');
     renderWrongNote();
@@ -2079,11 +2137,12 @@ if(!isAdmin && currentStudent){
     const all = snap.docs.map(d => ({ tid:d.id, ...d.data() })).filter(x=>x.classId);
     tasks.hw   = all.filter(t=>t.kind==='hw');
     tasks.exam = all.filter(t=>t.kind==='exam');
-    ensureScoreSlots();
+    rebuildScores();
     renderTasks(); renderScoreSelects();
     renderScoreTable('hw'); renderScoreTable('exam');
     renderStudentSite(); renderGradingTable();
     if(isAdmin) renderClassAdmin();
+    tryMigrate('tasks');
   });
  const submissionsRef = isAdmin
   ? collection(db,'submissions')
@@ -2091,21 +2150,76 @@ if(!isAdmin && currentStudent){
 sub('submissions', snap => {
   submissions = {};
   snap.docs.forEach(d => { submissions[d.id] = d.data(); });
+  rebuildScores();
+  renderScoreTable('hw'); renderScoreTable('exam');
   renderStudentSite(); renderTasks(); renderGradingTable();
   renderStudents();   // 제출이 들어오면 '미제출' 칸도 갱신
+  tryMigrate('subs');
 }, submissionsRef);
   sub('scores', snap => {
-    scores.hw = {}; scores.exam = {};
+    rawScores = { hw:{}, exam:{} }; legacyDocs.scores = [];
     snap.docs.forEach(d => {
-      const idx = d.id.indexOf('__');
-      if(idx < 0) return;
-      const kind = d.id.slice(0, idx), tid = d.id.slice(idx+2);
-      if(scores[kind]) scores[kind][tid] = d.data();
+      const x = d.data();
+      if(x && x.uid && x.kind && x.taskId && rawScores[x.kind]){
+        (rawScores[x.kind][x.taskId] = rawScores[x.kind][x.taskId] || {})[x.uid] =
+          { score:x.score||'', status:x.status||'미완료', taskId:x.taskId };
+      } else if(isAdmin){ legacyDocs.scores.push({ id:d.id, data:x||{} }); }
     });
-    ensureScoreSlots();
+    rebuildScores();
     renderScoreTable('hw'); renderScoreTable('exam');
     renderGradingTable(); renderStudentSite();
-  });
+    tryMigrate('scores');
+  }, ownedRef('scores'));
+}
+/* ─────────────────────────────────────────────
+   이전 형식 → 학생별 문서 (관리자 접속 시 1회, 지우지 않고 복사만)
+   ───────────────────────────────────────────── */
+let migFlags = {att:false, scores:false, subs:false, tasks:false, sch:false, started:false};
+function tryMigrate(flag){
+  if(flag) migFlags[flag] = true;
+  if(!subsIsAdmin || migFlags.started) return;
+  if(!(migFlags.att && migFlags.scores && migFlags.subs && migFlags.tasks && migFlags.sch)) return;
+  migFlags.started = true;
+  migrateLegacyV2();
+}
+async function migrateLegacyV2(){
+  const { db, doc, getDoc, setDoc } = window.fb;
+  try{
+    const mref = doc(db,'settings','migrationV2');
+    if((await getDoc(mref)).exists()) return;
+    const taskIds  = new Set(tasks.hw.concat(tasks.exam).map(t=>t.tid));
+    const schedIds = new Set(schedules.map(x=>x.sid));
+    const jobs = [];
+    legacyDocs.att.forEach(({id,data})=>{
+      if(!schedIds.has(id)) return;                       // 수업 구조 이전의 옛 일정은 건드리지 않음
+      Object.keys(data).forEach(uid=>{
+        const r = data[uid];
+        if(!r || typeof r!=='object' || !r.status) return;
+        if((attendance[id]||{})[uid]) return;
+        jobs.push(setDoc(doc(db,'attendance', attDocId(id,uid)), { uid, sid:id, status:r.status, reason:r.reason||'' }));
+      });
+    });
+    legacyDocs.scores.forEach(({id,data})=>{
+      const i = id.indexOf('__'); if(i<0) return;
+      const kind = id.slice(0,i), tid = id.slice(i+2);
+      if(!taskIds.has(tid) || !rawScores[kind]) return;
+      Object.keys(data).forEach(uid=>{
+        const r = data[uid];
+        if(!r || typeof r!=='object') return;
+        const sub = submissions[tid+'|'+uid];
+        const has = !!String(r.score||'').trim();
+        if(sub && sub.mode==='omr') return;                // 답안으로 다시 계산되므로 옮기지 않음 (학생이 쓴 값일 수 있음)
+        if(sub && sub.mode==='photo' && !has) return;      // 채점 대기
+        if(!sub && !has) return;
+        if((rawScores[kind][tid]||{})[uid]) return;
+        jobs.push(setDoc(doc(db,'scores', scoreDocId(kind,tid,uid)),
+          { uid, kind, taskId:tid, score:String(r.score||''), status:r.status||'미완료' }));
+      });
+    });
+    await Promise.all(jobs);
+    await setDoc(mref, { done:true, at:Date.now(), moved:jobs.length });
+    if(jobs.length) console.log('이전 형식 점수·출석 '+jobs.length+'건을 새 형식으로 복사했습니다.');
+  }catch(e){ console.error('이전 형식 데이터 복사 실패:', e.message); }
 }
 function stopSubscriptions(){
   unsubs.forEach(fn => { try{ fn(); }catch(e){} });
@@ -2114,7 +2228,7 @@ function stopSubscriptions(){
   students = []; schedules = []; attendance = {}; videos = []; notices = []; classes = []; selClassId = null;
   questionSets = []; questions = [];
   tasks = { hw:[], exam:[] };
-  submissions = {}; scores = { hw:{}, exam:{} };
+  submissions = {}; scores = { hw:{}, exam:{} }; rawScores = { hw:{}, exam:{} }; legacyDocs = { att:[], scores:[] };
   wrongItems = {};   // ← 추가
   myVariants = []; cloudDrafts = {}; variantListOpen = false;
   draftQids = { hw:[], exam:[] };
@@ -2998,7 +3112,8 @@ function deleteSchedule(sid){
   if(!confirm('이 일정을 삭제할까요? 해당 회차 출석 기록도 함께 삭제됩니다.')) return;
   const { db, doc, deleteDoc } = window.fb;
   deleteDoc(doc(db,'schedules',sid)).catch(e=>alert('삭제 실패: '+e.message));
-  deleteDoc(doc(db,'attendance',sid)).catch(()=>{});
+  deleteDoc(doc(db,'attendance',sid)).catch(()=>{});   // 이전 형식
+  students.forEach(st=>deleteDoc(doc(db,'attendance', attDocId(sid,st.uid))).catch(()=>{}));
 }
 function openScheduleEdit(sid){
   const s = schedules.find(x=>x.sid===sid); if(!s) return;
@@ -3077,11 +3192,11 @@ function renderSchedules(){
 function setAttendance(sid, u, status){
   const cur = (attendance[sid]||{})[u] ? attendance[sid][u].status : null;
   const next = cur===status ? null : status; // 같은 버튼을 다시 누르면 취소(미체크)
-  const { db, doc, setDoc, deleteField } = window.fb;
-  const payload = {};
-  payload[u] = next===null ? deleteField() : {status:next, reason:((attendance[sid]||{})[u]||{}).reason||''};
-  setDoc(doc(db,'attendance',sid), payload, {merge:true})
-    .catch(e=>alert('출석 저장 실패: '+e.message));
+  const { db, doc, setDoc, deleteDoc } = window.fb;
+  const ref = doc(db,'attendance', attDocId(sid,u));
+  const job = next===null ? deleteDoc(ref)
+    : setDoc(ref, { uid:u, sid, status:next, reason:((attendance[sid]||{})[u]||{}).reason||'' });
+  job.catch(e=>alert('출석 저장 실패: '+e.message));
 }
 function openReason(sid,u){
   reasonTarget = {sid,u};
@@ -3099,8 +3214,7 @@ function saveReason(){
   const cur = (attendance[sid]||{})[u];
   if(!cur) return;
   const { db, doc, setDoc } = window.fb;
-  const payload = {}; payload[u] = Object.assign({}, cur, {reason:text});
-  setDoc(doc(db,'attendance',sid), payload, {merge:true})
+  setDoc(doc(db,'attendance', attDocId(sid,u)), { uid:u, sid, status:cur.status, reason:text })
     .catch(e=>alert('사유 저장 실패: '+e.message));
 }
 /* 선택한 회차의 대상 학생 전원을 한 번에 체크 (null이면 미체크로) */
@@ -3112,15 +3226,14 @@ async function setAllAttendance(status){
   if(!targets.length){ alert('출석 대상 학생이 없습니다.'); return; }
   if(status===null && !confirm(`${targets.length}명의 출석 기록을 모두 지울까요?\n(사유도 함께 지워집니다)`)) return;
 
-  const { db, doc, setDoc, deleteField } = window.fb;
-  const payload = {};
-  targets.forEach(s=>{
-    payload[s.uid] = status===null
-      ? deleteField()
-      : { status, reason: ((attendance[sid]||{})[s.uid]||{}).reason || '' };
-  });
+  const { db, doc, setDoc, deleteDoc } = window.fb;
   try{
-    await setDoc(doc(db,'attendance',sid), payload, {merge:true});
+    await Promise.all(targets.map(st=>{
+      const ref = doc(db,'attendance', attDocId(sid,st.uid));
+      return status===null
+        ? deleteDoc(ref)
+        : setDoc(ref, { uid:st.uid, sid, status, reason: ((attendance[sid]||{})[st.uid]||{}).reason || '' });
+    }));
   }catch(e){ alert('저장 실패: '+e.message); }
 }
 function renderAttendance(){
@@ -5873,9 +5986,10 @@ function removeTask(kind,tid){
 
   const { db, doc, deleteDoc } = window.fb;
   deleteDoc(doc(db,'tasks',tid)).catch(e=>alert('삭제 실패: '+e.message));
-  deleteDoc(doc(db,'scores', kind+'__'+tid)).catch(()=>{});
+  deleteDoc(doc(db,'scores', kind+'__'+tid)).catch(()=>{});   // 이전 형식
   students.forEach(s=>{
     deleteDoc(doc(db,'submissions', tid+'|'+s.uid)).catch(()=>{});
+    deleteDoc(doc(db,'scores', scoreDocId(kind,tid,s.uid))).catch(()=>{});
   });
   cleanWrongBankItems((qid, item) => item.taskId===tid);
   deleteCloudinaryFiles(files);
@@ -6824,27 +6938,19 @@ async function submitSolve(){
   const subData = {
     studentUid: currentStudent,
     taskId: tid, kind, mode,
-    answers, photos, total:qs.length, correct,
+    answers, photos, total:qs.length,      // 점수(correct)는 저장하지 않는다 — 답안과 정답으로 항상 다시 계산
     late,
     submittedAt: now.getTime(),
     date: now.toLocaleString('ko-KR')
   };
-    const rec = mode==='omr'
-    ? { score: correct+'/'+qs.length,
-        status: correct===qs.length ? '완료' : (correct>0 ? '일부완료' : '미완료'),
-        taskId: tid }
-    : { score: '', status: '채점중', taskId: tid };
 
   const { db, doc, setDoc } = window.fb;
-  const scorePayload = {}; scorePayload[currentStudent] = rec;
   const studentUid = currentStudent;
 
    let step = '';
   try{
     step = '제출물';
     await setDoc(doc(db,'submissions', tid+'|'+studentUid), subData);
-    step = '점수';
-    await setDoc(doc(db,'scores', kind+'__'+tid), scorePayload, {merge:true});
     step = '오답노트';
     if(mode==='omr') await updateWrongBankAfterGrade(studentUid, kind, tid, t.title, qs, answers);
     step = '';
@@ -6994,16 +7100,11 @@ async function saveOmrEdit(){
     if(isCorrect(q, val)) correct++;
   });
 
-  const rec = {
-    score: correct+'/'+qs.length,
-    status: correct===qs.length ? '완료' : (correct>0 ? '일부완료' : '미완료')
-  };
-  const { db, doc, updateDoc, setDoc } = window.fb;
-  const scorePayload = {}; scorePayload[uid] = rec;
+  const { db, doc, updateDoc, deleteDoc } = window.fb;
 
   try{
-    await updateDoc(doc(db,'submissions', tid+'|'+uid), { answers, correct });
-    await setDoc(doc(db,'scores', kind+'__'+tid), scorePayload, {merge:true});
+    await updateDoc(doc(db,'submissions', tid+'|'+uid), { answers });
+    await deleteDoc(doc(db,'scores', scoreDocId(kind,tid,uid)));   // 직접 입력해 둔 점수가 있으면 지우고 새 답안 기준으로 계산
     await updateWrongBankAfterGrade(uid, kind, tid, t.title, qs, answers, true);
     if(currentDetailUid===uid) loadAdminWrongNote(uid);
     alert(`저장되었습니다. 수정된 점수: ${correct}/${qs.length}`);
@@ -7118,10 +7219,9 @@ async function saveOfflineGrade(skipGrading){
     : { score: '', status: '채점중' };
 
   const { db, doc, setDoc } = window.fb;
-  const scorePayload = {}; scorePayload[uid] = rec;
   try{
     await setDoc(doc(db,'submissions', tid+'|'+uid), subData);
-    await setDoc(doc(db,'scores', kind+'__'+tid), scorePayload, {merge:true});
+    await setDoc(doc(db,'scores', scoreDocId(kind,tid,uid)), { uid, kind, taskId:tid, score:rec.score, status:rec.status });
     if(graded) await updateOfflineWrongBank(uid, kind, tid, t.title, qs, marks);
     if(currentDetailUid===uid) loadAdminWrongNote(uid);
     closeModal('offline-grade-modal');
@@ -7172,11 +7272,10 @@ async function cancelSubmission(kind, tid, uid){
     '\n입력된 점수도 함께 지워집니다.'
   )) return;
 
-  const { db, doc, deleteDoc, setDoc } = window.fb;
-  const scorePayload = {}; scorePayload[uid] = { score: '', status: '미완료' };
+  const { db, doc, deleteDoc } = window.fb;
   try{
     await deleteDoc(doc(db,'submissions', tid+'|'+uid));
-    await setDoc(doc(db,'scores', kind+'__'+tid), scorePayload, {merge:true});
+    await deleteDoc(doc(db,'scores', scoreDocId(kind,tid,uid)));
   }catch(e){ alert('취소 실패: '+e.message); }
 }
 
@@ -7369,8 +7468,7 @@ function saveScore(kind, u){
   if(score && status==='채점중') status = '완료';   // ✅ 점수 입력 = 채점 완료
 
   const { db, doc, setDoc } = window.fb;
-  const payload = {}; payload[u] = { score, status };
-  setDoc(doc(db,'scores', kind+'__'+tid), payload, {merge:true})
+  setDoc(doc(db,'scores', scoreDocId(kind,tid,u)), { uid:u, kind, taskId:tid, score, status })
     .then(()=>alert('저장되었습니다.'))
     .catch(e=>alert('저장 실패: '+e.message));
 }
