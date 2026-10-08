@@ -8324,7 +8324,8 @@ function updateSolveProgress(){
    - 좌표는 문제 영역 너비를 1로 보고 저장 → 화면 크기가 바뀌어도 제자리
    - 이 기기(브라우저)에만 임시 저장되고 제출 내용에는 포함되지 않는다
    ========================================================= */
-const INK = { on:false, tool:'pen', color:'#1f2937', finger:false, data:{}, undo:[], key:null, saveTimer:null, cvs:{}, ro:null };
+const LASER_MS = 900;   // 레이저 자국이 사라지기까지 걸리는 시간
+const INK = { laser:{}, raf:0, on:false, tool:'pen', color:'#1f2937', finger:false, data:{}, undo:[], key:null, saveTimer:null, cvs:{}, ro:null };
 const INK_COLORS = ['#1f2937','#2563eb','#dc2626'];
 function inkKey(tid){ return 'ink:'+(currentStudent||'x')+':'+tid; }
 function inkLoad(){
@@ -8343,7 +8344,7 @@ function inkSaveSoon(){
 }
 function inkClearStored(tid){ try{ localStorage.removeItem(inkKey(tid)); }catch(e){} }
 function inkInit(tid){
-  INK.on = false; INK.tool = 'pen'; INK.color = INK_COLORS[0]; INK.undo = []; INK.key = inkKey(tid); INK.cvs = {};
+  INK.on = false; INK.tool = 'pen'; INK.color = INK_COLORS[0]; INK.undo = []; INK.key = inkKey(tid); INK.cvs = {}; INK.laser = {}; INK.laserHeld = null;
   if(INK.ro){ INK.ro.disconnect(); INK.ro = null; }
   inkLoad();
   const body = $('solve-body'); if(!body) return;
@@ -8356,6 +8357,7 @@ function inkInit(tid){
         ${INK_COLORS.map((c,i)=>`<button type="button" class="ink-dot${i===0?' on':''}" data-c="${c}" style="background:${c}" onclick="inkPickColor('${c}')" title="펜"></button>`).join('')}
         <button type="button" id="ink-hl" onclick="inkPickTool('hl')">형광펜</button>
         <button type="button" id="ink-er" onclick="inkPickTool('eraser')">지우개</button>
+        <button type="button" id="ink-laser" onclick="inkPickTool('laser')" title="굿노트 레이저 포인터처럼, 그린 선이 잠깐 뒤 사라져요">레이저</button>
         <button type="button" onclick="inkUndo()">↶ 되돌리기</button>
         <button type="button" onclick="inkClearAll()">전체 지우기</button>
         <button type="button" id="ink-fg" onclick="inkToggleFinger()">손가락도 쓰기</button>
@@ -8391,6 +8393,43 @@ function inkDrawStroke(ctx, st, W, dpr){
   for(let i=2;i<pts.length;i+=2) ctx.lineTo(pts[i]*W, pts[i+1]*W);
   ctx.stroke(); ctx.restore();
 }
+/* 레이저 포인터: 저장되지 않고, 그린 선이 점점 흐려지며 사라진다 */
+function inkLaserDraw(qid, now){
+  const cv = INK.cvs[qid]; if(!cv) return;
+  const trail = INK.laser[qid] || [];
+  const ctx = cv.getContext('2d');
+  const r = cv.parentElement.getBoundingClientRect(); const dpr = cv.width/Math.max(1,r.width), W = r.width*dpr;
+  ctx.save(); ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  for(let i=1;i<trail.length;i++){
+    const a = trail[i-1], b = trail[i];
+    if(b.brk) continue;                                  // 획이 끊긴 곳은 잇지 않는다
+    const life = 1 - (now - b.t)/LASER_MS; if(life<=0) continue;
+    ctx.globalAlpha = Math.min(1, life);
+    ctx.strokeStyle = '#ff2b2b'; ctx.shadowColor = '#ff4d4d'; ctx.shadowBlur = 10*dpr; ctx.lineWidth = (3+3*life)*dpr;
+    ctx.beginPath(); ctx.moveTo(a.x*W, a.y*W); ctx.lineTo(b.x*W, b.y*W); ctx.stroke();
+    ctx.shadowBlur = 0; ctx.strokeStyle = '#ffd6d6'; ctx.lineWidth = (1.2+1.2*life)*dpr;
+    ctx.beginPath(); ctx.moveTo(a.x*W, a.y*W); ctx.lineTo(b.x*W, b.y*W); ctx.stroke();
+  }
+  const head = INK.laserLast;
+  if(INK.laserHeld===qid && head){           // 펜을 대고 있는 동안 끝에 빛나는 점
+    ctx.globalAlpha = 1; ctx.shadowColor = '#ff4d4d'; ctx.shadowBlur = 14*dpr; ctx.fillStyle = '#ff2b2b';
+    ctx.beginPath(); ctx.arc(head.x*W, head.y*W, 5*dpr, 0, Math.PI*2); ctx.fill();
+    ctx.shadowBlur = 0; ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(head.x*W, head.y*W, 2*dpr, 0, Math.PI*2); ctx.fill();
+  }
+  ctx.restore();
+}
+function inkLaserTick(){
+  INK.raf = 0;
+  const now = performance.now(); let alive = false;
+  Object.keys(INK.laser).forEach(qid=>{
+    const trail = INK.laser[qid];
+    while(trail.length && now - trail[0].t > LASER_MS) trail.shift();
+    if(trail.length || INK.laserHeld===qid){ alive = true; inkRedraw(qid); inkLaserDraw(qid, now); }
+    else if(trail.length===0){ delete INK.laser[qid]; inkRedraw(qid); }
+  });
+  if(alive) INK.raf = requestAnimationFrame(inkLaserTick);
+}
+function inkLaserKick(){ if(!INK.raf) INK.raf = requestAnimationFrame(inkLaserTick); }
 function inkRedraw(qid){
   const cv = INK.cvs[qid]; if(!cv) return;
   const ctx = cv.getContext('2d'); ctx.clearRect(0,0,cv.width,cv.height);
@@ -8418,6 +8457,11 @@ function inkBind(cv, qid){
     if(e.pointerType==='touch' && !INK.finger) return;     // 손가락은 스크롤
     e.preventDefault(); cv.setPointerCapture(e.pointerId);
     if(INK.tool==='eraser'){ erased = false; cur = 'erase'; eraseAt(e); return; }
+    if(INK.tool==='laser'){
+      cur = 'laser'; INK.laserHeld = qid;
+      const [lx,ly] = pos(e); const tr = INK.laser[qid] = INK.laser[qid] || [];
+      tr.push({x:lx, y:ly, t:performance.now(), brk:true}); INK.laserLast = {x:lx, y:ly}; inkLaserKick(); return;
+    }
     const [x,y] = pos(e);
     cur = { c: INK.tool==='hl' ? '#facc15' : INK.color, w: INK.tool==='hl' ? 14 : 2.2, h: INK.tool==='hl', p:[x,y] };
     if(!INK.data[qid]) INK.data[qid] = [];
@@ -8427,17 +8471,24 @@ function inkBind(cv, qid){
   cv.addEventListener('pointermove', e=>{
     if(!cur) return;
     if(cur==='erase'){ eraseAt(e); return; }
+    if(cur==='laser'){
+      const tr = INK.laser[qid] = INK.laser[qid] || [];
+      const evs2 = e.getCoalescedEvents ? e.getCoalescedEvents() : [e];
+      (evs2.length?evs2:[e]).forEach(ev=>{ const [lx,ly] = pos(ev); tr.push({x:lx, y:ly, t:performance.now()}); INK.laserLast = {x:lx, y:ly}; });
+      inkLaserKick(); return;
+    }
     const evs = e.getCoalescedEvents ? e.getCoalescedEvents() : [e];
     (evs.length?evs:[e]).forEach(ev=>{ const [x,y] = pos(ev); cur.p.push(x,y); });
     inkRedraw(qid);
   });
   const end = e=>{
     if(!cur) return;
-    if(cur!=='erase') inkSaveSoon();
+    if(cur==='laser'){ INK.laserHeld = null; inkLaserKick(); }
+    else if(cur!=='erase') inkSaveSoon();
     cur = null;
   };
   cv.addEventListener('pointerup', end); cv.addEventListener('pointercancel', e=>{
-    if(cur && cur!=='erase'){ /* 스크롤로 넘어간 터치: 점 하나짜리 획은 버린다 */
+    if(cur && cur!=='erase' && cur!=='laser'){ /* 스크롤로 넘어간 터치: 점 하나짜리 획은 버린다 */
       const arr = INK.data[qid]; if(arr && arr[arr.length-1]===cur && cur.p.length<=4){ arr.pop(); INK.undo.pop(); inkRedraw(qid); }
     }
     end(e);
@@ -8452,6 +8503,7 @@ function inkRefreshBar(){
   document.querySelectorAll('#ink-bar .ink-dot').forEach(b=>b.classList.toggle('on', INK.tool==='pen' && b.dataset.c===INK.color));
   const hl = $('ink-hl'); if(hl) hl.classList.toggle('on', INK.tool==='hl');
   const er = $('ink-er'); if(er) er.classList.toggle('on', INK.tool==='eraser');
+  const lz = $('ink-laser'); if(lz) lz.classList.toggle('on', INK.tool==='laser');
   const fg = $('ink-fg'); if(fg) fg.classList.toggle('on', INK.finger);
 }
 function inkToggle(){ INK.on = !INK.on; inkRefreshBar(); }
@@ -9836,6 +9888,7 @@ function renderFirebaseGuide(){
     <li><b>종이 OMR</b> — 과제 관리·시험 관리의 <b>OMR 인쇄</b>(학생은 풀이 화면에서도 가능)로 답안지를 뽑습니다. 학생이 종이에 마킹한 뒤 풀이 화면의 <b>마킹한 OMR 사진으로 답 채우기</b>에 사진을 올리면 AI(Gemini)가 마킹을 읽어 답안을 채우고, 학생이 확인한 뒤 제출하면 온라인 OMR과 똑같이 자동 채점됩니다. 확신이 낮은 문항은 ★와 주황색으로 표시됩니다. AI가 틀리게 읽을 수 있으니 학생이 꼭 확인해야 하고, 어두운 사진·접힌 용지는 정확도가 떨어집니다. 사진 인식은 Gemini 호출 1회를 씁니다. 답안지 오른쪽 위에는 과제마다 다른 <b>숫자 4자리 과제 코드</b>가 0~9 칸에 칠해진 채 인쇄되며(과제 목록의 '코드' 배지와 같은 값), 사진을 올리면 AI가 이 코드를 읽어 지금 푸는 과제와 다르면 경고하고 답을 채우지 않습니다. 코드가 없는 기존 과제는 관리자가 접속할 때 자동으로 부여됩니다.</li>
     <li><b>문항 통계</b> — 채점·확인 → 문항 통계. 과제·시험을 고르면 문항별 정답률, 선지별 선택 분포, 가장 많이 고른 오답이 보입니다. 정답률 낮은 순으로 정렬하면 수업에서 다시 짚을 문제를 바로 찾을 수 있습니다. 파일(사진·PDF)로만 낸 제출은 집계에서 빠집니다.</li>
     <li><b>과제·시험 복제</b> — 과제 관리·시험 관리 목록 또는 수업·주차 화면의 <b>복제</b> 버튼. 수업과 주차(여러 개 가능)를 고르면 문항 구성이 그대로 복사되고, 시작·마감 일시는 주차 차이만큼 옮길 수 있습니다. 첨부 PDF는 복사하지 않습니다(한쪽을 지울 때 파일이 같이 지워지는 것을 막기 위해).</li>
+    <li><b>필기 · 레이저 포인터</b> — 풀이 화면의 '✏️ 필기'를 켜면 펜(3색)·형광펜·지우개에 더해 <b>레이저</b>가 있습니다. 레이저는 굿노트처럼 그은 선이 붉게 빛나다가 약 1초 뒤 사라지고, 저장되지 않으며 되돌리기에도 남지 않습니다. 필기는 이 기기에만 임시 저장되고 제출 내용에는 포함되지 않습니다.</li>
     <li><b>마감 임박 배너</b> — 학생 메인 맨 위에, 마감까지 24시간 이내이고 아직 제출하지 않은 과제·시험이 있으면 남은 시간과 '풀기' 버튼이 나옵니다(3시간 이내는 강조). 마감을 정하지 않은 과제는 나오지 않습니다.</li>
     <li><b>제출 결과 화면</b> — 제출 직후 점수 원, 틀린 문항 번호, 오답노트에 담긴 안내와 '해설 보기' 버튼이 나옵니다. 파일 제출은 '제출 완료'만 표시됩니다.</li>
     <li><b>별표 · 메모</b> — 학생이 해설 화면에서 문제마다 ★와 메모를 남기고, 오답노트 탭의 '별표·메모 문제 보기'에서 모아 봅니다. 이 기기의 브라우저에만 저장되므로 기기를 바꾸거나 브라우저 데이터를 지우면 사라집니다.</li>
