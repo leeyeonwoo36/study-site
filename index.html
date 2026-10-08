@@ -428,6 +428,9 @@
 .st-sum .box small{display:block; color:var(--muted); font-size:12px;}
 .st-sum .box strong{font-size:20px;}
 .dup-opt{display:flex; align-items:center; gap:8px; margin-top:12px; font-size:13.5px; font-weight:600; cursor:pointer;}
+/* 종이 OMR 도구 */
+.omr-tools{border:1px dashed var(--border); border-radius:14px; padding:12px 14px; margin-bottom:12px; background:var(--brand-soft); font-size:13.5px;}
+.omr-q.scanned-unsure{background:#fff7e6; box-shadow:inset 3px 0 0 var(--warn);}
 /* 필기(펜) 레이어 */
 .omr-q{position:relative;}
 .ink-cv{position:absolute; left:0; top:0; width:100%; height:100%; z-index:3; pointer-events:none; touch-action:auto;}
@@ -1636,6 +1639,15 @@ body.quiet-preview .sidebar{ padding-top:22px; }
     <h3 id="solve-title">온라인 OMR 풀이</h3>
         <p class="note">정답이 여러 개인 문제는 해당하는 선지를 모두 고르세요. 제출 후에는 답안을 수정할 수 없습니다.</p>
         <div id="solve-draft-status" style="font-size:12px; color:var(--muted); margin:-6px 0 10px; min-height:16px;"></div>
+       <div class="omr-tools" id="omr-tools">
+         <b>종이 OMR로 푸셨나요?</b>
+         <div style="display:flex; gap:6px; flex-wrap:wrap; margin-top:8px;">
+           <button type="button" class="btn small secondary" onclick="printOmrSheet(currentSolve.kind, currentSolve.tid)">OMR 답안지 인쇄</button>
+           <button type="button" class="btn small" onclick="$('omr-scan-file').click()">마킹한 OMR 사진으로 답 채우기</button>
+           <input type="file" id="omr-scan-file" accept="image/*" style="display:none;" onchange="scanOmrPhoto(this)">
+         </div>
+         <div id="omr-scan-status" style="font-size:12.5px; margin-top:8px;"></div>
+       </div>
        <div id="solve-body"></div>
            <div class="field-section">
       <span class="section-label">손으로 푼 답안 사진 첨부 (선택)</span>
@@ -6371,6 +6383,7 @@ function renderTasks(){
     <td class="row-actions">
       <button class="btn small secondary" onclick="startTaskEdit('${kind}','${t.tid}')">수정</button>
       <button class="btn small secondary" onclick="openDuplicateTask('${kind}','${t.tid}')">복제</button>
+      <button class="btn small secondary" onclick="printOmrSheet('${kind}','${t.tid}')">OMR 인쇄</button>
       <button class="btn small danger" onclick="removeTask('${kind}','${t.tid}')">삭제</button>
     </td></tr>`;
   };
@@ -6587,6 +6600,125 @@ async function doQImport(){
   }catch(e){
     alert('등록 중 오류: '+e.message+'\n일부만 등록되었을 수 있으니 문제은행을 확인하세요.');
   }
+}
+
+/* =========================================================
+   종이 OMR — 답안지 인쇄 · 사진으로 답 채우기
+   ========================================================= */
+function omrSheetHtml(t, qs, who, clsName){
+  const bubble = n=>`<span class="b">${n}</span>`;
+  const rows = qs.map((q,i)=>{
+    const n = i+1;
+    if(q.type==='mc') return `<div class="r"><span class="n">${n}</span>${[1,2,3,4,5].map(bubble).join('')}</div>`;
+    return `<div class="r"><span class="n">${n}</span><span class="w"></span><span class="wl">단답</span></div>`;
+  });
+  const perCol = 25;
+  const cols = [];
+  for(let i=0;i<rows.length;i+=perCol) cols.push(rows.slice(i,i+perCol).join(''));
+  const pages = [];
+  for(let i=0;i<cols.length;i+=2){
+    pages.push(`<section class="page">
+      <div class="m tl"></div><div class="m tr"></div><div class="m bl"></div><div class="m br"></div>
+      <div class="head">
+        <div class="ttl">${esc(t.title)} · OMR 답안지</div>
+        <div class="sub">${esc((clsName || classNameOf(t.classId) || '') + (clsName || classNameOf(t.classId) ? ' · ' : '') + weekText(t.week))} · 총 ${qs.length}문항 · 코드 ${esc(t.tid.slice(0,6))}</div>
+        <div class="who"><span>이름: <i>${esc(who||'')}</i></span><span>날짜: <i></i></span></div>
+      </div>
+      <div class="guide">진한 펜으로 보기 번호를 <b>완전히 칠하세요</b>. 정답이 여러 개인 문항은 해당하는 번호를 모두 칠합니다. 고칠 때는 새 용지를 쓰세요.</div>
+      <div class="grid"><div class="col">${cols[i]||''}</div><div class="col">${cols[i+1]||''}</div></div>
+      <div class="foot">${pages.length+1} / ${Math.ceil(cols.length/2)}</div>
+    </section>`);
+  }
+  return `<!DOCTYPE html><html lang="ko"><head><meta charset="UTF-8"><title>${esc(t.title)} OMR</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
+<style>
+  @page{ size:A4; margin:0; }
+  *{box-sizing:border-box;}
+  body{font-family:'Pretendard Variable','Pretendard','Noto Sans KR',sans-serif; margin:0; color:#111;}
+  .page{position:relative; width:210mm; height:297mm; padding:18mm 16mm; page-break-after:always; break-after:page; overflow:hidden;}
+  .m{position:absolute; width:8mm; height:8mm; background:#000;}
+  .tl{left:6mm; top:6mm;} .tr{right:6mm; top:6mm;} .bl{left:6mm; bottom:6mm;} .br{right:6mm; bottom:6mm;}
+  .ttl{font-size:20px; font-weight:900; text-align:center;}
+  .sub{text-align:center; font-size:12px; color:#555; margin:3px 0 10px;}
+  .who{display:flex; gap:30px; justify-content:center; font-size:14px; margin-bottom:8px;}
+  .who span{display:inline-flex; align-items:flex-end; gap:6px;} .who i{display:inline-block; width:52mm; border-bottom:1.5px solid #111; height:18px;}
+  .guide{border:1px solid #999; padding:6px 10px; font-size:11.5px; margin-bottom:12px;}
+  .grid{display:flex; gap:12mm;}
+  .col{flex:1;}
+  .r{display:flex; align-items:center; gap:3.2mm; height:9.2mm; border-bottom:1px dotted #bbb;}
+  .n{width:8mm; text-align:right; font-weight:800; font-size:13px; margin-right:1mm;}
+  .b{width:6.2mm; height:6.2mm; border:1.3px solid #111; border-radius:50%; font-size:9px; display:inline-flex; align-items:center; justify-content:center; color:#444;}
+  .w{flex:1; height:6.5mm; border:1.3px solid #111;}
+  .wl{font-size:10px; color:#666;}
+  .foot{position:absolute; bottom:12mm; left:0; right:0; text-align:center; font-size:10px; color:#777;}
+</style></head><body>${pages.join('') || '<p>문항이 없습니다.</p>'}
+<script>window.onload=function(){ setTimeout(function(){ window.print(); }, 500); };<\/script>
+</body></html>`;
+}
+function printOmrSheet(kind, tid){
+  const t = tasks[kind].find(x=>x.tid===tid); if(!t){ alert('과제·시험을 찾을 수 없습니다.'); return; }
+  const qs = (t.qids||[]).map(id=>questions.find(x=>x.qid===id)).filter(Boolean);
+  if(!qs.length){ alert('이 과제에는 문항이 없어 OMR 답안지를 만들 수 없습니다.'); return; }
+  const meSt = (!adminViewAll && currentStudent) ? (students.find(x=>x.uid===currentStudent)||{}) : {};
+  openPrintWindow(omrSheetHtml(t, qs, meSt.name||'', meSt.className||''), 'omr');
+}
+let omrScanBusy = false;
+async function scanOmrPhoto(input){
+  const f = input.files && input.files[0]; input.value = '';
+  if(!f || !currentSolve) return;
+  const st = $('omr-scan-status');
+  if(omrScanBusy) return;
+  if(!f.type.startsWith('image/')){ alert('사진(이미지) 파일만 가능합니다.'); return; }
+  const apiKey = localStorage.getItem('ai-gemini-apikey') || sharedAiKey;
+  if(!apiKey){ alert('AI 키가 설정되어 있지 않습니다. 선생님께 문의하세요.'); return; }
+  const t = tasks[currentSolve.kind].find(x=>x.tid===currentSolve.tid); if(!t) return;
+  const qs = (t.qids||[]).map(id=>questions.find(x=>x.qid===id)).filter(Boolean);
+  if(Object.keys(collectSolveAnswers(qs)).some(k=>collectSolveAnswers(qs)[k]) && !confirm('이미 입력한 답이 있습니다. 사진에서 읽은 답으로 덮어쓸까요?')) return;
+
+  omrScanBusy = true; st.style.color = 'var(--ink-soft)'; st.textContent = '사진을 읽는 중입니다… (10~30초)';
+  try{
+    const img = await new Promise((res,rej)=>{ const u = URL.createObjectURL(f); const im = new Image(); im.onload=()=>{ URL.revokeObjectURL(u); res(im); }; im.onerror=()=>rej(new Error('이미지를 열 수 없습니다.')); im.src=u; });
+    const cv = document.createElement('canvas'); cv.width = img.naturalWidth; cv.height = img.naturalHeight; cv.getContext('2d').drawImage(img,0,0);
+    const b64 = canvasToBase64(cv, 2000);
+    const types = qs.map((q,i)=>`${i+1}번: ${q.type==='mc'?'객관식(보기 ①~⑤)':'단답형(손글씨 칸)'}`).join(', ');
+    const prompt = `이 이미지는 학생이 마킹한 OMR 답안지 사진이다. 총 ${qs.length}문항이다. (${types})
+각 문항 번호별로 칠해진(마킹된) 보기 번호를 읽어라.
+- 객관식은 칠해진 모든 보기 번호를 marked에 정수 배열로 넣는다. 복수 마킹이 가능하다. 아무것도 칠하지 않았으면 빈 배열.
+- 단답형은 손으로 쓴 답을 text에 적는다. 읽기 어려우면 unsure를 true로 한다.
+- 칠한 정도가 애매하거나 두 보기 중 어느 쪽인지 확신이 없으면 unsure를 true로 한다.
+- 문항 번호는 답안지에 인쇄된 번호(1부터)를 그대로 쓴다. 보이지 않는 문항은 생략한다.
+- 추측으로 채우지 말고 보이는 것만 답한다.`;
+    const schema = { type:'object', properties:{ answers:{ type:'array', items:{ type:'object', properties:{
+      n:{type:'integer'}, marked:{type:'array', items:{type:'integer'}}, text:{type:'string'}, unsure:{type:'boolean'} }, required:['n'] } } }, required:['answers'] };
+    const { parsed } = await callGemini({ apiKey, parts:[{text:prompt},{inline_data:{mime_type:'image/jpeg', data:b64}}], schema, timeoutMs:90000 });
+    const list = Array.isArray(parsed.answers) ? parsed.answers : [];
+    const map = {}; let filled = 0, unsure = 0;
+    document.querySelectorAll('.omr-q.scanned-unsure').forEach(e=>e.classList.remove('scanned-unsure'));
+    list.forEach(a=>{
+      const q = qs[(a.n||0)-1]; if(!q) return;
+      let v = '';
+      if(q.type==='mc'){ const ms = [...new Set((a.marked||[]).filter(n=>n>=1&&n<=5))].sort((x,y)=>x-y); v = ansToStr(ms); }
+      else v = String(a.text||'').trim();
+      if(v){ map[q.qid] = v; filled++; }
+      if(a.unsure || (!v)){ if(a.unsure){ unsure++; solveFlags.add(q.qid); const w = $('qwrap_'+q.qid); if(w) w.classList.add('scanned-unsure'); } }
+    });
+    // 먼저 전부 비운 뒤 읽은 답만 채운다
+    qs.forEach(q=>{
+      if(q.type==='mc') document.querySelectorAll(`input[name="ans_${q.qid}"]`).forEach(cb=>{ cb.checked=false; cb.parentElement.classList.remove('picked'); });
+      else { const el = $('ans_'+q.qid); if(el) el.value=''; }
+    });
+    restoreSolveAnswers(qs, map);
+    qs.forEach(q=>{
+      const on = solveFlags.has(q.qid); const btn = $('flag_'+q.qid), wrap = $('qwrap_'+q.qid);
+      if(btn){ btn.classList.toggle('on', on); btn.textContent = on ? '★' : '☆'; }
+      if(wrap) wrap.classList.toggle('flagged', on);
+    });
+    updateSolveProgress(); saveSolveDraftNow();
+    st.style.color = unsure ? 'var(--warn)' : 'var(--good)';
+    st.innerHTML = `${filled}/${qs.length}문항을 읽었습니다.` + (unsure ? ` 확신이 낮은 <b>${unsure}문항</b>은 ★와 주황색으로 표시했어요.` : '') + '<br><b>AI가 읽은 결과는 틀릴 수 있으니 직접 확인한 뒤 제출하세요.</b>';
+  }catch(e){
+    st.style.color = 'var(--accent)'; st.textContent = '읽기 실패: ' + e.message;
+  }finally{ omrScanBusy = false; }
 }
 
 /* =========================================================
@@ -8615,6 +8747,7 @@ function renderFirebaseGuide(){
     <li><b>현장 제출</b> — 종이로 받은 과제는 채점 확인 탭에서 직접 기록합니다. 문항별 O/X를 찍으면 점수·완료 여부가 반영되고 틀린 문항은 오답노트에 등록됩니다.</li>
     <li><b>모바일 메뉴</b> — 하단에 대분류 4개(수업·출제·문제·채점·확인)와 로그아웃이 있습니다. 대분류를 누르면 위로 세부 메뉴가 뜨고, 고르거나 바깥을 누르면 닫힙니다.</li>
     <li><b>문제 JSON 가져오기</b> — 문제 → 문제은행 맨 위 카드. <b>Claude용 안내문 복사</b>를 Claude에게 붙여넣고 문제를 만들어 달라고 하면 규격에 맞는 JSON이 나옵니다. 그 파일을 올리면 <b>등록할 세트 선택(기존 세트·새 세트·JSON에 적힌 세트) → 검사(오류·중복 확인) → 등록</b> 순서로 진행됩니다. 오류가 있는 문제는 등록되지 않고 이유가 표시됩니다. 이미지는 JSON으로 넣을 수 없으니 필요하면 등록 후 문제 수정에서 붙이세요. 보기 본문의 HTML은 굵게·밑줄 등 기본 태그만 남기고 나머지는 제거됩니다.</li>
+    <li><b>종이 OMR</b> — 과제 관리·시험 관리의 <b>OMR 인쇄</b>(학생은 풀이 화면에서도 가능)로 답안지를 뽑습니다. 학생이 종이에 마킹한 뒤 풀이 화면의 <b>마킹한 OMR 사진으로 답 채우기</b>에 사진을 올리면 AI(Gemini)가 마킹을 읽어 답안을 채우고, 학생이 확인한 뒤 제출하면 온라인 OMR과 똑같이 자동 채점됩니다. 확신이 낮은 문항은 ★와 주황색으로 표시됩니다. AI가 틀리게 읽을 수 있으니 학생이 꼭 확인해야 하고, 어두운 사진·접힌 용지는 정확도가 떨어집니다. 사진 인식은 Gemini 호출 1회를 씁니다.</li>
     <li><b>문항 통계</b> — 채점·확인 → 문항 통계. 과제·시험을 고르면 문항별 정답률, 선지별 선택 분포, 가장 많이 고른 오답이 보입니다. 정답률 낮은 순으로 정렬하면 수업에서 다시 짚을 문제를 바로 찾을 수 있습니다. 파일(사진·PDF)로만 낸 제출은 집계에서 빠집니다.</li>
     <li><b>과제·시험 복제</b> — 과제 관리·시험 관리 목록 또는 수업·주차 화면의 <b>복제</b> 버튼. 수업과 주차(여러 개 가능)를 고르면 문항 구성이 그대로 복사되고, 시작·마감 일시는 주차 차이만큼 옮길 수 있습니다. 첨부 PDF는 복사하지 않습니다(한쪽을 지울 때 파일이 같이 지워지는 것을 막기 위해).</li>
     <li><b>공지사항</b> — 학생 메인 맨 위에 표시됩니다. 본문에 붙인 주소는 자동으로 링크가 되고 새 탭에서 열립니다. <b>중요</b>로 체크하면 강조되고 맨 위에 고정됩니다.</li>
