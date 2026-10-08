@@ -703,7 +703,7 @@ body.quiet-preview .sidebar{ padding-top:22px; }
     </div>
     <div class="card">
       <label>전화번호 또는 이메일</label>
-      <input type="text" id="login-id" inputmode="email" autocomplete="username" placeholder="01012345678 또는 student@gmail.com" style="margin-bottom:14px;">
+      <input type="text" id="login-id" inputmode="email" autocomplete="username" placeholder="010-1234-5678 또는 student@gmail.com" oninput="fmtPhoneInput(this,true)" style="margin-bottom:14px;">
       <label>비밀번호</label>
       <input type="password" id="login-pw" placeholder="비밀번호" style="margin-bottom:18px;"
         onkeydown="if(event.key==='Enter')doLogin()">
@@ -852,7 +852,7 @@ body.quiet-preview .sidebar{ padding-top:22px; }
           <p class="note">전화번호가 <b>로그인 아이디</b>가 됩니다. 초기 비밀번호를 정해 학생에게 알려 주면, 학생이 처음 로그인할 때 자기 비밀번호로 바꿉니다. 이메일은 비밀번호를 잊었을 때 재설정 메일을 보내는 데 쓰입니다.</p>
           <div class="form-grid" style="grid-template-columns:repeat(auto-fit,minmax(210px,1fr));">
             <div><label>이름</label><input type="text" id="reg-name" placeholder="홍길동"></div>
-            <div><label>전화번호 (로그인 아이디)</label><input type="tel" id="reg-phone" placeholder="01012345678"></div>
+            <div><label>전화번호 (로그인 아이디)</label><input type="tel" id="reg-phone" placeholder="010-1234-5678" oninput="fmtPhoneInput(this)"></div>
             <div><label>이메일 (재설정 메일용)</label><input type="email" id="reg-email" placeholder="student@gmail.com"></div>
             <div><label>초기 비밀번호</label>
               <div style="display:flex; gap:6px; align-items:center;"><input type="text" id="reg-pw" placeholder="6자리 이상" style="flex:1; min-width:0;">
@@ -1567,7 +1567,7 @@ body.quiet-preview .sidebar{ padding-top:22px; }
       <div><label>이름</label><input type="text" id="su-name" placeholder="홍길동"></div>
       <div><label>학년</label><input type="text" id="su-grade" placeholder="고2"></div>
       <div><label>학교</label><input type="text" id="su-school" placeholder="명덕외고"></div>
-      <div><label>전화번호</label><input type="tel" id="su-phone" placeholder="010-0000-0000"></div>
+      <div><label>전화번호</label><input type="tel" id="su-phone" placeholder="010-1234-5678" oninput="fmtPhoneInput(this)"></div>
     </div>
     <div class="form-grid full">
       <div><label>이메일</label><input type="email" id="su-email" placeholder="student@gmail.com"></div>
@@ -1612,7 +1612,7 @@ body.quiet-preview .sidebar{ padding-top:22px; }
       <div><label>이름</label><input type="text" id="e-name"></div>
       <div><label>학년</label><input type="text" id="e-grade"></div>
       <div><label>학교</label><input type="text" id="e-school"></div>
-      <div><label>전화번호</label><input type="tel" id="e-phone"></div>
+      <div><label>전화번호</label><input type="tel" id="e-phone" placeholder="010-1234-5678" oninput="fmtPhoneInput(this)"></div>
     </div>
     <p class="note">이메일(로그인 ID)은 여기서 바꿀 수 없습니다. 학생 본인이 "내 정보" 탭에서 변경하거나, Firebase 콘솔에서 변경해야 실제 로그인 계정이 함께 바뀝니다.</p>
     <button class="btn" onclick="saveStudentEdit()">저장</button>
@@ -2808,7 +2808,7 @@ async function doSignup(){
       name,
       grade: $('su-grade').value.trim(),
       school: $('su-school').value.trim(),
-      phone: $('su-phone').value.trim(),
+      phone: phoneShow($('su-phone').value.trim()),
       email,
       approved: false
     });
@@ -2873,6 +2873,15 @@ async function routeAfterAuth(user){
    ========================================================= */
 function phoneDigits(p){ return String(p||'').replace(/\D/g,''); }
 function phoneUsable(d){ return /^01\d{8,9}$/.test(d) && !/^010?0{7,8}$/.test(d); }   // 가입 기본값(010-0000-0000)은 제외
+/* 입력하는 동안 010-1234-5678 꼴로 맞춘다. 로그인 칸(allowEmail)은 글자나 @가 들어오면 이메일로 보고 건드리지 않는다 */
+function fmtPhoneInput(el, allowEmail){
+  const v = el.value;
+  if(allowEmail && /[^\d\s-]/.test(v)) return;
+  const d = v.replace(/\D/g,'').slice(0,11);
+  el.value = d.length<=3 ? d : d.length<=7 ? d.slice(0,3)+'-'+d.slice(3) : d.slice(0,3)+'-'+d.slice(3,7)+'-'+d.slice(7);
+}
+/* 화면에 보일 전화번호: 숫자 10~11자리면 하이픈 형식으로, 아니면 입력값 그대로 */
+function phoneShow(p){ const d = phoneDigits(p); return /^\d{10,11}$/.test(d) ? phoneFmt(d) : String(p||''); }
 function phoneFmt(d){ return d.length===11 ? d.replace(/(\d{3})(\d{4})(\d{4})/,'$1-$2-$3') : d.replace(/(\d{3})(\d{3})(\d{4})/,'$1-$2-$3'); }
 async function phoneHash(d){
   try{
@@ -3098,7 +3107,7 @@ function renderStudents(){
   pt.innerHTML = pending.map(s=>`
     <tr>
       <td>${esc(s.name)}</td><td>${esc(s.grade)}</td><td>${esc(s.school)}</td>
-      <td>${esc(s.phone)}</td><td>${esc(s.email)}</td>
+      <td>${esc(phoneShow(s.phone))}</td><td>${esc(s.email)}</td>
       <td class="row-actions">
         <button class="btn small" onclick="approveStudent('${s.uid}')">승인</button>
         <button class="btn small danger" onclick="rejectStudent('${s.uid}')">거절</button>
@@ -3114,7 +3123,7 @@ function renderStudents(){
     return `
     <tr>
       <td><a href="#" onclick="openStudentDetail('${s.uid}'); return false;">${esc(s.name)}</a>${s.mustChangePw?' <span class="badge muted" title="아직 초기 비밀번호로 로그인하지 않았거나 변경하지 않았습니다">초기 비번</span>':''}</td>
-      <td>${esc(s.grade)}</td><td>${esc(s.school)}</td><td>${esc(s.phone)}</td>
+      <td>${esc(s.grade)}</td><td>${esc(s.school)}</td><td>${esc(phoneShow(s.phone))}</td>
       <td>${s.classId ? esc(classNameOf(s.classId) || s.className || '-') : '<span class="badge warn">미배정</span>'}</td>
       <td>${pendCell}</td>
       <td class="row-actions">
@@ -3156,7 +3165,7 @@ function openStudentEdit(u){
   editStudentUid = u;
   const s = students.find(x=>x.uid===u); if(!s) return;
   $('e-name').value=s.name||''; $('e-grade').value=s.grade||'';
-  $('e-school').value=s.school||''; $('e-phone').value=s.phone||'';
+  $('e-school').value=s.school||''; $('e-phone').value=phoneShow(s.phone);
   openModal('student-edit-modal');
 }
 function openStudentEditFromDetail(){ openStudentEdit(currentDetailUid); }
@@ -3165,7 +3174,7 @@ function saveStudentEdit(){
   const name = $('e-name').value.trim();
   if(!name){ alert('이름은 비워둘 수 없습니다.'); return; }
   const data = { name, grade:$('e-grade').value.trim(),
-    school:$('e-school').value.trim(), phone:$('e-phone').value.trim() };
+    school:$('e-school').value.trim(), phone:phoneShow($('e-phone').value.trim()) };
   closeModal('student-edit-modal');
   const { db, doc, updateDoc } = window.fb;
   updateDoc(doc(db,'students', s.uid), data).then(()=>schedulePhoneSync()).catch(e=>alert('저장 실패: '+e.message));
@@ -5583,7 +5592,7 @@ ${PRINT_PAD_CSS}
   <div class="info-grid">
     <div><b>학년</b>${esc(s.grade)||'-'}</div>
     <div><b>학교</b>${esc(s.school)||'-'}</div>
-    <div><b>전화번호</b>${esc(s.phone)||'-'}</div>
+    <div><b>전화번호</b>${esc(phoneShow(s.phone))||'-'}</div>
     <div><b>발급일</b>${today}</div>
   </div>
 </div>
@@ -8209,7 +8218,7 @@ function fillMyInfo(){
   $('me-name').value = v('name');
   $('me-grade').value = v('grade');
   $('me-school').value = v('school');
-  $('me-phone').value = v('phone');
+  $('me-phone').value = phoneShow(v('phone'));
   $('me-email').value = v('email');
   $('me-new-email').value = '';
   $('me-cur-pw').value = '';
@@ -9650,7 +9659,7 @@ function renderScoreTable(kind){
       <select id="ss-${kind}-${s.uid}" style="width:110px;">
         ${['미완료','채점중','일부완료','완료'].map(o=>`<option ${rec.status===o?'selected':''}>${o}</option>`).join('')}
       </select></td>` : '';
-    return `<tr><td>${esc(s.name)}${flags}</td><td>${esc(s.phone)}</td>${statusCell}
+    return `<tr><td>${esc(s.name)}${flags}</td><td>${esc(phoneShow(s.phone))}</td>${statusCell}
       <td><input type="text" id="si-${kind}-${s.uid}" value="${esc(rec.score)}"
           placeholder="예: 4/5 또는 82" style="width:110px; display:inline-block;"></td>
       <td><button class="btn small" onclick="saveScore('${kind}','${s.uid}')">저장</button></td></tr>`;
