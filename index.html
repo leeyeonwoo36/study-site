@@ -411,6 +411,10 @@
   .variant-meta{font-size:11.5px; color:var(--muted); margin-bottom:6px;}
 
 /* 문항 통계 · 복제 */
+.bundle-list{border:1px solid var(--border); border-radius:12px; margin:6px 0 4px; overflow:hidden;}
+.bundle-list label{display:flex; align-items:center; gap:9px; margin:0; padding:10px 14px; border-bottom:1px solid var(--paper-line); font-size:14px; font-weight:600; cursor:pointer;}
+.bundle-list label:last-child{border-bottom:none;}
+.bundle-list small{color:var(--muted); font-weight:500; margin-left:auto;}
 .stats-table td{vertical-align:top; white-space:normal;}
 .st-bar{height:8px; border-radius:20px; background:var(--paper-line); overflow:hidden; min-width:80px;}
 .st-bar > i{display:block; height:100%; background:var(--good);}
@@ -782,7 +786,10 @@ body.quiet-preview .sidebar{ padding-top:22px; }
               <tbody id="schedule-table"></tbody></table>
           </div>
           <div class="card">
-            <h3 id="week-content-title">③ 이 주차의 과제 · 시험 · 영상</h3>
+            <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; flex-wrap:wrap;">
+              <h3 id="week-content-title" style="margin:0;">③ 이 주차의 과제 · 시험 · 영상</h3>
+              <button class="btn small" onclick="openBundlePrint()">이 주차 묶음 인쇄 (표지 · 문제지 · OMR)</button>
+            </div>
             <div id="week-content"></div>
             <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:12px;">
               <button class="btn secondary" onclick="goAddForWeek('hw')">+ 과제 부여</button>
@@ -1614,6 +1621,21 @@ body.quiet-preview .sidebar{ padding-top:22px; }
     <button class="btn ghost" onclick="closeModal('admin-wrong-picker-modal')">닫기</button>
   </div>
 </div>
+<!-- 주차 묶음 인쇄 -->
+<div class="modal-bg" id="bundle-modal">
+  <div class="modal">
+    <button class="modal-close" onclick="closeModal('bundle-modal')">✕</button>
+    <h3 id="bundle-heading">묶음 인쇄</h3>
+    <p class="note">고른 과제를 <b>표지 → (문제지 → OMR) 순서</b>로 한 번에 인쇄합니다. 답지(정답·해설)는 포함하지 않습니다.</p>
+    <label>인쇄할 과제 · 시험</label>
+    <div id="bundle-list" class="bundle-list"></div>
+    <label class="dup-opt"><input type="checkbox" id="bundle-cover" checked> 표지 포함</label>
+    <label class="dup-opt"><input type="checkbox" id="bundle-problem" checked> 문제지 포함</label>
+    <label class="dup-opt"><input type="checkbox" id="bundle-omr" checked> OMR 답안지 포함</label>
+    <button class="btn" style="width:100%; margin-top:12px;" onclick="doBundlePrint()">인쇄 창 열기</button>
+  </div>
+</div>
+
 <!-- 과제·시험 복제 -->
 <div class="modal-bg" id="dup-modal">
   <div class="modal">
@@ -6638,7 +6660,56 @@ function ensureTaskCodes(){
   });
 }
 
-function omrSheetHtml(t, qs, who, clsName){
+const OMR_CSS = `
+  *{box-sizing:border-box; -webkit-print-color-adjust:exact; print-color-adjust:exact;}
+  .page{position:relative; width:210mm; height:297mm; padding:20mm 16mm 18mm; page:omr; break-before:page; overflow:hidden;}
+  /* 모서리 표식: 배경색 대신 테두리로 그려서 '배경 그래픽' 설정과 상관없이 인쇄된다 */
+  .m{position:absolute; display:block; width:0; height:0; border:3.5mm solid #000;}
+  .tl{left:7mm; top:7mm;} .tr{right:7mm; top:7mm;} .bl{left:7mm; bottom:7mm;} .br{right:7mm; bottom:7mm;}
+  header{text-align:center; padding-bottom:5mm; border-bottom:2.2px solid #2F5D50; margin-bottom:5mm;}
+  .kick{font-size:9.5px; letter-spacing:.32em; color:#2F5D50; font-weight:700;}
+  h1{margin:3px 0 7px; font-size:23px; font-weight:900; letter-spacing:-.02em;}
+  .chips{display:flex; gap:6px; justify-content:center;}
+  .chips span{font-size:11px; font-weight:600; color:#2F5D50; background:#e6efeb; border-radius:99px; padding:3px 11px;}
+  .who{display:flex; gap:9mm; margin-bottom:4.5mm; align-items:stretch;}
+  .fs{flex:1; display:flex; flex-direction:column; justify-content:space-around;}
+  .f{display:flex; align-items:flex-end; gap:8px;}
+  .codebox{flex:0 0 78mm; border:1.4px solid #2F5D50; border-radius:10px; padding:2mm 3mm 2.4mm; background:#fbfdfc;}
+  .ct{font-size:10.5px; font-weight:800; color:#2F5D50; margin-bottom:1.2mm;} .ct small{font-weight:500; color:#7b8a83; font-size:8.5px;}
+  .cr{display:flex; align-items:center; gap:1.5mm; height:5.9mm;}
+  .cd{flex:0 0 5mm; font-size:11px; font-weight:800; color:#2F5D50; text-align:center;}
+  .cb{width:4.8mm; height:4.8mm; border:1.2px solid #14211c; border-radius:50%; font-size:7.5px; display:inline-flex; align-items:center; justify-content:center; color:#6b7872; background:#fff;}
+  .cb.on{background:#14211c; color:#fff; font-weight:700;}
+  .f{flex:1;}
+  .f label{font-size:12px; font-weight:800; color:#2F5D50; white-space:nowrap;}
+  .f .line{flex:1; border-bottom:1.6px solid #14211c; height:21px; font-size:15px; font-weight:700; padding:0 4px;}
+  .guide{display:flex; flex-wrap:wrap; gap:4px 14px; align-items:center; font-size:10.5px; color:#44514b; background:#f4f7f5; border:1px solid #d5e0db; border-radius:8px; padding:6px 11px; margin-bottom:5mm;}
+  .guide b{color:#2F5D50;}
+  .eg{display:inline-flex; align-items:center; gap:4px;}
+  .guide .b{display:inline-block; width:12px; height:12px; border:1.3px solid #14211c; border-radius:50%; position:relative; vertical-align:middle;}
+  .guide .ok{background:#14211c;}
+  .guide .half{background:linear-gradient(#bbb,#bbb);}
+  .guide .dot::after{content:""; position:absolute; left:50%; top:50%; width:3px; height:3px; margin:-1.5px; background:#14211c; border-radius:50%;}
+  .guide .x::after{content:"✕"; position:absolute; inset:0; font-size:9px; line-height:10px; text-align:center; font-style:normal;}
+  .grid{display:flex; gap:7mm;}
+  .col{flex:1; border:1.4px solid #2F5D50; border-radius:10px; overflow:hidden;}
+  .r{display:flex; align-items:center; gap:3mm; height:9.6mm; padding:0 4mm 0 3mm; background:#fff; border-bottom:1px solid #e4ebe8;}
+  .r.alt{background:#f2f6f4;}
+  .r:last-child{border-bottom:none;}
+  .n{flex:0 0 7.5mm; height:6.2mm; line-height:6.2mm; text-align:center; font-weight:800; font-size:12px; color:#fff; background:#2F5D50; border-radius:99px;}
+  .bs{display:flex; gap:3.4mm; margin-left:auto;}
+  .b{width:6.3mm; height:6.3mm; border:1.4px solid #14211c; border-radius:50%; font-size:9px; font-weight:600; display:inline-flex; align-items:center; justify-content:center; color:#6b7872; background:#fff;}
+  .w{flex:1; height:6.6mm; border:1.4px solid #14211c; border-radius:4px; background:#fff;}
+  .wl{font-size:9.5px; color:#6b7872;}
+  footer{position:absolute; bottom:11mm; left:0; right:0; text-align:center; font-size:10px; color:#8a958f; letter-spacing:.12em;}
+`;
+function scopeCss(css, scope){
+  return css.replace(/(^|\})\s*([^{}]+)\{/g,(m,a,sel)=>{
+    if(sel.trim().startsWith('@')) return m;
+    return a+'\n'+sel.split(',').map(x=>scope+' '+x.trim()).join(',')+'{';
+  });
+}
+function omrPagesHtml(t, qs, who, clsName){
   const bubble = n=>`<span class="b">${n}</span>`;
   const rows = qs.map((q,i)=>{
     const n = i+1;
@@ -6683,55 +6754,122 @@ function omrSheetHtml(t, qs, who, clsName){
       <footer>${Math.floor(i/2)+1} / ${totalPages}</footer>
     </section>`);
   }
+  return `<div class="omrdoc">${pages.join('') || ''}</div>`;
+}
+function omrSheetHtml(t, qs, who, clsName){
   return `<!DOCTYPE html><html lang="ko"><head><meta charset="UTF-8"><title>${esc(t.title)} OMR</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
 <style>
   @page{ size:A4; margin:0; }
-  *{box-sizing:border-box; -webkit-print-color-adjust:exact; print-color-adjust:exact;}
+  @page omr{ size:A4; margin:0; }
   body{font-family:'Pretendard Variable','Pretendard','Noto Sans KR',sans-serif; margin:0; color:#14211c;}
-  .page{position:relative; width:210mm; height:297mm; padding:20mm 16mm 18mm; page-break-after:always; break-after:page; overflow:hidden;}
-  /* 모서리 표식: 배경색 대신 테두리로 그려서 '배경 그래픽' 설정과 상관없이 인쇄된다 */
-  .m{position:absolute; display:block; width:0; height:0; border:3.5mm solid #000;}
-  .tl{left:7mm; top:7mm;} .tr{right:7mm; top:7mm;} .bl{left:7mm; bottom:7mm;} .br{right:7mm; bottom:7mm;}
-  header{text-align:center; padding-bottom:5mm; border-bottom:2.2px solid #2F5D50; margin-bottom:5mm;}
-  .kick{font-size:9.5px; letter-spacing:.32em; color:#2F5D50; font-weight:700;}
-  h1{margin:3px 0 7px; font-size:23px; font-weight:900; letter-spacing:-.02em;}
-  .chips{display:flex; gap:6px; justify-content:center;}
-  .chips span{font-size:11px; font-weight:600; color:#2F5D50; background:#e6efeb; border-radius:99px; padding:3px 11px;}
-  .who{display:flex; gap:9mm; margin-bottom:4.5mm; align-items:stretch;}
-  .fs{flex:1; display:flex; flex-direction:column; justify-content:space-around;}
-  .f{display:flex; align-items:flex-end; gap:8px;}
-  .codebox{flex:0 0 78mm; border:1.4px solid #2F5D50; border-radius:10px; padding:2mm 3mm 2.4mm; background:#fbfdfc;}
-  .ct{font-size:10.5px; font-weight:800; color:#2F5D50; margin-bottom:1.2mm;} .ct small{font-weight:500; color:#7b8a83; font-size:8.5px;}
-  .cr{display:flex; align-items:center; gap:1.5mm; height:5.9mm;}
-  .cd{flex:0 0 5mm; font-size:11px; font-weight:800; color:#2F5D50; text-align:center;}
-  .cb{width:4.8mm; height:4.8mm; border:1.2px solid #14211c; border-radius:50%; font-size:7.5px; display:inline-flex; align-items:center; justify-content:center; color:#6b7872; background:#fff;}
-  .cb.on{background:#14211c; color:#fff; font-weight:700;}
-  .f{flex:1;}
-  .f label{font-size:12px; font-weight:800; color:#2F5D50; white-space:nowrap;}
-  .f .line{flex:1; border-bottom:1.6px solid #14211c; height:21px; font-size:15px; font-weight:700; padding:0 4px;}
-  .guide{display:flex; flex-wrap:wrap; gap:4px 14px; align-items:center; font-size:10.5px; color:#44514b; background:#f4f7f5; border:1px solid #d5e0db; border-radius:8px; padding:6px 11px; margin-bottom:5mm;}
-  .guide b{color:#2F5D50;}
-  .eg{display:inline-flex; align-items:center; gap:4px;}
-  .guide .b{display:inline-block; width:12px; height:12px; border:1.3px solid #14211c; border-radius:50%; position:relative; vertical-align:middle;}
-  .guide .ok{background:#14211c;}
-  .guide .half{background:linear-gradient(#bbb,#bbb);}
-  .guide .dot::after{content:""; position:absolute; left:50%; top:50%; width:3px; height:3px; margin:-1.5px; background:#14211c; border-radius:50%;}
-  .guide .x::after{content:"✕"; position:absolute; inset:0; font-size:9px; line-height:10px; text-align:center; font-style:normal;}
-  .grid{display:flex; gap:7mm;}
-  .col{flex:1; border:1.4px solid #2F5D50; border-radius:10px; overflow:hidden;}
-  .r{display:flex; align-items:center; gap:3mm; height:9.6mm; padding:0 4mm 0 3mm; background:#fff; border-bottom:1px solid #e4ebe8;}
-  .r.alt{background:#f2f6f4;}
-  .r:last-child{border-bottom:none;}
-  .n{flex:0 0 7.5mm; height:6.2mm; line-height:6.2mm; text-align:center; font-weight:800; font-size:12px; color:#fff; background:#2F5D50; border-radius:99px;}
-  .bs{display:flex; gap:3.4mm; margin-left:auto;}
-  .b{width:6.3mm; height:6.3mm; border:1.4px solid #14211c; border-radius:50%; font-size:9px; font-weight:600; display:inline-flex; align-items:center; justify-content:center; color:#6b7872; background:#fff;}
-  .w{flex:1; height:6.6mm; border:1.4px solid #14211c; border-radius:4px; background:#fff;}
-  .wl{font-size:9.5px; color:#6b7872;}
-  footer{position:absolute; bottom:11mm; left:0; right:0; text-align:center; font-size:10px; color:#8a958f; letter-spacing:.12em;}
-</style></head><body>${pages.join('') || '<p>문항이 없습니다.</p>'}
+${scopeCss(OMR_CSS,'.omrdoc')}
+</style></head><body>${omrPagesHtml(t, qs, who, clsName) || '<p>문항이 없습니다.</p>'}
 <script>window.onload=function(){ setTimeout(function(){ window.print(); }, 600); };<\/script>
 </body></html>`;
+}
+/* =========================================================
+   주차 묶음 인쇄: 표지 → (문제지 → OMR) × 과제
+   ========================================================= */
+const PRINT_PROBLEM_CSS = `
+  .sheet-title{font-size:22px; font-weight:900; text-align:center; margin:0 0 4px;}
+  .sheet-meta{text-align:center; color:#666; font-size:12px; margin-bottom:18px; padding-bottom:14px; border-bottom:2px solid #111;}
+  .probsec{break-before:page;}
+  .two-col{column-count:2; column-gap:22px;}
+  .q{margin-bottom:18px; break-inside:avoid; -webkit-column-break-inside:avoid;}
+  .qnum{font-weight:700; font-size:13.5px; margin-bottom:6px; white-space:pre-wrap;}
+  .passage{border:1px solid #999; background:#f5f5f5; padding:8px 10px; margin:6px 0; font-size:12px; white-space:pre-wrap;}
+  .passage img{break-inside:avoid;}
+  .choices{margin-top:5px; font-size:13px;}
+  .choice{margin-bottom:2px;}
+  .ch-hang{display:flex; gap:.4em; align-items:flex-start;}
+  .ch-hang .ch-n{flex:0 0 auto;}
+  .ch-hang .ch-t{flex:1; min-width:0;}
+  .short-answer-line{border-bottom:1px solid #999; display:block; margin-top:8px; height:1.6em;}
+`;
+const COVER_CSS = `
+  .cover{page:cover; position:relative; width:210mm; height:297mm; overflow:hidden; break-before:page; background:#fff; color:#14211c;
+    -webkit-print-color-adjust:exact; print-color-adjust:exact;}
+  .cover svg{position:absolute; left:0; top:0; width:210mm; height:150mm;}
+  .cover .top{position:absolute; left:0; right:0; top:30mm; text-align:center; color:#fff;}
+  .cover .k1{font-size:13px; letter-spacing:.38em; font-weight:600; opacity:.9;}
+  .cover .k2{font-size:15px; font-weight:700; margin-top:4px; opacity:.95;}
+  .cover .wk{font-size:92px; font-weight:900; letter-spacing:-.04em; line-height:1; margin:14mm 0 5mm;}
+  .cover .pill{display:inline-block; padding:5px 22px; border-radius:99px; background:rgba(255,255,255,.18); border:1.5px solid rgba(255,255,255,.7); font-size:17px; font-weight:700;}
+  .cover .body{position:absolute; left:22mm; right:22mm; top:166mm;}
+  .cover .bh{display:flex; align-items:center; gap:10px; font-size:15px; font-weight:800; color:#2F5D50; margin-bottom:4mm;}
+  .cover .bh::after{content:""; flex:1; height:2px; background:#2F5D50; opacity:.25;}
+  .cover .it{display:flex; align-items:center; gap:4.5mm; padding:3.4mm 0; border-bottom:1px solid #e1e9e5;}
+  .cover .tag{flex:0 0 auto; min-width:17mm; text-align:center; padding:3px 10px; border-radius:99px; font-size:12px; font-weight:800; color:#fff; background:#2F5D50;}
+  .cover .tag.ex{background:#c2562f;}
+  .cover .tt{flex:1; font-size:19px; font-weight:800; letter-spacing:-.02em;}
+  .cover .mt{font-size:11.5px; color:#6b7872; white-space:nowrap;}
+  .cover .nm{position:absolute; left:22mm; right:22mm; bottom:30mm; display:flex; gap:10mm; font-size:14px; font-weight:700; color:#2F5D50;}
+  .cover .nm div{flex:1; display:flex; align-items:flex-end; gap:8px;} .cover .nm i{flex:1; border-bottom:1.6px solid #14211c; height:20px;}
+  .cover .ft{position:absolute; left:0; right:0; bottom:10mm; text-align:center; font-size:11px; color:#8a958f; letter-spacing:.08em;}
+`;
+function coverHtml(cn, week, items){
+  const rows = items.map(it=>`<div class="it"><span class="tag${it.kind==='exam'?' ex':''}">${it.kind==='exam'?'시험':'과제 '+it.hwNo}</span><span class="tt">${esc(it.title)}</span><span class="mt">${it.n}문항 · 코드 ${esc(it.code)}</span></div>`).join('');
+  const d = new Date(); const dt = `${d.getFullYear()}.${String(d.getMonth()+1).padStart(2,'0')}.${String(d.getDate()).padStart(2,'0')}`;
+  return `<section class="cover">
+    <svg viewBox="0 0 210 150" preserveAspectRatio="none"><path d="M0 0H210V118C165 148 80 100 0 132Z" fill="#2F5D50"/><circle cx="182" cy="30" r="48" fill="#3d7566" opacity=".55"/><circle cx="22" cy="104" r="34" fill="#264d42"/><path d="M0 132C80 100 165 148 210 118" fill="none" stroke="#e8b04b" stroke-width="2.2"/></svg>
+    <div class="top"><div class="k1">명덕외고</div><div class="k2">국제정치 스터디</div><div class="wk">${esc(weekText(week))}</div>${cn?`<span class="pill">${esc(cn)}</span>`:''}</div>
+    <div class="body"><div class="bh">이번 주 학습 과제</div>${rows || '<div class="it"><span class="tt">등록된 과제가 없습니다.</span></div>'}</div>
+    <div class="nm"><div>이름<i></i></div><div>반<i></i></div></div>
+    <div class="ft">${esc(dt)} 인쇄</div>
+  </section>`;
+}
+function openBundlePrint(){
+  const c = classOf(selClassId); if(!c){ alert('먼저 수업을 선택하세요.'); return; }
+  const list = [];
+  tasks.hw.filter(t=>t.classId===c.cid && (t.week||1)===selWeek).forEach(t=>list.push({kind:'hw',t}));
+  tasks.exam.filter(t=>t.classId===c.cid && (t.week||1)===selWeek).forEach(t=>list.push({kind:'exam',t}));
+  if(!list.length){ alert(`${weekText(selWeek)}에 인쇄할 과제·시험이 없습니다.`); return; }
+  $('bundle-heading').textContent = `${c.name} · ${weekText(selWeek)} 묶음 인쇄`;
+  $('bundle-list').innerHTML = list.map(x=>`<label><input type="checkbox" class="bundle-ck" value="${x.kind}|${x.t.tid}" checked><span class="badge ${x.kind==='exam'?'part':'muted'}">${x.kind==='exam'?'시험':'과제'}</span> ${esc(x.t.title)}<small>${(x.t.qids||[]).length}문항</small></label>`).join('');
+  openModal('bundle-modal');
+}
+function doBundlePrint(){
+  const c = classOf(selClassId); if(!c) return;
+  const picks = [...document.querySelectorAll('#bundle-list .bundle-ck:checked')].map(x=>x.value.split('|'));
+  if(!picks.length){ alert('인쇄할 과제를 하나 이상 고르세요.'); return; }
+  const wantCover = $('bundle-cover').checked, wantProb = $('bundle-problem').checked, wantOmr = $('bundle-omr').checked;
+  if(!wantCover && !wantProb && !wantOmr){ alert('인쇄할 항목을 하나 이상 고르세요.'); return; }
+  const byId = new Map(questions.map(q=>[q.qid,q]));
+  let hwNo = 0; const items = []; const sections = [];
+  picks.forEach(([kind,tid])=>{
+    const t = tasks[kind].find(x=>x.tid===tid); if(!t) return;
+    const qs = (t.qids||[]).map(id=>byId.get(id)).filter(Boolean);
+    if(kind==='hw') hwNo++;
+    items.push({ kind, hwNo, title:t.title, n:qs.length, code:taskCodeOf(t) });
+    if(!qs.length) return;
+    if(wantProb) sections.push(`<section class="probsec">
+      <div class="sheet-title">${esc(t.title)}</div>
+      <div class="sheet-meta">${esc(c.name)} · ${esc(weekText(selWeek))} · 총 ${qs.length}문항</div>
+      <div class="two-col">${qs.map((q,i)=>buildPrintQuestionHtml(q,i+1)).join('')}</div>
+    </section>`);
+    if(wantOmr) sections.push(omrPagesHtml(t, qs, '', c.name));
+  });
+  const html = `<!DOCTYPE html><html lang="ko"><head><meta charset="UTF-8">
+<title>${esc(c.name)} ${esc(weekText(selWeek))} 과제 묶음</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
+<style>
+  @page{ size:A4; margin:16mm 14mm; }
+  @page cover{ size:A4; margin:0; }
+  @page omr{ size:A4; margin:0; }
+  body{font-family:'Pretendard Variable','Pretendard','Noto Sans KR',-apple-system,sans-serif; color:#111; line-height:1.6; letter-spacing:-.01em; margin:0; -webkit-font-smoothing:antialiased;}
+  .no-print{text-align:center; padding:12px;} .no-print button{padding:10px 20px; font-size:14px; cursor:pointer;}
+  @media print{ .no-print{display:none;} }
+${PRINT_PROBLEM_CSS}
+${COVER_CSS}
+${scopeCss(OMR_CSS,'.omrdoc')}
+</style></head><body>
+<div class="no-print"><button onclick="window.print()">인쇄 / PDF로 저장</button></div>
+${wantCover ? coverHtml(c.name, selWeek, items) : ''}
+${sections.join('')}
+</body></html>`;
+  closeModal('bundle-modal');
+  openPrintWindow(html, '명덕외고-국제정치');
 }
 function printOmrSheet(kind, tid){
   const t = tasks[kind].find(x=>x.tid===tid); if(!t){ alert('과제·시험을 찾을 수 없습니다.'); return; }
@@ -8835,6 +8973,7 @@ function renderFirebaseGuide(){
     <li><b>현장 제출</b> — 종이로 받은 과제는 채점 확인 탭에서 직접 기록합니다. 문항별 O/X를 찍으면 점수·완료 여부가 반영되고 틀린 문항은 오답노트에 등록됩니다.</li>
     <li><b>모바일 메뉴</b> — 하단에 대분류 4개(수업·출제·문제·채점·확인)와 로그아웃이 있습니다. 대분류를 누르면 위로 세부 메뉴가 뜨고, 고르거나 바깥을 누르면 닫힙니다.</li>
     <li><b>문제 JSON 가져오기</b> — 문제 → 문제은행 맨 위 카드. <b>Claude용 안내문 복사</b>를 Claude에게 붙여넣고 문제를 만들어 달라고 하면 규격에 맞는 JSON이 나옵니다. 그 파일을 올리면 <b>등록할 세트 선택(기존 세트·새 세트·JSON에 적힌 세트) → 검사(오류·중복 확인) → 등록</b> 순서로 진행됩니다. 오류가 있는 문제는 등록되지 않고 이유가 표시됩니다. 이미지는 JSON으로 넣을 수 없으니 필요하면 등록 후 문제 수정에서 붙이세요. 보기 본문의 HTML은 굵게·밑줄 등 기본 태그만 남기고 나머지는 제거됩니다.</li>
+    <li><b>주차 묶음 인쇄</b> — 수업 · 주차 탭의 '이 주차의 과제·시험·영상' 카드에서 <b>이 주차 묶음 인쇄</b>. 고른 과제·시험을 <b>표지 → 과제1 문제지 → 과제1 OMR → 과제2 문제지 → …</b> 순서로 한 번에 뽑습니다. 표지에는 수업 이름, 주차, 과제 이름과 코드가 들어갑니다. 정답·해설은 포함하지 않으니 따로 배부하세요. 인쇄 창의 <b>배경 그래픽</b>을 켜면 표지의 초록 색면이 선명하게 나옵니다.</li>
     <li><b>종이 OMR</b> — 과제 관리·시험 관리의 <b>OMR 인쇄</b>(학생은 풀이 화면에서도 가능)로 답안지를 뽑습니다. 학생이 종이에 마킹한 뒤 풀이 화면의 <b>마킹한 OMR 사진으로 답 채우기</b>에 사진을 올리면 AI(Gemini)가 마킹을 읽어 답안을 채우고, 학생이 확인한 뒤 제출하면 온라인 OMR과 똑같이 자동 채점됩니다. 확신이 낮은 문항은 ★와 주황색으로 표시됩니다. AI가 틀리게 읽을 수 있으니 학생이 꼭 확인해야 하고, 어두운 사진·접힌 용지는 정확도가 떨어집니다. 사진 인식은 Gemini 호출 1회를 씁니다. 답안지 오른쪽 위에는 과제마다 다른 <b>숫자 4자리 과제 코드</b>가 0~9 칸에 칠해진 채 인쇄되며(과제 목록의 '코드' 배지와 같은 값), 사진을 올리면 AI가 이 코드를 읽어 지금 푸는 과제와 다르면 경고하고 답을 채우지 않습니다. 코드가 없는 기존 과제는 관리자가 접속할 때 자동으로 부여됩니다.</li>
     <li><b>문항 통계</b> — 채점·확인 → 문항 통계. 과제·시험을 고르면 문항별 정답률, 선지별 선택 분포, 가장 많이 고른 오답이 보입니다. 정답률 낮은 순으로 정렬하면 수업에서 다시 짚을 문제를 바로 찾을 수 있습니다. 파일(사진·PDF)로만 낸 제출은 집계에서 빠집니다.</li>
     <li><b>과제·시험 복제</b> — 과제 관리·시험 관리 목록 또는 수업·주차 화면의 <b>복제</b> 버튼. 수업과 주차(여러 개 가능)를 고르면 문항 구성이 그대로 복사되고, 시작·마감 일시는 주차 차이만큼 옮길 수 있습니다. 첨부 PDF는 복사하지 않습니다(한쪽을 지울 때 파일이 같이 지워지는 것을 막기 위해).</li>
