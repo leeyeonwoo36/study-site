@@ -146,8 +146,8 @@
   .ch-hang .ch-n{flex:0 0 auto;}
   .ch-hang .ch-t{flex:1; min-width:0; line-height:1.55;}
   .omr-choices.omr-list{flex-direction:column; flex-wrap:nowrap; align-items:stretch; gap:8px;}
-  .omr-bubble:has(.ch-hang){border-radius:14px; align-items:flex-start; text-align:left;}
-  .omr-bubble:has(.ch-hang) input{margin-top:.3em;}
+  .omr-list .omr-bubble{border-radius:14px; align-items:flex-start; text-align:left;}
+  .omr-list .omr-bubble input{margin-top:.3em;}
   .choice-line{padding:5px 10px; border-radius:var(--radius); font-size:13px; margin-bottom:3px; border:1px solid transparent;}
   .choice-line.correct{background:var(--good-soft); border-color:var(--good); font-weight:700;}
   .choice-line.mine-wrong{background:var(--accent-soft); border-color:var(--accent);}
@@ -3957,7 +3957,7 @@ function renderPassageBoxHtml(passages){
   if(!passages || !passages.length) return '';
   return passages.map((p,i)=>{
     const title = p.hideTitle ? '' : `<div class="ptitle">&lt;보기&gt;${passages.length>1?(' '+(i+1)):''}</div>`;
-    return `<div class="passage-box">${title}${p.text||''}${renderPassageTableHtml(p.table)}${p.imageUrl?`<img src="${p.imageUrl}" style="max-width:100%;border-radius:6px;margin-top:6px;">`:''}</div>`;
+    return `<div class="passage-box">${title}${p.text||''}${renderPassageTableHtml(p.table)}${p.imageUrl?`<img loading="lazy" decoding="async" src="${p.imageUrl}" style="max-width:100%;border-radius:6px;margin-top:6px;">`:''}</div>`;
   }).join('');
 }
 function renderPassagePrintHtml(passages){
@@ -4714,7 +4714,7 @@ function buildPrintQuestionHtml(q, n){
   const passage = ps.map((p,i)=>{
     const title = p.hideTitle ? '' : `<b>&lt;보기&gt;${ps.length>1 ? ' '+(i+1) : ''}</b><br>`;
     const img = p.imageUrl
-      ? `<img src="${p.imageUrl}" style="display:block; max-width:100%; margin-top:6px;">`
+      ? `<img loading="lazy" decoding="async" src="${p.imageUrl}" style="display:block; max-width:100%; margin-top:6px;">`
       : '';
     return `<div class="passage">${title}${p.text||''}${renderPassageTableHtml(p.table)}${img}</div>`;
   }).join('');
