@@ -1157,6 +1157,19 @@ body.quiet-preview .sidebar{ padding-top:22px; }
 
       <!-- 문제은행 -->
       <div class="tabpanel" id="tab-a-bank">
+        <div class="card" id="qimport-card">
+          <h3>JSON으로 문제 가져오기</h3>
+          <p class="note">Claude 등으로 만든 문제 JSON 파일을 올리면 검사 후 문제은행에 한꺼번에 등록합니다. 먼저 <b>안내문 복사</b>로 규격을 Claude에게 알려 주세요.</p>
+          <div style="display:flex; gap:6px; flex-wrap:wrap; margin-bottom:10px;">
+            <button class="btn secondary" onclick="copyQImportSpec()">Claude용 안내문 복사</button>
+            <button class="btn secondary" onclick="$('qimport-file').click()">JSON 파일 선택</button>
+            <input type="file" id="qimport-file" accept=".json,application/json" style="display:none;" onchange="onQImportFile(this)">
+          </div>
+          <textarea id="qimport-text" rows="4" placeholder="또는 JSON을 여기에 붙여넣기" style="width:100%; font-family:monospace; font-size:12px;"></textarea>
+          <button class="btn" style="width:100%; margin-top:8px;" onclick="checkQImport()">검사하기</button>
+          <div id="qimport-result" style="margin-top:12px;"></div>
+        </div>
+
         <div class="page-head"><div><h1>문제은행</h1><p>등록된 모든 문제를 세트와 무관하게 한 곳에서 검색·확인하고, 과제·시험에 낱개로 담을 수 있습니다.</p></div></div>
         <div class="card">
                     <div class="form-grid">
@@ -6361,6 +6374,195 @@ function renderTasks(){
 }
   
 /* =========================================================
+   문제 JSON 가져오기 (Claude 등으로 만든 문제를 한꺼번에 등록)
+   ========================================================= */
+const QIMPORT_SPEC = `아래 규격의 JSON 한 개만 출력해 주세요. (설명 문장 없이, 코드블록 하나로)
+
+{
+  "set": "문제 세트 이름 (예: 국제기구 1단원)",
+  "questions": [
+    {
+      "type": "mc",
+      "body": "물음(문제 지문)",
+      "passages": [
+        {
+          "text": "<보기> 본문. 줄바꿈은 \\n, 강조는 <b>굵게</b> <u>밑줄</u> 정도만 사용",
+          "table": [["구분","A국","B국"],["GDP","10","20"]]
+        }
+      ],
+      "choices": ["선지1","선지2","선지3","선지4","선지5"],
+      "answer": "1",
+      "explain": "해설"
+    },
+    {
+      "type": "short",
+      "body": "단답형 물음",
+      "answer": "정답 텍스트",
+      "explain": "해설"
+    }
+  ]
+}
+
+규칙
+- type은 "mc"(객관식, 선지 정확히 5개) 또는 "short"(단답형)만 사용합니다.
+- answer: 객관식은 선지 번호 문자열 "3", 복수 정답은 "1,3". 단답형은 정답 텍스트.
+- choices에는 ①②③ 같은 번호 기호를 붙이지 않습니다. 선지 글만 씁니다.
+- passages는 <보기>가 없으면 생략하고, 있으면 최대 2개입니다. 표는 문자열 2차원 배열(첫 행 포함)입니다. 이미지는 넣을 수 없습니다.
+- ㄱ,ㄴ,ㄷ 조합형 선지는 "ㄱ", "ㄱ, ㄴ"처럼 글자만 씁니다.
+- 세트 이름은 맨 위 "set" 하나로 지정하거나, 문제마다 "set"을 따로 적을 수 있습니다. 이름에 "/"는 쓸 수 없습니다.
+- 모든 문자열은 JSON 규칙에 맞게 따옴표·줄바꿈을 이스케이프합니다.`;
+function copyQImportSpec(){
+  const done = ()=>alert('복사했습니다. Claude 대화에 붙여넣고 "이 규격으로 문제를 만들어줘"라고 요청하세요.');
+  if(navigator.clipboard && navigator.clipboard.writeText){ navigator.clipboard.writeText(QIMPORT_SPEC).then(done).catch(()=>fallbackCopy()); }
+  else fallbackCopy();
+  function fallbackCopy(){ const ta = document.createElement('textarea'); ta.value = QIMPORT_SPEC; document.body.appendChild(ta); ta.select(); try{ document.execCommand('copy'); done(); }catch(e){ alert('복사에 실패했습니다.'); } ta.remove(); }
+}
+function onQImportFile(inp){
+  const f = inp.files && inp.files[0]; if(!f) return;
+  const rd = new FileReader();
+  rd.onload = ()=>{ $('qimport-text').value = String(rd.result||''); inp.value=''; checkQImport(); };
+  rd.readAsText(f, 'utf-8');
+}
+/* 허용 태그만 남기는 간단한 정리 (가져온 HTML이 학생 화면에 그대로 들어가므로) */
+function sanitizeImportHtml(html){
+  const ALLOW = new Set(['B','STRONG','I','EM','U','BR','P','SUB','SUP','DIV','SPAN','UL','OL','LI']);
+  const tpl = document.createElement('template'); tpl.innerHTML = html;
+  const walk = node=>{
+    [...node.childNodes].forEach(ch=>{
+      if(ch.nodeType===3) return;
+      if(ch.nodeType!==1){ ch.remove(); return; }
+      walk(ch);
+      if(!ALLOW.has(ch.tagName)){ ch.replaceWith(...ch.childNodes); return; }
+      [...ch.attributes].forEach(a=>ch.removeAttribute(a.name));
+    });
+  };
+  walk(tpl.content);
+  return tpl.innerHTML;
+}
+function importPassageText(t){
+  t = String(t==null?'':t);
+  if(!/[<]/.test(t)) return esc(t).replace(/\n/g,'<br>');
+  return sanitizeImportHtml(t.replace(/\n/g,'<br>'));
+}
+function normImportAnswer(a){
+  const CI = {'①':1,'②':2,'③':3,'④':4,'⑤':5};
+  let list = Array.isArray(a) ? a : String(a==null?'':a).split(/[,\s]+/);
+  list = list.map(x=>CI[x]||Number(x)).filter(n=>Number.isInteger(n));
+  return list;
+}
+let qImportReady = [];
+function parseQImport(text){
+  let data;
+  try{ data = JSON.parse(text.replace(/^\uFEFF/,'').replace(/^\s*```(?:json)?/i,'').replace(/```\s*$/,'')); }
+  catch(e){ return { fatal:'JSON 형식이 올바르지 않습니다: '+e.message }; }
+  const arr = Array.isArray(data) ? data : (Array.isArray(data.questions) ? data.questions : null);
+  if(!arr) return { fatal:'"questions" 배열을 찾을 수 없습니다.' };
+  const topSet = (!Array.isArray(data) && typeof data.set==='string') ? data.set.trim() : '';
+  const out = arr.map((q,i)=>{
+    const errs = [];
+    const item = { idx:i+1, errs, data:null, dup:false };
+    if(!q || typeof q!=='object'){ errs.push('문제 객체가 아닙니다.'); return item; }
+    const set = String(q.set!=null ? q.set : topSet).trim();
+    if(!set) errs.push('세트 이름이 없습니다.');
+    else if(set.includes('/')) errs.push('세트 이름에 "/"는 쓸 수 없습니다.');
+    const type = q.type==='short' ? 'short' : (q.type==='mc' || Array.isArray(q.choices) ? 'mc' : null);
+    if(!type) errs.push('type은 "mc" 또는 "short"여야 합니다.');
+    const body = String(q.body==null?'':q.body).trim();
+    if(!body) errs.push('body(물음)가 비어 있습니다.');
+    let choices = [], answer = '';
+    if(type==='mc'){
+      choices = Array.isArray(q.choices) ? q.choices.map(c=>String(c==null?'':c).trim()) : [];
+      if(choices.length!==5 || choices.some(c=>!c)) errs.push('객관식은 비어 있지 않은 선지 5개가 필요합니다.');
+      const list = normImportAnswer(q.answer);
+      if(!list.length || list.some(n=>n<1||n>5)) errs.push('answer는 1~5 사이 번호여야 합니다.');
+      else answer = ansToStr([...new Set(list)].sort((a,b)=>a-b));
+    } else if(type==='short'){
+      answer = String(q.answer==null?'':q.answer).trim();
+      if(!answer) errs.push('단답형 answer가 비어 있습니다.');
+    }
+    const passages = [];
+    const rawP = q.passages==null ? [] : q.passages;
+    if(!Array.isArray(rawP)) errs.push('passages는 배열이어야 합니다.');
+    else {
+      if(rawP.length>2) errs.push('보기(passages)는 최대 2개입니다.');
+      rawP.slice(0,2).forEach(pp=>{
+        if(!pp || typeof pp!=='object'){ errs.push('보기 항목이 올바르지 않습니다.'); return; }
+        let table = null;
+        if(Array.isArray(pp.table) && pp.table.length){
+          const rows = pp.table.map(r=> Array.isArray(r) ? r : (r && Array.isArray(r.cells) ? r.cells : null));
+          if(rows.some(r=>!r)) errs.push('표는 문자열 2차원 배열이어야 합니다.');
+          else table = rows.map(r=>({ cells: r.map(c=>String(c==null?'':c)) }));
+        }
+        const img = String(pp.imageUrl||'').trim();
+        if(img && !/^https:\/\//i.test(img)) errs.push('imageUrl은 https 주소만 가능합니다.');
+        const text = importPassageText(pp.text);
+        if(!text.trim() && !table && !img) errs.push('빈 보기가 있습니다.');
+        passages.push({ text, hideTitle: !!pp.hideTitle, imageUrl: img, table });
+      });
+    }
+    if(!errs.length){
+      item.data = { set, type, body, passages, choices: type==='mc' ? choices : [], answer, explain: String(q.explain==null?'':q.explain).trim() };
+      item.dup = questions.some(x=>x.set===set && String(x.body||'').trim()===body);
+    }
+    return item;
+  });
+  return { items: out };
+}
+function checkQImport(){
+  const box = $('qimport-result'); const text = ($('qimport-text').value||'').trim();
+  if(!text){ box.innerHTML = '<p class="note">JSON을 붙여넣거나 파일을 선택하세요.</p>'; return; }
+  const r = parseQImport(text);
+  if(r.fatal){ qImportReady = []; box.innerHTML = `<div class="note" style="border-left-color:var(--accent);">⚠️ ${esc(r.fatal)}</div>`; return; }
+  const ok = r.items.filter(x=>x.data), bad = r.items.filter(x=>!x.data), dups = ok.filter(x=>x.dup);
+  qImportReady = ok;
+  const sets = [...new Set(ok.map(x=>x.data.set))];
+  const newSets = sets.filter(n=>!questionSets.includes(n));
+  box.innerHTML = `
+    <div class="st-sum">
+      <div class="box"><small>등록 가능</small><strong>${ok.length}개</strong></div>
+      <div class="box"><small>오류</small><strong style="color:${bad.length?'var(--accent)':'inherit'}">${bad.length}개</strong></div>
+      <div class="box"><small>이미 있는 문제</small><strong>${dups.length}개</strong></div>
+    </div>
+    ${newSets.length ? `<p class="note" style="margin-top:8px;">새로 만들어질 세트: ${newSets.map(esc).join(', ')}</p>` : ''}
+    ${bad.length ? `<div style="margin-top:10px; font-size:13px;"><b>오류 목록</b> (이 문제들은 등록되지 않습니다)<ul style="margin:6px 0 0; padding-left:20px;">${bad.map(b=>`<li>${b.idx}번: ${b.errs.map(esc).join(' / ')}</li>`).join('')}</ul></div>` : ''}
+    <div style="margin-top:10px; max-height:260px; overflow:auto; border:1px solid var(--border); border-radius:12px;">
+      ${ok.map(x=>`<div style="padding:8px 12px; border-bottom:1px solid var(--paper-line); font-size:13px;">
+        <b>${x.idx}.</b> <span class="badge muted">${esc(x.data.set)}</span> <span class="badge ${x.data.type==='mc'?'part':'good'}">${x.data.type==='mc'?'객관식':'단답형'}</span>
+        ${x.dup?'<span class="badge warn">중복 가능</span>':''}
+        ${x.data.passages.length?'<span class="badge muted">보기 '+x.data.passages.length+'</span>':''}
+        <div style="margin-top:3px; color:var(--ink-soft);">${esc(x.data.body.length>70 ? x.data.body.slice(0,70)+'…' : x.data.body)}</div></div>`).join('') || '<p class="empty-hint" style="padding:12px;">등록 가능한 문제가 없습니다.</p>'}
+    </div>
+    ${ok.length ? `
+      ${dups.length ? `<label class="dup-opt"><input type="checkbox" id="qimport-skipdup" checked> 이미 같은 세트에 같은 물음이 있는 ${dups.length}개는 건너뛰기</label>` : ''}
+      <button class="btn" style="width:100%; margin-top:10px;" onclick="doQImport()">문제은행에 등록하기</button>` : ''}`;
+}
+async function doQImport(){
+  const skipEl = $('qimport-skipdup'); const skip = skipEl ? skipEl.checked : false;
+  const list = qImportReady.filter(x=>!(skip && x.dup));
+  if(!list.length){ alert('등록할 문제가 없습니다.'); return; }
+  if(!confirm(`${list.length}개 문제를 문제은행에 등록할까요?`)) return;
+  const { db, doc, collection, setDoc } = window.fb;
+  const nextOrder = {};
+  const orderFor = set=>{
+    if(nextOrder[set]===undefined) nextOrder[set] = questions.filter(x=>x.set===set).reduce((m,x)=>Math.max(m, x.order ?? -1), -1) + 1;
+    return nextOrder[set]++;
+  };
+  const now = Date.now();
+  try{
+    const newSets = [...new Set(list.map(x=>x.data.set))].filter(n=>!questionSets.includes(n));
+    for(const n of newSets) await setDoc(doc(db,'questionSets', n), { name:n });
+    let i = 0;
+    for(const x of list){
+      await setDoc(doc(collection(db,'questions')), Object.assign({}, x.data, { order: orderFor(x.data.set), createdAt: now + (i++) }));
+    }
+    $('qimport-text').value = ''; qImportReady = [];
+    $('qimport-result').innerHTML = `<div class="note">✅ ${list.length}개 문제를 등록했습니다.</div>`;
+  }catch(e){
+    alert('등록 중 오류: '+e.message+'\n일부만 등록되었을 수 있으니 문제은행을 확인하세요.');
+  }
+}
+
+/* =========================================================
    문항 통계
    ========================================================= */
 function fillStatsSelect(){
@@ -8385,6 +8587,7 @@ function renderFirebaseGuide(){
     <li><b>파일 제출 채점</b> — 학생이 사진·PDF만 내면 "채점중"으로 남습니다. <b>성적 관리</b>에서 점수를 입력해야 채점 완료가 되고, 그때 학생에게 정답·해설이 공개됩니다.</li>
     <li><b>현장 제출</b> — 종이로 받은 과제는 채점 확인 탭에서 직접 기록합니다. 문항별 O/X를 찍으면 점수·완료 여부가 반영되고 틀린 문항은 오답노트에 등록됩니다.</li>
     <li><b>모바일 메뉴</b> — 하단에 대분류 4개(수업·출제·문제·채점·확인)와 로그아웃이 있습니다. 대분류를 누르면 위로 세부 메뉴가 뜨고, 고르거나 바깥을 누르면 닫힙니다.</li>
+    <li><b>문제 JSON 가져오기</b> — 문제 → 문제은행 맨 위 카드. <b>Claude용 안내문 복사</b>를 Claude에게 붙여넣고 문제를 만들어 달라고 하면 규격에 맞는 JSON이 나옵니다. 그 파일을 올리면 <b>검사(오류·중복 확인) → 등록</b> 순서로 진행됩니다. 오류가 있는 문제는 등록되지 않고 이유가 표시됩니다. 이미지는 JSON으로 넣을 수 없으니 필요하면 등록 후 문제 수정에서 붙이세요. 보기 본문의 HTML은 굵게·밑줄 등 기본 태그만 남기고 나머지는 제거됩니다.</li>
     <li><b>문항 통계</b> — 채점·확인 → 문항 통계. 과제·시험을 고르면 문항별 정답률, 선지별 선택 분포, 가장 많이 고른 오답이 보입니다. 정답률 낮은 순으로 정렬하면 수업에서 다시 짚을 문제를 바로 찾을 수 있습니다. 파일(사진·PDF)로만 낸 제출은 집계에서 빠집니다.</li>
     <li><b>과제·시험 복제</b> — 과제 관리·시험 관리 목록 또는 수업·주차 화면의 <b>복제</b> 버튼. 수업과 주차(여러 개 가능)를 고르면 문항 구성이 그대로 복사되고, 시작·마감 일시는 주차 차이만큼 옮길 수 있습니다. 첨부 PDF는 복사하지 않습니다(한쪽을 지울 때 파일이 같이 지워지는 것을 막기 위해).</li>
     <li><b>공지사항</b> — 학생 메인 맨 위에 표시됩니다. 본문에 붙인 주소는 자동으로 링크가 되고 새 탭에서 열립니다. <b>중요</b>로 체크하면 강조되고 맨 위에 고정됩니다.</li>
