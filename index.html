@@ -410,6 +410,19 @@
     border-radius:0; padding:12px 14px; margin-bottom:8px; background:#fff;}
   .variant-meta{font-size:11.5px; color:var(--muted); margin-bottom:6px;}
 
+/* 필기(펜) 레이어 */
+.omr-q{position:relative;}
+.ink-cv{position:absolute; left:0; top:0; width:100%; height:100%; z-index:3; pointer-events:none; touch-action:auto;}
+#solve-body.ink-on .ink-cv{pointer-events:auto; touch-action:pan-y; cursor:crosshair;}
+#solve-body.ink-on.ink-finger .ink-cv{touch-action:none;}
+#solve-body.ink-on.ink-eraser .ink-cv{cursor:cell;}
+.ink-bar{display:flex; flex-wrap:wrap; gap:6px; align-items:center; margin-top:9px;}
+.ink-bar button{border:1px solid var(--border); background:#fff; color:var(--ink); border-radius:999px; padding:6px 11px; font-size:12.5px; font-weight:600; cursor:pointer; font-family:inherit;}
+.ink-bar button.on{background:var(--brand); border-color:var(--brand); color:#fff;}
+.ink-bar .ink-tools{display:none; gap:6px; align-items:center; flex-wrap:wrap;}
+#solve-body.ink-on .ink-tools{display:inline-flex;}
+.ink-bar .ink-dot{width:26px; height:26px; padding:0; border-radius:50%; border:2px solid #fff; box-shadow:0 0 0 1px var(--border);}
+.ink-bar .ink-dot.on{box-shadow:0 0 0 2px var(--brand);}
 /* 풀이 화면 진행률 바 */
 .solve-progress{position:sticky; top:0; z-index:5; background:#fff;
   border-bottom:1px solid var(--border); padding:10px 0 12px; margin-bottom:6px;}
@@ -6934,6 +6947,157 @@ function updateSolveProgress(){
   box.classList.toggle('done', answered === qs.length);
 }
 /* ---------- 풀이 ---------- */
+/* =========================================================
+   필기(펜) — 풀이 화면의 각 문제 위에 손글씨를 덮어쓴다
+   - 좌표는 문제 영역 너비를 1로 보고 저장 → 화면 크기가 바뀌어도 제자리
+   - 이 기기(브라우저)에만 임시 저장되고 제출 내용에는 포함되지 않는다
+   ========================================================= */
+const INK = { on:false, tool:'pen', color:'#1f2937', finger:false, data:{}, undo:[], key:null, saveTimer:null, cvs:{}, ro:null };
+const INK_COLORS = ['#1f2937','#2563eb','#dc2626'];
+function inkKey(tid){ return 'ink:'+(currentStudent||'x')+':'+tid; }
+function inkLoad(){
+  INK.data = {};
+  try{ const raw = localStorage.getItem(INK.key); if(raw) INK.data = JSON.parse(raw) || {}; }catch(e){}
+}
+function inkSaveSoon(){
+  if(previewingStudent) return;
+  clearTimeout(INK.saveTimer);
+  INK.saveTimer = setTimeout(()=>{
+    try{
+      const clean = {}; Object.keys(INK.data).forEach(q=>{ if(INK.data[q] && INK.data[q].length) clean[q] = INK.data[q]; });
+      if(Object.keys(clean).length) localStorage.setItem(INK.key, JSON.stringify(clean)); else localStorage.removeItem(INK.key);
+    }catch(e){}
+  }, 600);
+}
+function inkClearStored(tid){ try{ localStorage.removeItem(inkKey(tid)); }catch(e){} }
+function inkInit(tid){
+  INK.on = false; INK.tool = 'pen'; INK.color = INK_COLORS[0]; INK.undo = []; INK.key = inkKey(tid); INK.cvs = {};
+  if(INK.ro){ INK.ro.disconnect(); INK.ro = null; }
+  inkLoad();
+  const body = $('solve-body'); if(!body) return;
+  body.classList.remove('ink-on','ink-finger','ink-eraser');
+  const prog = $('solve-progress');
+  if(prog){
+    const bar = document.createElement('div'); bar.className = 'ink-bar'; bar.id = 'ink-bar';
+    bar.innerHTML = `<button type="button" id="ink-toggle" onclick="inkToggle()">✏️ 필기</button>
+      <span class="ink-tools">
+        ${INK_COLORS.map((c,i)=>`<button type="button" class="ink-dot${i===0?' on':''}" data-c="${c}" style="background:${c}" onclick="inkPickColor('${c}')" title="펜"></button>`).join('')}
+        <button type="button" id="ink-hl" onclick="inkPickTool('hl')">형광펜</button>
+        <button type="button" id="ink-er" onclick="inkPickTool('eraser')">지우개</button>
+        <button type="button" onclick="inkUndo()">↶ 되돌리기</button>
+        <button type="button" onclick="inkClearAll()">전체 지우기</button>
+        <button type="button" id="ink-fg" onclick="inkToggleFinger()">손가락도 쓰기</button>
+      </span>`;
+    prog.appendChild(bar);
+  }
+  if(typeof ResizeObserver!=='undefined') INK.ro = new ResizeObserver(entries=>entries.forEach(en=>inkFit(en.target.id.replace('qwrap_',''))));
+  body.querySelectorAll('.omr-q').forEach(wrap=>{
+    const qid = wrap.id.replace('qwrap_','');
+    const cv = document.createElement('canvas'); cv.className = 'ink-cv'; wrap.appendChild(cv);
+    INK.cvs[qid] = cv;
+    inkBind(cv, qid);
+    inkFit(qid);
+    if(INK.ro) INK.ro.observe(wrap);
+  });
+}
+function inkFit(qid){
+  const cv = INK.cvs[qid]; if(!cv) return;
+  const r = cv.parentElement.getBoundingClientRect(); if(!r.width || !r.height) return;
+  const dpr = Math.min(window.devicePixelRatio||1, 2);
+  const w = Math.round(r.width*dpr), h = Math.round(r.height*dpr);
+  if(cv.width!==w || cv.height!==h){ cv.width = w; cv.height = h; }
+  inkRedraw(qid);
+}
+function inkDrawStroke(ctx, st, W, dpr){
+  const pts = st.p; if(!pts || pts.length<2) return;
+  ctx.save();
+  ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  ctx.strokeStyle = st.c; ctx.lineWidth = st.w*dpr;
+  ctx.globalAlpha = st.h ? 0.32 : 1;
+  ctx.beginPath(); ctx.moveTo(pts[0]*W, pts[1]*W);
+  if(pts.length===2) ctx.lineTo(pts[0]*W+0.1, pts[1]*W);
+  for(let i=2;i<pts.length;i+=2) ctx.lineTo(pts[i]*W, pts[i+1]*W);
+  ctx.stroke(); ctx.restore();
+}
+function inkRedraw(qid){
+  const cv = INK.cvs[qid]; if(!cv) return;
+  const ctx = cv.getContext('2d'); ctx.clearRect(0,0,cv.width,cv.height);
+  const r = cv.parentElement.getBoundingClientRect(); const dpr = cv.width/Math.max(1,r.width);
+  (INK.data[qid]||[]).forEach(st=>inkDrawStroke(ctx, st, r.width*dpr, dpr));
+}
+function inkBind(cv, qid){
+  let cur = null, erased = false;
+  const pos = e=>{ const r = cv.getBoundingClientRect(); return [ (e.clientX-r.left)/r.width, (e.clientY-r.top)/r.width, r ]; };
+  const eraseAt = e=>{
+    const [x,y,r] = pos(e); const rad = 12/r.width;
+    const list = INK.data[qid]||[]; const keep = [];
+    list.forEach(st=>{
+      let hit = false;
+      for(let i=0;i<st.p.length && !hit;i+=2){ if(Math.hypot(st.p[i]-x, st.p[i+1]-y) < rad + (st.h?0.01:0)) hit = true; }
+      if(!hit) keep.push(st);
+    });
+    if(keep.length!==list.length){
+      if(!erased){ INK.undo.push({qid, prev:list.slice()}); erased = true; }
+      INK.data[qid] = keep; inkRedraw(qid); inkSaveSoon();
+    }
+  };
+  cv.addEventListener('pointerdown', e=>{
+    if(!INK.on) return;
+    if(e.pointerType==='touch' && !INK.finger) return;     // 손가락은 스크롤
+    e.preventDefault(); cv.setPointerCapture(e.pointerId);
+    if(INK.tool==='eraser'){ erased = false; cur = 'erase'; eraseAt(e); return; }
+    const [x,y] = pos(e);
+    cur = { c: INK.tool==='hl' ? '#facc15' : INK.color, w: INK.tool==='hl' ? 14 : 2.2, h: INK.tool==='hl', p:[x,y] };
+    if(!INK.data[qid]) INK.data[qid] = [];
+    INK.undo.push({qid, prev:INK.data[qid].slice()});
+    INK.data[qid].push(cur);
+  });
+  cv.addEventListener('pointermove', e=>{
+    if(!cur) return;
+    if(cur==='erase'){ eraseAt(e); return; }
+    const evs = e.getCoalescedEvents ? e.getCoalescedEvents() : [e];
+    (evs.length?evs:[e]).forEach(ev=>{ const [x,y] = pos(ev); cur.p.push(x,y); });
+    inkRedraw(qid);
+  });
+  const end = e=>{
+    if(!cur) return;
+    if(cur!=='erase') inkSaveSoon();
+    cur = null;
+  };
+  cv.addEventListener('pointerup', end); cv.addEventListener('pointercancel', e=>{
+    if(cur && cur!=='erase'){ /* 스크롤로 넘어간 터치: 점 하나짜리 획은 버린다 */
+      const arr = INK.data[qid]; if(arr && arr[arr.length-1]===cur && cur.p.length<=4){ arr.pop(); INK.undo.pop(); inkRedraw(qid); }
+    }
+    end(e);
+  });
+}
+function inkRefreshBar(){
+  const body = $('solve-body'); if(!body) return;
+  body.classList.toggle('ink-on', INK.on);
+  body.classList.toggle('ink-finger', INK.on && INK.finger);
+  body.classList.toggle('ink-eraser', INK.tool==='eraser');
+  const t = $('ink-toggle'); if(t){ t.classList.toggle('on', INK.on); t.textContent = INK.on ? '✏️ 필기 끄기 (답 선택)' : '✏️ 필기'; }
+  document.querySelectorAll('#ink-bar .ink-dot').forEach(b=>b.classList.toggle('on', INK.tool==='pen' && b.dataset.c===INK.color));
+  const hl = $('ink-hl'); if(hl) hl.classList.toggle('on', INK.tool==='hl');
+  const er = $('ink-er'); if(er) er.classList.toggle('on', INK.tool==='eraser');
+  const fg = $('ink-fg'); if(fg) fg.classList.toggle('on', INK.finger);
+}
+function inkToggle(){ INK.on = !INK.on; inkRefreshBar(); }
+function inkPickColor(c){ INK.tool = 'pen'; INK.color = c; inkRefreshBar(); }
+function inkPickTool(t){ INK.tool = (INK.tool===t) ? 'pen' : t; inkRefreshBar(); }
+function inkToggleFinger(){ INK.finger = !INK.finger; inkRefreshBar(); }
+function inkUndo(){
+  const u = INK.undo.pop(); if(!u) return;
+  INK.data[u.qid] = u.prev; inkRedraw(u.qid); inkSaveSoon();
+}
+function inkClearAll(){
+  const any = Object.values(INK.data).some(a=>a && a.length);
+  if(!any) return;
+  if(!confirm('이 과제에 쓴 필기를 모두 지울까요?')) return;
+  Object.keys(INK.data).forEach(q=>{ INK.undo.push({qid:q, prev:(INK.data[q]||[]).slice()}); INK.data[q] = []; inkRedraw(q); });
+  inkSaveSoon();
+}
+
 function openStudentSolve(kind,tid){
   const t = tasks[kind].find(x=>x.tid===tid);
   if(!t){ alert('해당 과제/시험을 찾을 수 없습니다. 목록이 갱신되었을 수 있어요. 다시 시도해주세요.'); return; }
@@ -6998,6 +7162,7 @@ function openStudentSolve(kind,tid){
   });
   updateSolveProgress();
   openModal('solve-modal');
+  inkInit(tid);
 }
 function normalize(s){ return String(s||'').replace(/\s+/g,'').toLowerCase(); }
 async function submitSolve(){
@@ -7104,6 +7269,7 @@ async function submitSolve(){
       dateLine
     );
     closeModal('solve-modal');
+    inkClearStored(tid);
     currentSolve = null;
     alert(
       (mode==='omr'
