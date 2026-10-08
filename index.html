@@ -4798,6 +4798,8 @@ function printWithOptions(){
   .two-col{column-count:2; column-gap:22px;}
   .q{margin-bottom:18px; break-inside:avoid; -webkit-column-break-inside:avoid;}
   .qnum{font-weight:700; font-size:13.5px; margin-bottom:6px; white-space:pre-wrap;}
+  .qnum:has(.qn){display:flex; align-items:flex-start; white-space:normal;}
+  .qnum .qn{flex:0 0 auto; margin-right:.4em;} .qnum .qt{flex:1; min-width:0; white-space:pre-wrap;}
   .passage{border:1px solid #999; background:#f5f5f5; padding:8px 10px; margin:6px 0; font-size:12px; white-space:pre-wrap;}
   .passage img{break-inside:avoid;}
   .choices{margin-top:5px; font-size:13px;}
@@ -4852,7 +4854,7 @@ function buildPrintQuestionHtml(q, n){
   } else {
     body = `<div class="short-answer-line"></div>`;
   }
-  return `<div class="q"><div class="qnum">${n}. ${esc(q.body)}</div>${passage}${body}</div>`;
+  return `<div class="q"><div class="qnum"><span class="qn">${n}.</span><span class="qt">${esc(q.body)}</span></div>${passage}${body}</div>`;
 }
 
 /* 빠른 정답 — 번호와 정답만 촘촘한 표로, 채점할 때 훑어보기 쉽게 */
@@ -6778,6 +6780,8 @@ const PRINT_PROBLEM_CSS = `
   .two-col{column-count:2; column-gap:22px;}
   .q{margin-bottom:18px; break-inside:avoid; -webkit-column-break-inside:avoid;}
   .qnum{font-weight:700; font-size:13.5px; margin-bottom:6px; white-space:pre-wrap;}
+  .qnum:has(.qn){display:flex; align-items:flex-start; white-space:normal;}
+  .qnum .qn{flex:0 0 auto; margin-right:.4em;} .qnum .qt{flex:1; min-width:0; white-space:pre-wrap;}
   .passage{border:1px solid #999; background:#f5f5f5; padding:8px 10px; margin:6px 0; font-size:12px; white-space:pre-wrap;}
   .passage img{break-inside:avoid;}
   .choices{margin-top:5px; font-size:13px;}
