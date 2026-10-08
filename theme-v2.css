@@ -271,4 +271,28 @@ body.on-login{
   .sidebar nav button.active:hover{background:rgba(255,255,255,.95);}
   .sidebar nav .nav-logout{border-radius:12px; margin-top:0; border-left:none;}
   th,td{padding:9px 8px;}
+  /* 관리자 하단바: 열린 그룹도 한 줄로, 높이 고정 */
+  .sidebar nav, #shell-admin .sidebar nav{display:flex !important; flex-direction:row; flex-wrap:nowrap; align-items:stretch; overflow-x:auto; overflow-y:hidden; max-height:60px;}
+  .sidebar nav .nav-sect, .sidebar nav .nav-sect.open, .sidebar nav .nav-sub, .sidebar nav .nav-sect.open .nav-sub{display:contents !important; background:none; padding:0;}
+  .sidebar nav .nav-group{display:none !important;}
+  .sidebar nav button.admin-nav, .sidebar nav .nav-sub .admin-nav{
+    flex:0 0 auto; width:auto; margin:0 1px; padding:9px 11px; font-size:12px; white-space:nowrap; text-align:center; border-radius:12px;}
+  .sidebar nav .nav-logout{flex:0 0 auto; padding:9px 11px; font-size:12px; margin:0 1px; border-top:none;}
+  .main{padding-bottom:84px;}
+}
+
+/* ---------- 학생 화면 다듬기 ---------- */
+#shell-student .page-head h1{letter-spacing:-.02em;}
+#shell-student .card{box-shadow:0 1px 2px rgba(31,64,54,.06), 0 6px 18px rgba(31,64,54,.06); transition:box-shadow .18s, transform .18s;}
+#shell-student .card:hover{box-shadow:0 2px 4px rgba(31,64,54,.08), 0 10px 26px rgba(31,64,54,.1);}
+#shell-student #stu-deadline-card{background:linear-gradient(120deg,#fff 55%,#fdf1ea);}
+#shell-student table tbody tr{transition:background .12s;}
+#shell-student table tbody tr:hover{background:rgba(47,93,80,.05);}
+#shell-student .week-head{margin:22px 0 10px; padding:6px 12px; border-left:4px solid var(--brand); background:rgba(47,93,80,.07); border-radius:0 10px 10px 0; font-size:15px;}
+@media (max-width:760px){
+  #shell-student .sidebar nav{align-items:center; max-height:none;}
+  #shell-student .sidebar nav button{font-size:12px; padding:11px 2px; font-weight:600;}
+  #shell-student .sidebar nav .nav-logout{flex:0 0 auto; padding:11px 8px; font-size:11px; align-self:center; border-left:none;}
+  #shell-student .main{padding-top:18px;}
+  #shell-student .page-head p{font-size:13px;}
 }
