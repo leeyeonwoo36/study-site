@@ -5999,6 +5999,7 @@ function extractedToQuestionData(q, set, order){
     createdAt: Date.now()
   };
 }
+function extractedLabel(q, i){ return (q && q.number) ? q.number+'번' : (i+1)+'번째'; }
 async function saveExtractedQuestion(i){
   const q = extractedQuestionsCache[i]; if(!q) return;
   const err = validateExtracted(q);
@@ -6295,9 +6296,6 @@ async function extractQuestionsFromPdf(){
 - explain에는 정답지 해설을 우선 추출하라. 없으면 고2 국제정치 교과 수준으로 간단히 작성하라.
 - 반드시 지정된 JSON 스키마 형식으로만 응답하라.`;
 
-    const { list: questionsList, warnings } = sortExtractedByNumber(parsed.questions || []);
-    questionsList.forEach(normalizeExtractedTable);
-    
   try {
     const examBase64 = await fileToBase64(examFile);
     const answerBase64 = await fileToBase64(answerFile);
@@ -6316,6 +6314,7 @@ async function extractQuestionsFromPdf(){
     console.log('PDF 추출에 사용된 모델:', model);
 
     const { list: questionsList, warnings } = sortExtractedByNumber(parsed.questions || []);
+    questionsList.forEach(normalizeExtractedTable);
 
     // 그림 정밀 추출
     const imageQs = questionsList.filter(q => q.hasImage && q.imagePage && Array.isArray(q.imageBox2d));

@@ -462,3 +462,10 @@ body.on-login{
 
 :root[data-theme="dark"] .sidebar nav button.active,
 :root[data-theme="dark"] .sidebar nav .nav-sub .admin-nav.active{background:rgba(255,255,255,.12); color:#fff; box-shadow:none;}
+
+/* 긴 코드 블록이 화면을 밀어 가로 스크롤을 만들지 않도록 */
+.layout>.main{min-width:0;}
+.tabpanel pre{max-width:100
+/* 긴 코드 블록이 화면을 밀어 가로 스크롤을 만들지 않도록 */
+.layout>.main{min-width:0;}
+.tabpanel pre{max-width:100%;}
