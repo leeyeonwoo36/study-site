@@ -702,18 +702,19 @@ body.quiet-preview .sidebar{ padding-top:22px; }
       <p>학습관리 시스템</p>
     </div>
     <div class="card">
-      <label>전화번호 또는 이메일</label>
-      <input type="text" id="login-id" inputmode="email" autocomplete="username" placeholder="010-1234-5678 또는 student@gmail.com" oninput="fmtPhoneInput(this,true)" style="margin-bottom:14px;">
+      <div id="login-mode-title" style="font-size:13px; font-weight:700; margin-bottom:10px; color:var(--muted);">학생 로그인</div>
+      <label id="login-id-label">전화번호</label>
+      <input type="tel" id="login-id" inputmode="tel" autocomplete="username" placeholder="010-1234-5678" oninput="if(loginMode==='student')fmtPhoneInput(this)" style="margin-bottom:14px;">
       <label>비밀번호</label>
       <input type="password" id="login-pw" placeholder="비밀번호" style="margin-bottom:18px;"
         onkeydown="if(event.key==='Enter')doLogin()">
       <button class="btn btn-login" onclick="doLogin()">로그인</button>
       <div style="display:flex; justify-content:space-between; margin-top:14px;">
-        <a href="#" onclick="openModal('signup-modal'); return false;" style="font-size:12.5px;">회원가입</a>
-        <a href="#" onclick="openModal('findpw-modal'); return false;" style="font-size:12.5px; color:var(--muted);">비밀번호를 잊으셨나요?</a>
+        <a href="#" id="login-mode-link" onclick="setLoginMode(loginMode==='admin'?'student':'admin'); return false;" style="font-size:12.5px;">관리자 로그인</a>
+        <a href="#" onclick="openFindPw(); return false;" style="font-size:12.5px; color:var(--muted);">비밀번호를 잊으셨나요?</a>
       </div>
     </div>
-    <div class="login-foot">가입 후 관리자 승인이 완료되어야 로그인할 수 있습니다</div>
+    <div class="login-foot" id="login-foot">계정은 관리자가 등록합니다. 초기 비밀번호는 담당 선생님께 받으세요</div>
   </div>
 </div>
 
@@ -1558,34 +1559,14 @@ body.quiet-preview .sidebar{ padding-top:22px; }
     </div>
   </div>
 </div>
-<!-- 회원가입 -->
-<div class="modal-bg" id="signup-modal">
-  <div class="modal">
-    <button class="modal-close" onclick="closeModal('signup-modal')">✕</button>
-    <h3>학생 회원가입</h3>
-    <div class="form-grid">
-      <div><label>이름</label><input type="text" id="su-name" placeholder="홍길동"></div>
-      <div><label>학년</label><input type="text" id="su-grade" placeholder="고2"></div>
-      <div><label>학교</label><input type="text" id="su-school" placeholder="명덕외고"></div>
-      <div><label>전화번호</label><input type="tel" id="su-phone" placeholder="010-1234-5678" oninput="fmtPhoneInput(this)"></div>
-    </div>
-    <div class="form-grid full">
-      <div><label>이메일</label><input type="email" id="su-email" placeholder="student@gmail.com"></div>
-      <div><label>비밀번호 (6자리 이상)</label><input type="password" id="su-pw" placeholder="비밀번호 설정"></div>
-    </div>
-    <p class="note">가입 신청 후 관리자 승인이 완료되어야 로그인할 수 있습니다.</p>
-    <button class="btn" style="width:100%;" onclick="doSignup()">가입 신청하기</button>
-  </div>
-</div>
-
 <!-- 비밀번호 찾기 -->
 <div class="modal-bg" id="findpw-modal">
   <div class="modal">
     <button class="modal-close" onclick="closeModal('findpw-modal')">✕</button>
     <h3>비밀번호 찾기</h3>
-    <p class="note">가입할 때 사용한 이메일로 비밀번호 재설정 링크를 보내드립니다. 메일이 안 보이면 스팸함도 확인해주세요.</p>
-    <label>가입한 이메일</label>
-    <input type="email" id="findpw-email" placeholder="student@gmail.com" style="margin-bottom:14px;">
+    <p class="note" id="findpw-note">등록된 이메일로 비밀번호 재설정 링크를 보내드립니다. 메일이 안 보이면 스팸함도 확인해주세요.</p>
+    <label id="findpw-label">전화번호</label>
+    <input type="text" id="findpw-email" placeholder="010-1234-5678" oninput="if(loginMode==='student')fmtPhoneInput(this)" style="margin-bottom:14px;">
     <button class="btn" style="width:100%;" onclick="sendResetLink()">재설정 링크 보내기</button>
     <div id="findpw-result" style="margin-top:12px;"></div>
   </div>
@@ -2793,45 +2774,19 @@ function logout(){
   switchSite('login');
 }
 
-async function doSignup(){
-  const name = $('su-name').value.trim();
-  const email = $('su-email').value.trim();
-  const pw = $('su-pw').value;
-  if(!name || !email || !pw){ alert('이름, 이메일, 비밀번호를 모두 입력하세요.'); return; }
-  if(pw.length < 6){ alert('비밀번호는 6자리 이상이어야 합니다.'); return; }
-  if(!window.fb){ alert('Firebase가 아직 로드되지 않았습니다. 잠시 후 다시 시도해주세요.'); return; }
-  window.signupInProgress = true;
-  try {
-    const { auth, createUserWithEmailAndPassword, signOut, db, doc, setDoc } = window.fb;
-    const cred = await createUserWithEmailAndPassword(auth, email, pw);
-    await setDoc(doc(db, 'students', cred.user.uid), {
-      name,
-      grade: $('su-grade').value.trim(),
-      school: $('su-school').value.trim(),
-      phone: phoneShow($('su-phone').value.trim()),
-      email,
-      approved: false
-    });
-    await signOut(auth);
-    closeModal('signup-modal');
-    ['su-name','su-grade','su-school','su-phone','su-email','su-pw'].forEach(i=>$(i).value='');
-    alert('가입 신청이 완료되었습니다. 관리자 승인 후 로그인할 수 있습니다.');
-  } catch(e){
-    console.error('회원가입 실패:', e);
-    if(e.code === 'auth/email-already-in-use') alert('이미 가입된 이메일입니다.');
-    else if(e.code === 'auth/weak-password') alert('비밀번호가 너무 약합니다. 6자리 이상 입력하세요.');
-    else if(e.code === 'auth/invalid-email') alert('올바른 이메일 형식이 아닙니다.');
-    else alert('회원가입 중 오류가 발생했습니다: ' + e.code);
-  }
-  finally {
-    window.signupInProgress = false;       // ✅ 추가
-  }
-}
-
 /* 로그인 성공 후 공통 라우팅 (doLogin과 onAuthStateChanged가 함께 사용) */
 async function routeAfterAuth(user){
   // 이전 세션과 다른 계정이면 남아 있던 구독·데이터를 먼저 정리
   if(subsOwner && subsOwner !== user.uid) stopSubscriptions();
+  if(pendingAdminLogin){
+    pendingAdminLogin = false;
+    if(!isAdminUid(user.uid)){
+      pendingRoleChoice = false;
+      await window.fb.signOut(window.fb.auth);
+      alert('관리자 계정이 아닙니다. 학생은 "← 학생 로그인"에서 전화번호로 로그인하세요.');
+      return false;
+    }
+  }
   if(isAdminUid(user.uid)){
     currentUserIsAdmin = true;
     currentStudent = null;
@@ -3031,25 +2986,28 @@ async function changeMyPassword(){
 async function doLogin(){
   const id = $('login-id').value.trim();
   const pw = $('login-pw').value;
-  if(!id || !pw){ alert('전화번호(또는 이메일)와 비밀번호를 입력하세요.'); return; }
+  if(!id || !pw){ alert((loginMode==='admin'?'이메일':'전화번호')+'와 비밀번호를 입력하세요.'); return; }
+  if(loginMode==='admin' && !id.includes('@')){ alert('관리자 이메일을 입력하세요.'); return; }
+  if(loginMode==='student' && id.includes('@')){ alert('학생은 전화번호로 로그인합니다.'); return; }
   if(!window.fb){ alert('Firebase가 아직 로드되지 않았습니다. 잠시 후 다시 시도해주세요.'); return; }
   try {
     pendingRoleChoice = true;      // 수동 로그인일 때만 선택창을 띄운다
+    pendingAdminLogin = (loginMode==='admin');
     const email = await resolveLoginEmail(id);
     const cred = await window.fb.signInWithEmailAndPassword(window.fb.auth, email, pw);
     $('login-pw').value = '';
   } catch(e) {
-    pendingRoleChoice = false;
+    pendingRoleChoice = false; pendingAdminLogin = false;
     console.log('로그인 실패:', e.code);
     if(e.code === 'app/phone-not-found'){
-      alert('등록되지 않은 전화번호입니다.\n번호를 다시 확인하거나, 이메일로 로그인해 보세요.');
+      alert('등록되지 않은 전화번호입니다.\n번호를 다시 확인하거나 담당 선생님께 문의하세요.');
     } else if(e.code === 'app/bad-id'){
-      alert('전화번호(숫자 10~11자리) 또는 이메일 형식으로 입력하세요.');
+      alert('전화번호를 010-1234-5678 형식(숫자 10~11자리)으로 입력하세요.');
     } else if(e.code === 'permission-denied'){
-      alert('전화번호 로그인을 아직 쓸 수 없습니다. 이메일로 로그인해 주세요.\n(관리자: 운영 안내 탭의 규칙 전문을 게시해야 합니다)');
+      alert('전화번호 로그인을 아직 쓸 수 없습니다. 담당 선생님께 문의하세요.\n(관리자: 운영 안내 탭의 규칙 전문을 게시해야 합니다)');
     } else if(e.code === 'auth/invalid-credential' || e.code === 'auth/wrong-password'
       || e.code === 'auth/user-not-found' || e.code === 'auth/invalid-email'){
-      alert('전화번호(이메일) 또는 비밀번호가 올바르지 않습니다.');
+      alert((loginMode==='admin'?'이메일':'전화번호')+' 또는 비밀번호가 올바르지 않습니다.');
     } else if(e.code === 'auth/unauthorized-domain'){
       alert('승인되지 않은 도메인입니다.\nFirebase 콘솔 → Authentication → Settings → 승인된 도메인에 현재 주소를 추가해주세요.');
     } else if(e.code === 'auth/too-many-requests'){
@@ -3061,18 +3019,50 @@ async function doLogin(){
 }
 
 /* 비밀번호 찾기 — Firebase가 실제로 메일을 발송 */
+let loginMode = 'student';
+function setLoginMode(m){
+  loginMode = m;
+  const adm = m==='admin';
+  $('login-mode-title').textContent = adm ? '관리자 로그인' : '학생 로그인';
+  $('login-id-label').textContent = adm ? '관리자 이메일' : '전화번호';
+  const el = $('login-id');
+  el.type = adm ? 'email' : 'tel';
+  el.inputMode = adm ? 'email' : 'tel';
+  el.placeholder = adm ? 'admin@gmail.com' : '010-1234-5678';
+  el.value = ''; $('login-pw').value = '';
+  $('login-mode-link').textContent = adm ? '← 학생 로그인' : '관리자 로그인';
+  $('login-foot').textContent = adm ? '관리자 계정으로만 로그인할 수 있습니다' : '계정은 관리자가 등록합니다. 초기 비밀번호는 담당 선생님께 받으세요';
+}
+function openFindPw(){
+  const adm = loginMode==='admin';
+  $('findpw-label').textContent = adm ? '관리자 이메일' : '전화번호';
+  const el = $('findpw-email');
+  el.type = adm ? 'email' : 'tel';
+  el.placeholder = adm ? 'admin@gmail.com' : '010-1234-5678';
+  el.value = ''; $('findpw-result').innerHTML = '';
+  openModal('findpw-modal');
+}
+function maskEmail(e){
+  const [u,d] = String(e).split('@');
+  return (u.length<=2 ? u[0]+'*' : u.slice(0,2)+'*'.repeat(Math.min(u.length-2,5))) + '@' + (d||'');
+}
+/* 비밀번호 찾기 — Firebase가 실제로 메일을 발송 (학생은 전화번호로 이메일을 찾아 보낸다) */
 async function sendResetLink(){
-  const email = $('findpw-email').value.trim();
+  const id = $('findpw-email').value.trim();
   const box = $('findpw-result');
-  if(!email){ box.innerHTML = '<div class="note">이메일을 입력해주세요.</div>'; return; }
+  const adm = loginMode==='admin';
+  if(!id){ box.innerHTML = '<div class="note">'+(adm?'이메일':'전화번호')+'을(를) 입력해주세요.</div>'; return; }
   if(!window.fb){ box.innerHTML = '<div class="note">Firebase가 아직 로드되지 않았습니다.</div>'; return; }
   try {
+    const email = adm ? id : await resolveLoginEmail(id);
     await window.fb.sendPasswordResetEmail(window.fb.auth, email);
     box.innerHTML = '<div class="note" style="background:var(--good-soft); border-color:var(--good);">'
-      + esc(email) + ' 주소로 재설정 링크를 보냈습니다.<br>메일이 안 보이면 스팸함도 확인해주세요.</div>';
+      + esc(adm ? email : maskEmail(email)) + ' 주소로 재설정 링크를 보냈습니다.<br>메일이 안 보이면 스팸함도 확인해주세요.</div>';
   } catch(e){
-    if(e.code === 'auth/invalid-email') box.innerHTML = '<div class="note">올바른 이메일 형식이 아닙니다.</div>';
-    else box.innerHTML = '<div class="note">발송에 실패했습니다. 가입한 이메일이 맞는지 확인해주세요.</div>';
+    if(e.code === 'app/bad-id') box.innerHTML = '<div class="note">전화번호 형식이 올바르지 않습니다.</div>';
+    else if(e.code === 'app/phone-not-found') box.innerHTML = '<div class="note">등록되지 않은 전화번호입니다. 담당 선생님께 문의하세요.</div>';
+    else if(e.code === 'auth/invalid-email') box.innerHTML = '<div class="note">올바른 이메일 형식이 아닙니다.</div>';
+    else box.innerHTML = '<div class="note">발송에 실패했습니다. 입력한 정보를 확인해주세요.</div>';
   }
 }
 
@@ -6932,6 +6922,7 @@ function setPreviewBanner(text){
 }
 
 /* ===== 로그인 직후 역할 선택 (수동 로그인 1회만) ===== */
+let pendingAdminLogin = false;
 let pendingRoleChoice = false;    // doLogin이 세우고 routeAfterAuth가 소비
 
 function chooseRole(which){
@@ -10074,7 +10065,7 @@ function renderFirebaseGuide(){
 
   <h3 ${h3}>계정 · 권한</h3>
   <ul ${ul}>
-    <li>학생은 로그인 화면의 <b>회원가입</b>으로 신청하고, <b>학생 관리 → 가입 승인 대기</b>에서 승인해야 로그인됩니다.</li>
+    <li>회원가입은 없습니다. 학생 계정은 <b>학생 관리 → 학생 등록</b>에서 관리자가 만들고, 학생은 <b>전화번호 + 초기 비밀번호</b>로 로그인해 첫 로그인 때 비밀번호를 바꿉니다. 관리자는 로그인 화면의 <b>관리자 로그인</b>(이메일)으로 들어갑니다.</li>
     <li>관리자는 코드의 <code>window.ADMIN_UIDS</code>와 Firestore 규칙의 <code>isAdmin()</code>에 UID를 넣어 지정합니다. <b>관리자를 추가할 때는 두 곳을 반드시 함께</b> 수정하세요.</li>
     <li>학생 삭제·거절은 Firestore 문서만 지웁니다. Authentication 계정은 Firebase 콘솔에서 따로 삭제해야 합니다.</li>
     <li><b>학생 화면 보기</b>(미리보기)에서는 제출·오답노트 기록·임시 저장·텔레그램 알림이 모두 일어나지 않습니다. 마음껏 눌러봐도 됩니다.</li>
@@ -10213,9 +10204,7 @@ service cloud.firestore {
     match /students/{uid} {
       allow get: if isAdmin() || isMe(uid);
       allow list: if isAdmin();
-      allow create: if isAdmin() || (isMe(uid)
-        &amp;&amp; request.resource.data.approved == false
-        &amp;&amp; request.resource.data.keys().hasOnly(['name','grade','school','phone','email','approved']));
+      allow create: if isAdmin();   // 회원가입 없음 — 학생 문서는 관리자만 생성
       // 학생은 이메일과 '초기 비밀번호 변경 완료' 표시(mustChangePw=false)만 바꿀 수 있음
       allow update: if isAdmin() || (isMe(uid)
         &amp;&amp; request.resource.data.diff(resource.data).affectedKeys().hasOnly(['email','mustChangePw'])
@@ -10294,7 +10283,8 @@ service cloud.firestore {
         &amp;&amp; id == request.resource.data.nid + '|' + request.auth.uid;
     }
   }
-}</pre>
+}
+</pre>
 
   <h3 ${h3}>규칙을 고칠 때 — 실제로 터졌던 함정</h3>
   <ul ${ul}>
@@ -10391,7 +10381,6 @@ window.fb = {
 
 /* 새로고침해도 로그인 유지 — 라우팅은 routeAfterAuth() 하나로 통일 */
 onAuthStateChanged(auth, async user => {
-  if(window.signupInProgress) return;
   if(!user){ window.handleSignedOut(); return; }
   console.log("로그인 유지 중:", user.uid);
   try { await window.routeAfterAuth(user); }
