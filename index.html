@@ -1381,29 +1381,24 @@ body.quiet-preview .sidebar{ padding-top:22px; }
            <div class="tabpanel active" id="tab-t-main">
         <div class="page-head"><div><h1 id="stu-greeting">메인</h1><p>오늘 할 일과 나의 학습 현황을 한눈에 확인하세요.</p></div></div>
         <div id="stu-notice-area"></div>
-        <div id="stu-deadline-card" class="card" style="border-left:4px solid var(--accent);"></div>
 
-        <div class="form-grid">
-          <div class="card">
-            <h3>내 출석 현황</h3>
-            <div id="stu-attendance-summary"></div>
-          </div>
-          <div class="card">
-            <h3>과제·시험 진행률</h3>
+        <div class="sm-hero">
+          <div class="card sm-next" id="stu-next-class"></div>
+          <div class="card sm-task">
+            <div id="stu-deadline-card"></div>
             <div id="stu-progress-summary"></div>
           </div>
+        </div>
+
+        <div class="card sm-att">
+          <h3>출석</h3>
+          <div id="stu-attendance-summary"></div>
+          <div id="stu-sched-list"></div>
         </div>
 
         <div class="card">
           <h3>내 시험 성적 추이</h3>
           <div id="stu-trend-chart"></div>
-        </div>
-
-        <div class="card">
-          <h3>수업 일정 · 출석</h3>
-          <table class="schedule-table">
-            <tr><th>날짜</th><th>요일</th><th>시간</th><th>교실</th><th>예상 진도</th><th>출석</th><th>사유</th></tr>
-            <tbody id="t-schedule-table"></tbody></table>
         </div>
       </div>
 
@@ -3716,24 +3711,77 @@ function renderAttendance(){
     sum.textContent = `출석 ${p} · 지각 ${l} · 결석 ${a} · 미체크 ${n}`;
   }
 }
+function todayStr(){
+  const d = new Date(), p = n=>String(n).padStart(2,'0');
+  return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate());
+}
+/* 한 회차의 출석 상태: p 출석 · l 지각 · a 결석 · n 지난 수업인데 미체크 · f 오늘이거나 앞으로의 수업 */
+function attState(sc, uid, ts){
+  const rec = (attendance[sc.sid]||{})[uid];
+  if(rec && rec.status) return rec.status;
+  return String(sc.date) >= ts ? 'f' : 'n';
+}
+const ATT_LABEL = { p:'출석', l:'지각', a:'결석', n:'미체크', f:'예정' };
 function renderStudentSchedule(){
-  const tb=$('t-schedule-table'); if(!tb || !currentStudent) return;
-    const visible = (adminViewAll ? schedules.slice()
+  const list = $('stu-sched-list'); if(!list || !currentStudent) return;
+  const ts = todayStr();
+  const visible = (adminViewAll ? schedules.slice()
     : schedules.filter(s => inClass(s,currentStudent)))
-    .sort((a,b)=> (a.week||1)-(b.week||1) || (String(a.date)<String(b.date)?-1:1));
-  let lastWeek = null;
-  tb.innerHTML = visible.map(s=>{
-    const wk = s.week||1;
-    const weekHead = wk!==lastWeek ? `<tr class="week-row"><td colspan="7">${weekText(wk)}</td></tr>` : '';
-    lastWeek = wk;
-    const f=fmtDate(s.date), rec=(attendance[s.sid]||{})[currentStudent];
-    const st = rec? rec.status : null;
-    const b = st ? `<span class="att-badge ${st}">${st==='p'?'출석':st==='l'?'지각':'결석'}</span>`
-                 : '<span class="att-badge n">-</span>';
-    const reason = (rec && rec.reason) ? esc(rec.reason).replace(/\n/g,'<br>') : '-';
-    return weekHead + `<tr><td><b>${f.label}</b></td><td>${f.day}</td><td>${esc(s.time)}</td><td>${esc(s.room)}</td>
-      <td>${esc(s.topic)||'-'}</td><td>${b}</td><td style="font-size:12px;">${reason}</td></tr>`;
-  }).join('') || '<tr><td colspan="7" class="empty-hint">등록된 일정이 없습니다.</td></tr>';
+    .sort((a,b)=> (a.week||1)-(b.week||1) || (String(a.date)<String(b.date)?-1:1) || String(a.time).localeCompare(String(b.time)));
+
+  /* 다음 수업 */
+  const nx = $('stu-next-class');
+  if(nx){
+    const up = visible.filter(x=>String(x.date)>=ts)
+      .sort((a,b)=> String(a.date)<String(b.date)?-1 : String(a.date)>String(b.date)?1 : String(a.time).localeCompare(String(b.time)))[0];
+    if(up){
+      const dt = new Date(up.date+'T00:00:00'), d = dday(up.date);
+      const md = isNaN(dt) ? esc(up.date) : (dt.getMonth()+1)+'.'+String(dt.getDate()).padStart(2,'0');
+      const dayK = isNaN(dt) ? '' : DAYS[dt.getDay()]+'요일';
+      nx.innerHTML = `
+        <div class="nx-top"><span>다음 수업</span><em>${d===0?'오늘':'D-'+d}</em></div>
+        <div class="nx-date"><b>${md}</b><span>${dayK}${up.time? ' '+esc(up.time):''}</span></div>
+        <div class="nx-meta">${up.room? esc(up.room)+' · ' : ''}${weekText(up.week||1)}</div>
+        <div class="nx-topic">${up.topic ? esc(up.topic) : '예상 진도가 아직 정해지지 않았어요'}</div>`;
+    } else {
+      nx.innerHTML = `<div class="nx-top"><span>다음 수업</span></div><div class="nx-empty">예정된 수업이 없어요</div>`;
+    }
+  }
+
+  if(!visible.length){ list.innerHTML = '<p class="empty-hint">등록된 일정이 없습니다.</p>'; return; }
+
+  /* 한눈에 보는 도장판 + 주차별 목록 */
+  const weeks = [];
+  visible.forEach(sc=>{
+    const w = sc.week||1;
+    let g = weeks.find(x=>x.w===w); if(!g){ g = {w, items:[]}; weeks.push(g); }
+    g.items.push(sc);
+  });
+  const stamps = weeks.map(g=>`<div class="sa-wk">${g.items.map(sc=>{
+      const st = attState(sc, currentStudent, ts), dt = new Date(sc.date+'T00:00:00');
+      const tip = (isNaN(dt)?sc.date:(dt.getMonth()+1)+'/'+dt.getDate()+' '+DAYS[dt.getDay()])+' · '+ATT_LABEL[st];
+      return `<i class="sa-stamp ${st}" title="${esc(tip)}"></i>`;
+    }).join('')}</div>`).join('');
+
+  const rows = weeks.map(g=>{
+    const rowsHtml = g.items.map(sc=>{
+      const st = attState(sc, currentStudent, ts), rec = (attendance[sc.sid]||{})[currentStudent];
+      const dt = new Date(sc.date+'T00:00:00'), bad = isNaN(dt);
+      const label = (st==='f' && String(sc.date)===ts) ? '오늘' : ATT_LABEL[st];
+      const reason = (rec && rec.reason) ? `<div class="sa-reason">${esc(rec.reason).replace(/\n/g,'<br>')}</div>` : '';
+      return `<div class="sa-row${String(sc.date)===ts?' today':''}">
+        <div class="sa-date"><b>${bad?esc(sc.date):(dt.getMonth()+1)+'.'+String(dt.getDate()).padStart(2,'0')}</b><span>${bad?'':DAYS[dt.getDay()]}</span></div>
+        <div class="sa-info">
+          <div class="sa-topic">${sc.topic ? esc(sc.topic) : '<span class="muted">진도 미정</span>'}</div>
+          <div class="sa-meta">${[sc.time, sc.room].filter(Boolean).map(esc).join(' · ') || '&nbsp;'}</div>
+          ${reason}
+        </div>
+        <span class="sa-chip ${st}">${label}</span>
+      </div>`;
+    }).join('');
+    return `<div class="sa-week"><span>${weekText(g.w)}</span><i></i></div>${rowsHtml}`;
+  }).join('');
+  list.innerHTML = `<div class="sa-stamps">${stamps}</div>${rows}`;
 }
 /* =========================================================
    공지사항
@@ -7375,7 +7423,8 @@ function renderStudentDashboard(s){
 
   // 인사
   const g = $('stu-greeting');
-  if(g) g.textContent = adminViewAll ? '관리자 전체 보기' : `안녕하세요, ${s.name}님` + (s.classId ? (s.className ? ' · '+s.className : '') : ' · 아직 수업에 배정되지 않았어요');
+  if(g) g.innerHTML = adminViewAll ? '관리자 전체 보기'
+    : `안녕하세요, ${esc(s.name)}님` + (s.classId ? (s.className ? ` <span class="sm-class">${esc(s.className)}</span>` : '') : ' <span class="sm-class none">수업 미배정</span>');
 
   const myHw   = tasks.hw.filter(isAssignedToMe);
   const myExam = tasks.exam.filter(isAssignedToMe);
@@ -7424,29 +7473,32 @@ function renderStudentDashboard(s){
   /* ── 출석 요약 ── */
   const attBox = $('stu-attendance-summary');
   if(attBox){
-    let p=0,l=0,a=0,n=0;
+    const ts = todayStr();
+    let p=0,l=0,a=0,n=0,f=0;
     mySch.forEach(sc=>{
-      const who = adminViewAll
-        ? targetsOf(sc).map(st=>st.uid)
-        : [currentStudent];
+      const who = adminViewAll ? targetsOf(sc).map(st=>st.uid) : [currentStudent];
       who.forEach(u=>{
-        const v = ((attendance[sc.sid]||{})[u]||{}).status;
-        if(v==='p')p++; else if(v==='l')l++; else if(v==='a')a++; else n++;
+        const v = attState(sc, u, ts);
+        if(v==='p')p++; else if(v==='l')l++; else if(v==='a')a++; else if(v==='n')n++; else f++;
       });
     });
     const checked = p+l+a;
     const rate = checked? Math.round(p/checked*100) : null;
     attBox.innerHTML = `
-      ${adminViewAll ? '<div style="font-size:12px; color:var(--muted); margin-bottom:6px;">전체 학생 · 전체 회차 합산</div>' : ''}
-      <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:8px;">
-        <span class="badge good">출석 ${p}</span>
-        <span class="badge part">지각 ${l}</span>
-        <span class="badge warn">결석 ${a}</span>
-        <span class="badge muted">미체크 ${n}</span>
+      ${adminViewAll ? '<div class="sa-note">전체 학생 · 전체 회차 합산</div>' : ''}
+      <div class="sa-top">
+        <div class="sa-ring" role="img" aria-label="출석률 ${rate===null?'없음':rate+'%'}">
+          <svg viewBox="0 0 36 36"><circle class="bg" cx="18" cy="18" r="15.9"/><circle class="fg" cx="18" cy="18" r="15.9" stroke-dasharray="${rate||0} 100"/></svg>
+          <div class="sa-rate">${rate===null ? '<b>-</b>' : `<b>${rate}</b><span>%</span>`}</div>
+        </div>
+        <div class="sa-counts">
+          <div><b>${p}</b><span><i class="sa-dot p"></i>출석</span></div>
+          <div><b>${l}</b><span><i class="sa-dot l"></i>지각</span></div>
+          <div><b>${a}</b><span><i class="sa-dot a"></i>결석</span></div>
+          ${n? `<div><b>${n}</b><span><i class="sa-dot n"></i>미체크</span></div>` : ''}
+        </div>
       </div>
-      <div style="font-size:13px; color:var(--ink-soft);">
-        ${rate===null ? '아직 체크된 출석이 없습니다.' : `출석률 <b style="color:var(--brand);">${rate}%</b> (${p}/${checked})`}
-      </div>`;
+      <div class="sa-sub">${rate===null ? '아직 체크된 출석이 없습니다.' : `체크된 ${checked}회 중 ${p}회 출석`}${f? ` · 남은 수업 ${f}회` : ''}</div>`;
   }
 
   /* ── 진행률 요약 ── */
@@ -7466,15 +7518,8 @@ function renderStudentDashboard(s){
     });
     const pct = total? Math.round(done/total*100) : 0;
     progBox.innerHTML = `
-      <div style="font-size:13px; color:var(--ink-soft); margin-bottom:8px;">
-        ${adminViewAll
-          ? `전체 제출 대상 ${total}건 중 <b style="color:var(--brand);">${done}건</b> 제출 완료`
-          : `전체 ${total}개 중 <b style="color:var(--brand);">${done}개</b> 제출 완료`}
-      </div>
-      <div style="background:var(--paper-line); border-radius:20px; height:14px; overflow:hidden;">
-        <div style="background:var(--brand); height:100%; width:${pct}%; transition:width .3s;"></div>
-      </div>
-      <div style="text-align:right; font-size:12px; color:var(--muted); margin-top:4px;">${pct}%</div>`;
+      <div class="pg-line"><span>${adminViewAll ? '전체 제출' : '과제·시험 제출'}</span><b>${done} / ${total}</b></div>
+      <div class="pg-bar" role="progressbar" aria-valuenow="${pct}" aria-valuemin="0" aria-valuemax="100"><i style="width:${pct}%"></i></div>`;
   }
 
   /* ── 성적 추이 (관리자는 시험별 평균) ── */
@@ -9205,6 +9250,7 @@ function renderFirebaseGuide(){
 
   <h3 ${h3}>학생 화면에서 달라진 것</h3>
   <ul ${ul}>
+    <li><b>메인 화면</b> — 맨 위에 <b>다음 수업</b>(날짜·시간·교실·예상 진도)과 <b>가장 급한 할 일 · 제출 진행률</b>이 나란히 보입니다. 그 아래 <b>출석</b> 상자 하나에 출석률, 출석·지각·결석 횟수, 회차별 도장판, 주차별 일정이 모두 들어가서 옆으로 스크롤할 일이 없습니다. 지난 수업인데 출석이 체크되지 않았다면 '미체크', 앞으로의 수업은 '예정'으로 보입니다.</li>
     <li><b>진행률 바</b> — 풀이 화면 상단에 "답한 문제 8 / 12"가 따라다니고, 다 풀면 초록으로 바뀝니다.</li>
     <li><b>★ 나중에 볼 문제</b> — 문항 오른쪽 별을 누르면 표시됩니다. 상단 <b>★ 표시 N개</b>를 누르면 그 문제로 차례로 이동하고, 제출 전에 다시 확인하라고 알려줍니다.</li>
     <li><b>미응답 경고</b> — 빈 문항이 있으면 제출 확인창에 <b>번호까지</b> 알려줍니다.</li>

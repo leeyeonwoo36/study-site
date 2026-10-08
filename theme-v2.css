@@ -314,3 +314,88 @@ body.on-login{
 .modal .card, .modal-bg .card{box-shadow:none;}
 #shell-student .card{transition:none;}
 #shell-student .card:hover{box-shadow:0 1px 2px rgba(31,64,54,.06), 0 6px 18px rgba(31,64,54,.06);}
+
+/* =========================================================
+   학생 메인 — 다음 수업 · 할 일 · 출석(한 상자)
+   ========================================================= */
+#shell-student .page-head h1{font-size:28px; font-weight:800; letter-spacing:-.035em; display:flex; align-items:center; gap:10px; flex-wrap:wrap;}
+.sm-class{font-size:13px; font-weight:700; color:var(--brand); background:var(--brand-soft); padding:4px 12px; border-radius:99px; letter-spacing:0;}
+.sm-class.none{color:var(--accent); background:var(--accent-soft);}
+#tab-t-main .card h3::before{display:none;}
+#tab-t-main .card h3{font-size:15px; font-weight:800; margin-bottom:14px;}
+#tab-t-main .card:hover{box-shadow:0 1px 2px rgba(31,64,54,.06), 0 6px 18px rgba(31,64,54,.06);}
+
+.sm-hero{display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:16px; margin-bottom:16px;}
+.sm-hero .card{margin:0;}
+#shell-student .card.sm-next{background:var(--brand-deep); color:#fff; border:0; position:relative; overflow:hidden;}
+.sm-next::after{content:''; position:absolute; right:-46px; top:-46px; width:160px; height:160px; border-radius:50%; background:rgba(255,255,255,.06); pointer-events:none;}
+.nx-top{display:flex; justify-content:space-between; align-items:center; font-size:13px; font-weight:600; color:rgba(255,255,255,.76);}
+.nx-top em{font-style:normal; background:#E8B04B; color:#2B2008; font-weight:800; padding:3px 12px; border-radius:99px; font-size:12px;}
+.nx-date{display:flex; align-items:baseline; gap:12px; margin-top:16px; flex-wrap:wrap;}
+.nx-date b{font-size:48px; font-weight:800; letter-spacing:-.045em; line-height:1;}
+.nx-date span{font-size:15px; font-weight:600; color:rgba(255,255,255,.9);}
+.nx-meta{margin-top:8px; font-size:13px; color:rgba(255,255,255,.68);}
+.nx-topic{margin-top:14px; padding-top:14px; border-top:1px solid rgba(255,255,255,.16); font-size:14.5px; font-weight:600; line-height:1.55;}
+.nx-empty{margin-top:22px; font-size:16px; font-weight:700;}
+
+#shell-student .sm-task{display:flex; flex-direction:column; justify-content:space-between;}
+#shell-student .sm-task #stu-deadline-card{border:0 !important; background:none !important; padding:0; box-shadow:none;}
+#stu-progress-summary{margin-top:18px; padding-top:16px; border-top:1px solid var(--paper-line);}
+.pg-line{display:flex; justify-content:space-between; font-size:13px; color:var(--ink-soft); margin-bottom:8px;}
+.pg-line b{color:var(--brand); font-weight:800;}
+.pg-bar{height:8px; border-radius:99px; background:var(--paper-line); overflow:hidden;}
+.pg-bar i{display:block; height:100%; background:var(--brand); border-radius:99px; transition:width .4s;}
+
+.sa-note{font-size:12px; color:var(--muted); margin-bottom:10px;}
+.sa-top{display:flex; align-items:center; gap:28px; flex-wrap:wrap;}
+.sa-ring{position:relative; width:96px; height:96px; flex:none;}
+.sa-ring svg{width:100%; height:100%; transform:rotate(-90deg);}
+.sa-ring circle{fill:none; stroke-width:3.4;}
+.sa-ring .bg{stroke:var(--paper-line);}
+.sa-ring .fg{stroke:var(--brand); stroke-linecap:round;}
+.sa-rate{position:absolute; inset:0; display:flex; align-items:center; justify-content:center; gap:1px;}
+.sa-rate b{font-size:27px; font-weight:800; letter-spacing:-.03em;}
+.sa-rate span{font-size:12px; color:var(--muted); margin-top:8px;}
+.sa-counts{display:flex; gap:26px; flex-wrap:wrap;}
+.sa-counts > div{display:flex; flex-direction:column; gap:3px;}
+.sa-counts b{font-size:27px; font-weight:800; line-height:1.1; letter-spacing:-.03em;}
+.sa-counts span{font-size:12.5px; color:var(--ink-soft); display:flex; align-items:center; gap:6px;}
+.sa-dot{width:8px; height:8px; border-radius:50%; display:inline-block;}
+.sa-dot.p,.sa-stamp.p{background:var(--brand);}
+.sa-dot.l,.sa-stamp.l{background:#E0A21B;}
+.sa-dot.a,.sa-stamp.a{background:#C2453B;}
+.sa-dot.n,.sa-stamp.n{background:#C9D1CD;}
+.sa-sub{font-size:13px; color:var(--ink-soft); margin-top:14px;}
+.sa-stamps{display:flex; flex-wrap:wrap; gap:8px 16px; margin:16px 0 2px; padding:14px 16px; background:var(--paper); border-radius:14px;}
+.sa-wk{display:flex; gap:4px;}
+.sa-stamp{width:22px; height:22px; border-radius:7px; display:block;}
+.sa-stamp.f{border:1.5px dashed #B3C0BA; background:transparent;}
+
+.sa-week{display:flex; align-items:center; gap:12px; margin:22px 0 2px; font-size:13px; font-weight:800; color:var(--brand);}
+.sa-week i{flex:1; height:1px; background:var(--paper-line);}
+.sa-row{display:grid; grid-template-columns:62px minmax(0,1fr) auto; gap:14px; align-items:center; padding:12px 0; border-bottom:1px solid var(--paper-line);}
+.sa-row.today{background:linear-gradient(90deg, rgba(232,176,75,.16), transparent 80%); margin:0 -10px; padding-left:10px; padding-right:10px; border-radius:12px; border-bottom-color:transparent;}
+.sa-date{display:flex; flex-direction:column; line-height:1.25;}
+.sa-date b{font-size:17px; font-weight:800; letter-spacing:-.02em;}
+.sa-date span{font-size:12px; color:var(--muted);}
+.sa-topic{font-size:14.5px; font-weight:700; line-height:1.4; overflow-wrap:anywhere;}
+.sa-topic .muted{color:var(--muted); font-weight:500;}
+.sa-meta{font-size:12.5px; color:var(--muted); margin-top:2px;}
+.sa-reason{margin-top:6px; font-size:12.5px; color:var(--ink-soft); background:var(--paper); padding:6px 10px; border-radius:8px; overflow-wrap:anywhere;}
+.sa-chip{font-size:12px; font-weight:800; padding:4px 12px; border-radius:99px; white-space:nowrap;}
+.sa-chip.p{background:var(--good-soft); color:var(--good);}
+.sa-chip.l{background:#FFF1CF; color:#8E6200;}
+.sa-chip.a{background:#FCE6E2; color:#B23B2E;}
+.sa-chip.n{background:#EDF0EE; color:#6F7B76;}
+.sa-chip.f{border:1px solid var(--border); color:var(--muted); background:#fff;}
+
+@media (max-width:760px){
+  .sm-hero{grid-template-columns:1fr;}
+  #shell-student .page-head h1{font-size:23px;}
+  .nx-date b{font-size:42px;}
+  .sa-top{gap:20px;}
+  .sa-counts{gap:20px;}
+  .sa-row{grid-template-columns:54px minmax(0,1fr) auto; gap:10px;}
+}
+#shell-student .sm-task #stu-deadline-card > div:first-child{font-size:13px !important; color:var(--ink-soft) !important; font-weight:600; margin-bottom:8px !important;}
+#shell-student .sm-task #stu-deadline-card > div:nth-child(2){font-size:20px !important; font-weight:800 !important; letter-spacing:-.025em; line-height:1.3;}
