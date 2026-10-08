@@ -577,6 +577,13 @@ body.quiet-preview .sidebar{ padding-top:22px; }
   .week-tabs{display:flex; gap:6px; flex-wrap:wrap; margin-bottom:14px;}
   .week-row td{background:var(--brand-soft); color:var(--brand); font-weight:800; font-size:13px; text-align:left !important;}
   .week-head{margin:18px 0 8px; font-size:15px; color:var(--brand);}
+  .tgt-box{border:1px dashed var(--border); border-radius:12px; padding:10px 12px; background:#fff;}
+  .tgt-modes{display:flex; gap:16px; flex-wrap:wrap; font-size:13.5px;}
+  .tgt-modes label{display:inline-flex; align-items:center; gap:6px; margin:0; font-weight:600; cursor:pointer;}
+  .tgt-quick{display:flex; gap:6px; align-items:center; margin:10px 0 6px;}
+  .tgt-chips{display:flex; flex-wrap:wrap; gap:6px;}
+  .tgt-chip{display:inline-flex; align-items:center; gap:5px; padding:6px 11px; border:1px solid var(--border); border-radius:999px; font-size:13px; cursor:pointer; background:#fff; margin:0;}
+  .tgt-chip.on{background:var(--brand-soft); border-color:var(--brand); color:var(--brand); font-weight:700;}
   .wc-row{display:flex; align-items:center; justify-content:space-between; gap:8px; padding:9px 0; border-bottom:1px solid var(--paper-line);}
   .wc-row:last-child{border-bottom:none;}
 </style>
@@ -733,6 +740,8 @@ body.quiet-preview .sidebar{ padding-top:22px; }
               <div><label>교실</label><input type="text" id="sch-room" placeholder="예: 본관 401호"></div>
               <div><label>예상 진도</label><input type="text" id="sch-topic" placeholder="예: 국제기구 1~2장"></div>
             </div>
+            <label style="margin-top:10px;">출석 대상 학생</label>
+            <div class="tgt-box" id="sch-targets" style="margin-bottom:10px;"></div>
             <button class="btn" style="width:100%;" onclick="addSchedule()">이 주차에 회차 추가</button>
             <table class="schedule-table" style="margin-top:14px;"><tr><th>날짜</th><th>요일</th><th>시간</th><th>교실</th><th>예상 진도</th><th></th></tr>
               <tbody id="schedule-table"></tbody></table>
@@ -815,7 +824,8 @@ body.quiet-preview .sidebar{ padding-top:22px; }
               <div><label>수업</label><select id="hw-class" onchange="fillWeekSelect('hw')"></select></div>
               <div><label>주차</label><select id="hw-week"></select></div>
             </div>
-            <p class="note" style="margin-top:6px;">선택한 수업에 배정된 학생이 자동으로 대상이 됩니다.</p>
+            <label style="margin-top:10px;">대상 학생</label>
+            <div class="tgt-box" id="hw-targets"></div>
           </div>
 
           <div class="field-section">
@@ -869,7 +879,8 @@ body.quiet-preview .sidebar{ padding-top:22px; }
               <div><label>수업</label><select id="ex-class" onchange="fillWeekSelect('ex')"></select></div>
               <div><label>주차</label><select id="ex-week"></select></div>
             </div>
-            <p class="note" style="margin-top:6px;">선택한 수업에 배정된 학생이 자동으로 대상이 됩니다.</p>
+            <label style="margin-top:10px;">대상 학생</label>
+            <div class="tgt-box" id="ex-targets"></div>
           </div>
 
           <div class="field-section">
@@ -931,7 +942,8 @@ body.quiet-preview .sidebar{ padding-top:22px; }
               <div><label>수업</label><select id="video-class" onchange="fillWeekSelect('video')"></select></div>
               <div><label>주차</label><select id="video-week"></select></div>
             </div>
-            <p class="note" style="margin-top:6px;">선택한 수업에 배정된 학생이 자동으로 대상이 됩니다.</p>
+            <label style="margin-top:10px;">대상 학생</label>
+            <div class="tgt-box" id="video-targets"></div>
           </div>
     <button class="btn" id="video-submit-btn" style="width:100%; margin-top:16px;" onclick="addVideo()">영상 등록</button>
     <button class="btn ghost" id="video-cancel-btn" style="width:100%; margin-top:8px; display:none;" onclick="cancelVideoEdit()">수정 취소</button>
@@ -1461,6 +1473,8 @@ body.quiet-preview .sidebar{ padding-top:22px; }
       <div><label>교실</label><input type="text" id="esc-room" placeholder="예: 본관 401호"></div>
       <div><label>예상 진도</label><input type="text" id="esc-topic" placeholder="예: 국제기구 1~2장"></div>
     </div>
+    <label style="margin-top:10px;">출석 대상 학생</label>
+    <div class="tgt-box" id="esc-targets" style="margin-bottom:12px;"></div>
     <button class="btn" onclick="saveScheduleEdit()">저장</button>
     <button class="btn ghost" onclick="closeModal('schedule-edit-modal')">취소</button>
   </div>
@@ -1939,7 +1953,20 @@ function classOf(cid){ return classes.find(c=>c.cid===cid) || null; }
 function classNameOf(cid){ const c = classOf(cid); return c ? c.name : ''; }
 function studentClassId(uid){ const st = students.find(x=>x.uid===uid); return st ? (st.classId||null) : null; }
 /* 일정·과제·시험·영상이 이 학생의 수업에 속하는가 */
-function inClass(x, uid){ return !!(x && x.classId) && studentClassId(uid)===x.classId; }
+function inClass(x, uid){
+  if(!(x && x.classId) || studentClassId(uid)!==x.classId) return false;
+  return !(Array.isArray(x.targetUids) && x.targetUids.length) || x.targetUids.includes(uid);   // 대상 학생을 고른 항목은 그 학생만
+}
+/* 항목 x(일정·과제·시험·영상)의 대상 여부 / 대상 학생 목록 */
+function isTarget(x, st){
+  if(!(x && x.classId && st && st.classId===x.classId)) return false;
+  return !(Array.isArray(x.targetUids) && x.targetUids.length) || x.targetUids.includes(st.uid);
+}
+function targetsOf(x){ return students.filter(st=>st.approved && isTarget(x,st)); }
+function tgtBadge(x){
+  const n = (x && Array.isArray(x.targetUids)) ? x.targetUids.length : 0;
+  return n ? `<span class="badge part" title="선택한 학생만">선택 ${n}명</span>` : '';
+}
 function classStudentsOf(cid){ return students.filter(st=>st.approved && cid && st.classId===cid); }
 function weekText(n){ return (Number(n)||1)+'주차'; }
 function classWeekText(x){ return (classNameOf(x.classId) || '(삭제된 수업)') + ' · ' + weekText(x.week); }
@@ -1990,7 +2017,7 @@ function ensureScoreSlots(){
   ['hw','exam'].forEach(kind=>{
     tasks[kind].forEach(t=>{
       scores[kind][t.tid] = scores[kind][t.tid] || {};
-      const targets = students.filter(s=>s.classId && s.classId===t.classId);
+      const targets = students.filter(s=>isTarget(t,s));
       targets.forEach(s=>{
         if(!scores[kind][t.tid][s.uid]) scores[kind][t.tid][s.uid] = {score:'', status:'미완료'};
         if(scores[kind][t.tid][s.uid].status===undefined) scores[kind][t.tid][s.uid].status='미완료';
@@ -3024,6 +3051,61 @@ function goAddForWeek(kind){
   setClassWeek(pfx, c.cid, selWeek);
   setAdminTab('a-'+kind);
 }
+/* ---------- 대상 학생 선택 (수업 전체 / 선택한 학생만) ---------- */
+const tgtState = {};   // pfx -> { cid, all:true, set:Set }
+function tgtClassId(pfx){
+  if(pfx==='sch') return selClassId;
+  if(pfx==='esc'){ const x = schedules.find(z=>z.sid===editScheduleSid); return x ? x.classId : null; }
+  const cs = $(pfx+'-class'); return cs ? cs.value : null;
+}
+function tgtRender(pfx){
+  const box = $(pfx+'-targets'); if(!box) return;
+  const cid = tgtClassId(pfx);
+  let st = tgtState[pfx];
+  if(!st){ st = tgtState[pfx] = { cid, all:true, set:new Set() }; }
+  if(st.cid !== cid){ st.cid = cid; st.set = new Set(); st.all = true; }   // 수업을 바꾸면 처음부터
+  const mem = classStudentsOf(cid);
+  st.set = new Set([...st.set].filter(u=>mem.some(m=>m.uid===u)));
+  if(!mem.length){ box.innerHTML = '<span class="note">이 수업에 배정된 학생이 없습니다.</span>'; return; }
+  box.innerHTML = `
+    <div class="tgt-modes">
+      <label><input type="radio" name="${pfx}-tgt" ${st.all?'checked':''} onchange="tgtMode('${pfx}',true)"> 수업 전체 (${mem.length}명)</label>
+      <label><input type="radio" name="${pfx}-tgt" ${st.all?'':'checked'} onchange="tgtMode('${pfx}',false)"> 학생 선택</label>
+    </div>
+    <div class="tgt-list" style="${st.all?'display:none;':''}">
+      <div class="tgt-quick">
+        <button type="button" class="btn small secondary" onclick="tgtAll('${pfx}',true)">전체 선택</button>
+        <button type="button" class="btn small secondary" onclick="tgtAll('${pfx}',false)">전체 해제</button>
+        <span style="font-size:12.5px; color:var(--muted);">${st.set.size}명 선택</span>
+      </div>
+      <div class="tgt-chips">${mem.map(m=>`<label class="tgt-chip ${st.set.has(m.uid)?'on':''}"><input type="checkbox" ${st.set.has(m.uid)?'checked':''} onchange="tgtToggle('${pfx}','${m.uid}',this.checked)">${esc(m.name)}</label>`).join('')}</div>
+    </div>`;
+}
+function tgtMode(pfx, all){ const st = tgtState[pfx]; if(!st) return; st.all = all; tgtRender(pfx); }
+function tgtAll(pfx, on){
+  const st = tgtState[pfx]; if(!st) return;
+  st.set = new Set(on ? classStudentsOf(st.cid).map(m=>m.uid) : []); tgtRender(pfx);
+}
+function tgtToggle(pfx, uid, on){
+  const st = tgtState[pfx]; if(!st) return;
+  if(on) st.set.add(uid); else st.set.delete(uid);
+  tgtRender(pfx);
+}
+/* 저장용 값: 수업 전체면 [], 선택이면 uid 배열. 선택 모드인데 0명이면 null */
+function tgtRead(pfx){
+  const st = tgtState[pfx];
+  if(!st || st.all) return [];
+  if(!st.set.size){ alert('대상 학생을 한 명 이상 선택하거나 "수업 전체"를 고르세요.'); return null; }
+  const mem = classStudentsOf(st.cid);
+  if(st.set.size >= mem.length) return [];          // 전부 고르면 전체와 같다
+  return [...st.set];
+}
+function tgtSet(pfx, uids){
+  tgtState[pfx] = { cid: tgtClassId(pfx), all: !(uids && uids.length), set: new Set(uids||[]) };
+  tgtRender(pfx);
+}
+function tgtReset(pfx){ delete tgtState[pfx]; tgtRender(pfx); }
+
 /* 과제·시험·영상 폼의 수업/주차 선택 */
 function renderClassSelects(){
   ['hw','ex','video'].forEach(pfx=>{
@@ -3045,6 +3127,7 @@ function fillWeekSelect(pfx, keep){
   for(let i=1;i<=n;i++) html += `<option value="${i}">${weekText(i)}</option>`;
   ws.innerHTML = html || '<option value="">-</option>';
   if(keep && Number(keep)>=1 && Number(keep)<=n) ws.value = String(keep);
+  tgtRender(pfx);
 }
 function setClassWeek(pfx, cid, week){
   const cs = $(pfx+'-class'); if(!cs) return;
@@ -3108,13 +3191,13 @@ function renderWeekContent(){
   $('week-content-title').textContent = `③ ${weekText(selWeek)}의 과제 · 시험 · 영상`;
   const rows = [];
   tasks.hw.filter(t=>t.classId===c.cid && (t.week||1)===selWeek).forEach(t=>rows.push(
-    `<div class="wc-row"><span><span class="badge muted">과제</span> ${esc(t.title)} <span style="color:var(--muted); font-size:12px;">${fmtPeriod(t)}</span></span>
+    `<div class="wc-row"><span><span class="badge muted">과제</span> ${esc(t.title)} ${tgtBadge(t)} <span style="color:var(--muted); font-size:12px;">${fmtPeriod(t)}</span></span>
      <button class="btn small secondary" onclick="startTaskEdit('hw','${t.tid}')">수정</button></div>`));
   tasks.exam.filter(t=>t.classId===c.cid && (t.week||1)===selWeek).forEach(t=>rows.push(
-    `<div class="wc-row"><span><span class="badge part">시험</span> ${esc(t.title)} <span style="color:var(--muted); font-size:12px;">${fmtPeriod(t)}</span></span>
+    `<div class="wc-row"><span><span class="badge part">시험</span> ${esc(t.title)} ${tgtBadge(t)} <span style="color:var(--muted); font-size:12px;">${fmtPeriod(t)}</span></span>
      <button class="btn small secondary" onclick="startTaskEdit('exam','${t.tid}')">수정</button></div>`));
   videos.filter(v=>v.classId===c.cid && (v.week||1)===selWeek).forEach(v=>rows.push(
-    `<div class="wc-row"><span><span class="badge good">영상</span> ${esc(v.title)}</span>
+    `<div class="wc-row"><span><span class="badge good">영상</span> ${esc(v.title)} ${tgtBadge(v)}</span>
      <button class="btn small secondary" onclick="editVideo('${v.vid}')">수정</button></div>`));
   box.innerHTML = rows.join('') || `<p class="empty-hint">${weekText(selWeek)}에 부여된 과제·시험·영상이 없습니다.</p>`;
 }
@@ -3123,8 +3206,11 @@ function addSchedule(){
   const v = id => $(id).value.trim();
   if(!v('sch-date')||!v('sch-time')||!v('sch-room')){ alert('날짜·시간·교실을 입력해주세요.'); return; }
   if(!selClassId || !classOf(selClassId)){ alert('먼저 수업을 선택하세요.'); return; }
-  const data = {date:v('sch-date'), time:v('sch-time'), room:v('sch-room'), topic:v('sch-topic'), classId:selClassId, week:selWeek};
+  tgtRender('sch');
+  const tg = tgtRead('sch'); if(tg===null) return;
+  const data = {date:v('sch-date'), time:v('sch-time'), room:v('sch-room'), topic:v('sch-topic'), classId:selClassId, week:selWeek, targetUids:tg};
   ['sch-date','sch-time','sch-room','sch-topic'].forEach(i=>$(i).value='');
+  tgtReset('sch');
   const { db, collection, doc, setDoc } = window.fb;
   setDoc(doc(collection(db,'schedules')), data).catch(e=>alert('등록 실패: '+e.message));
 }
@@ -3142,13 +3228,15 @@ function openScheduleEdit(sid){
   $('esc-time').value = s.time||'';
   $('esc-room').value = s.room||'';
   $('esc-topic').value = s.topic||'';
+  tgtSet('esc', s.targetUids||[]);
   openModal('schedule-edit-modal');
 }
 function saveScheduleEdit(){
   if(!editScheduleSid) return;
   const date = $('esc-date').value.trim(), time = $('esc-time').value.trim(), room = $('esc-room').value.trim();
   if(!date || !time || !room){ alert('날짜·시간·교실을 입력해주세요.'); return; }
-  const data = { date, time, room, topic: $('esc-topic').value.trim() };
+  const tg = tgtRead('esc'); if(tg===null) return;
+  const data = { date, time, room, topic: $('esc-topic').value.trim(), targetUids: tg };
   closeModal('schedule-edit-modal');
   const { db, doc, updateDoc } = window.fb;
   updateDoc(doc(db,'schedules', editScheduleSid), data).catch(e=>alert('수정 실패: '+e.message));
@@ -3180,6 +3268,7 @@ function findNearestSessionSid(){
   return near || past || next;
 }
 function renderSchedules(){
+  tgtRender('sch');
   const tb = $('schedule-table');
   if(tb){
     const list = schedules.filter(x=>x.classId===selClassId && (x.week||1)===selWeek);
@@ -3187,7 +3276,7 @@ function renderSchedules(){
       const f = fmtDate(s.date);
       return `<tr>
       <td>${f.label}</td><td>${f.day}</td><td>${esc(s.time)}</td>
-      <td>${esc(s.room)}</td><td>${esc(s.topic)||'-'}</td>
+      <td>${esc(s.room)}</td><td>${esc(s.topic)||'-'} ${tgtBadge(s)}</td>
       <td class="row-actions">
         <button class="btn small secondary" onclick="openScheduleEdit('${s.sid}')">수정</button>
         <button class="btn small danger" onclick="deleteSchedule('${s.sid}')">삭제</button>
@@ -3242,7 +3331,7 @@ async function setAllAttendance(status){
   const sid = $('att-session').value;
   const sch = schedules.find(s=>s.sid===sid);
   if(!sid || !sch){ alert('회차를 먼저 선택하세요.'); return; }
-  const targets = students.filter(s=>s.approved && s.classId && s.classId===sch.classId);
+  const targets = targetsOf(sch);
   if(!targets.length){ alert('출석 대상 학생이 없습니다.'); return; }
   if(status===null && !confirm(`${targets.length}명의 출석 기록을 모두 지울까요?\n(사유도 함께 지워집니다)`)) return;
 
@@ -3265,7 +3354,7 @@ function renderAttendance(){
     const sum0 = $('att-summary'); if(sum0) sum0.textContent = '';
     return;
   }
-  const targets = students.filter(s=>s.approved && s.classId && s.classId===sch.classId);
+  const targets = targetsOf(sch);
   tb.innerHTML = targets.map(st=>{
     const rec=(attendance[sid]||{})[st.uid];
     const s = rec ? rec.status : null;
@@ -3435,10 +3524,11 @@ function addVideo(){
   if(!title){ alert('제목을 입력하세요.'); return; }
   if(!yid){ alert('올바른 유튜브 URL이 아닙니다.'); return; }
   const cw = readClassWeek('video'); if(!cw) return;
+  const tg = tgtRead('video'); if(tg===null) return;
   const data = {
     title, youtubeId: yid, url,
     desc: $('video-desc').value.trim(),
-    classId: cw.classId, week: cw.week,
+    classId: cw.classId, week: cw.week, targetUids: tg,
     createdAt: Date.now()
   };
   const editId = editingVideoId;
@@ -3458,13 +3548,14 @@ function editVideo(vid){
   $('video-url').value = v.url||'';
   $('video-desc').value = v.desc||'';
   setClassWeek('video', v.classId, v.week);
+  tgtSet('video', v.targetUids||[]);
   $('video-form-title').textContent = '영상 수정';
   $('video-submit-btn').textContent = '수정 저장';
   $('video-cancel-btn').style.display = 'block';
   setAdminTab('a-video');
 }
 function cancelVideoEdit(){
-  editingVideoId = null;
+  editingVideoId = null; tgtReset('video');
   $('video-form-title').textContent = '영상 등록';
   $('video-submit-btn').textContent = '영상 등록';
   $('video-cancel-btn').style.display = 'none';
@@ -3477,7 +3568,7 @@ function removeVideo(vid){
 function renderVideos(){
   const tb = $('video-table'); if(!tb) return;
   tb.innerHTML = videos.map(v=>{
-    const targetLabel = classWeekText(v);
+    const targetLabel = classWeekText(v) + (Array.isArray(v.targetUids)&&v.targetUids.length ? ' · 선택 '+v.targetUids.length+'명' : '');
     return `<tr>
       <td>${esc(v.title)}${v.desc?`<div style="font-size:12px; color:var(--muted); margin-top:2px;">${esc(v.desc)}</div>`:''}</td>
       <td><img src="https://img.youtube.com/vi/${v.youtubeId}/mqdefault.jpg" style="width:110px; border-radius:6px;"></td>
@@ -5949,6 +6040,7 @@ function startTaskEdit(kind, tid){
   draftQids[kind] = (t.qids||[]).slice();
   renderDraft(kind);
   setClassWeek(prefix, t.classId, t.week);
+  tgtSet(prefix, t.targetUids||[]);
 
   $(kind+'-form-title').textContent = (kind==='hw'?'과제':'시험') + ' 수정';
   $(kind+'-submit-btn').textContent = '수정 저장';
@@ -5959,7 +6051,7 @@ function cancelTaskEdit(kind){
   editTaskId[kind] = null;
   const prefix = kind==='hw' ? 'hw' : 'ex';
   $(prefix+'-title').value=''; $(prefix+'-start').value=''; $(prefix+'-due').value='';
-  draftQids[kind]=[]; renderDraft(kind);
+  draftQids[kind]=[]; renderDraft(kind); tgtReset(prefix);
   $(kind+'-form-title').textContent = (kind==='hw'?'과제':'시험') + ' 등록';
   $(kind+'-submit-btn').textContent = (kind==='hw'?'과제':'시험') + ' 등록';
   $(kind+'-cancel-btn').style.display = 'none';
@@ -5970,6 +6062,7 @@ function cancelTaskEdit(kind){
   if(!title){ alert('제목을 입력하세요.'); return; }
   if(!draftQids[kind].length && !confirm('담긴 문제가 없습니다. 그래도 등록할까요?')) return;
   const cw = readClassWeek(prefix); if(!cw) return;
+  const tg = tgtRead(prefix); if(tg===null) return;
 
   const editId = editTaskId[kind];
   const existing = editId ? tasks[kind].find(x=>x.tid===editId) : null;
@@ -5987,8 +6080,9 @@ function cancelTaskEdit(kind){
     startAt: $(prefix+'-start').value || '',
     due: $(prefix+'-due').value || '',
     qids: draftQids[kind].slice(), pdfName, pdfUrl,
-    classId: cw.classId, week: cw.week
+    classId: cw.classId, week: cw.week, targetUids: tg
   };
+  tgtReset(prefix);
 
   $(prefix+'-title').value=''; $(prefix+'-start').value=''; $(prefix+'-due').value='';
   $(prefix+'-pdf').value='';
@@ -6029,7 +6123,7 @@ function removeTask(kind,tid){
 }
 /* 과제·시험의 실제 대상 학생 (승인된 학생 중 배정된 학생만) */
 function taskTargetStudents(t){
-  return students.filter(s => s.approved && s.classId && s.classId===t.classId);
+  return targetsOf(t);
 }
 function submitCount(t){
   return taskTargetStudents(t).filter(s => submissions[t.tid+'|'+s.uid]).length;
@@ -6314,7 +6408,7 @@ function renderStudentDashboard(s){
     let p=0,l=0,a=0,n=0;
     mySch.forEach(sc=>{
       const who = adminViewAll
-        ? students.filter(st=>st.approved && st.classId && st.classId===sc.classId).map(st=>st.uid)
+        ? targetsOf(sc).map(st=>st.uid)
         : [currentStudent];
       who.forEach(u=>{
         const v = ((attendance[sc.sid]||{})[u]||{}).status;
@@ -7469,7 +7563,7 @@ function renderScoreTable(kind){
   if(!tid){ tb.innerHTML=`<tr><td colspan="${colspan}" class="empty-hint">등록된 항목이 없습니다.</td></tr>`; return; }
   ensureScoreSlots();
   const t = tasks[kind].find(x=>x.tid===tid);
-  const targetStudents = t ? students.filter(s=>s.approved && s.classId && s.classId===t.classId) : [];
+  const targetStudents = t ? targetsOf(t) : [];
 
   tb.innerHTML = targetStudents.map(s=>{
     const rec = (scores[kind][tid]||{})[s.uid] || {score:'',status:'미완료'};
@@ -7808,7 +7902,7 @@ function backupScoresCsv(){
     const row = [s.name, s.grade, s.school, s.phone];
     let done=0, pend=0;
     cols.forEach(({kind,t})=>{
-      const assigned = !!(t.classId && s.classId===t.classId);
+      const assigned = isTarget(t,s);
       if(!assigned){ row.push('-'); return; }          // 배정 안 된 항목
       const sub = submissions[t.tid+'|'+s.uid];
       const rec = (scores[kind][t.tid]||{})[s.uid] || {};
@@ -7848,7 +7942,7 @@ function backupAttendanceCsv(){
     const row = [s.name, s.grade];
     let p=0,l=0,a=0,n=0;
     schedules.forEach(sc=>{
-      const assigned = !!(sc.classId && s.classId===sc.classId);
+      const assigned = isTarget(sc,s);
       if(!assigned){ row.push('-'); return; }
       const rec = (attendance[sc.sid]||{})[s.uid];
       const st = rec ? rec.status : null;
