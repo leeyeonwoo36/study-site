@@ -4948,6 +4948,15 @@ function openPrintOptions(){
 }
 /* 인쇄용 새 창 열기.
    about:blank 대신 사이트 주소가 찍히도록 주소만 바꿔치기한다(내용은 그대로). */
+/* 인쇄 여백: @page 여백을 0으로 두면 브라우저가 머리글·바닥글(날짜, 제목, 주소, 쪽번호)을 찍지 않는다.
+   대신 쪽마다 반복되는 표 머리·바닥(thead/tfoot)으로 위아래 여백을 만들고, 좌우는 칸 안쪽 여백으로 만든다. */
+const PRINT_PAD_CSS = `
+  @page{ size:A4; margin:0; }
+  table.pad{width:100%; border-collapse:collapse; border:0; margin:0;}
+  table.pad>thead>tr>td, table.pad>tfoot>tr>td{height:16mm; padding:0; border:0;}
+  table.pad>tbody>tr>td{padding:0 14mm; border:0; vertical-align:top;}
+  table.pad.brk{break-before:page;}`;
+function padWrap(inner, cls){ return `<table class="pad ${cls||''}"><thead><tr><td></td></tr></thead><tbody><tr><td>${inner}</td></tr></tbody><tfoot><tr><td></td></tr></tfoot></table>`; }
 function openPrintWindow(html, pathLabel){
   const win = window.open('', '_blank');
   if(!win){ alert('팝업이 차단되었습니다. 브라우저 팝업 차단을 해제한 뒤 다시 시도해주세요.'); return null; }
@@ -4988,7 +4997,7 @@ function printWithOptions(){
 <title>${esc(title)}</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
 <style>
-  @page{ size:A4; margin:16mm 14mm; }
+${PRINT_PAD_CSS}
   body{font-family:'Pretendard Variable','Pretendard','Noto Sans KR',-apple-system,sans-serif; color:#111; line-height:1.6; letter-spacing:-.01em; margin:0; -webkit-font-smoothing:antialiased;}
   .sheet-title{font-size:22px; font-weight:900; text-align:center; margin:0 0 4px;}
   .sheet-meta{text-align:center; color:#666; font-size:12px; margin-bottom:18px; padding-bottom:14px; border-bottom:2px solid #111;}
@@ -5033,7 +5042,7 @@ function printWithOptions(){
   }
 </style></head><body>
 <div class="no-print"><button onclick="window.print()">인쇄 / PDF로 저장</button></div>
-${sections.join('')}
+${padWrap(sections.join(''))}
 </body></html>`;
 
   openPrintWindow(html, printPathLabel || '명덕외고-국제정치');
@@ -5148,7 +5157,7 @@ function buildStudentReportHtml(uid){
 <title>${esc(s.name)} 학생 학습관리표</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
 <style>
-  @page{ size:A4; margin:16mm 14mm; }
+${PRINT_PAD_CSS}
   body{font-family:'Pretendard Variable','Pretendard','Noto Sans KR',-apple-system,sans-serif; color:#111; line-height:1.6; letter-spacing:-.01em; margin:0; -webkit-font-smoothing:antialiased;}
   h1{font-size:22px; font-weight:900; margin:0 0 4px;}
   h2{font-size:15px; font-weight:900; margin:22px 0 8px; padding-bottom:6px; border-bottom:2px solid #111;}
@@ -5164,6 +5173,7 @@ function buildStudentReportHtml(uid){
   .no-print button{padding:10px 20px; font-size:14px; cursor:pointer;}
   @media print{ .no-print{display:none;} }
 </style></head><body>
+<table class="pad"><thead><tr><td></td></tr></thead><tbody><tr><td>
 <div class="no-print"><button onclick="window.print()">인쇄 / PDF로 저장</button></div>
 
 <h1>${esc(s.name)} 학생 학습관리표</h1>
@@ -5191,6 +5201,7 @@ function buildStudentReportHtml(uid){
 <h2>시험 성적 추이</h2>
 ${buildTrendSvgMarkup(trendArr)}
 
+</td></tr></tbody><tfoot><tr><td></td></tr></tfoot></table>
 </body></html>`;
 }
 
@@ -6980,7 +6991,6 @@ ${scopeCss(OMR_CSS,'.omrdoc')}
 const PRINT_PROBLEM_CSS = `
   .sheet-title{font-size:22px; font-weight:900; text-align:center; margin:0 0 4px;}
   .sheet-meta{text-align:center; color:#666; font-size:12px; margin-bottom:18px; padding-bottom:14px; border-bottom:2px solid #111;}
-  .probsec{break-before:page;}
   .two-col{column-count:2; column-gap:22px;}
   .q{margin-bottom:18px; break-inside:avoid; -webkit-column-break-inside:avoid;}
   .qnum{font-weight:700; font-size:13.5px; margin-bottom:6px; white-space:pre-wrap;}
@@ -7051,18 +7061,18 @@ function doBundlePrint(){
     if(kind==='hw') hwNo++;
     items.push({ kind, hwNo, title:t.title, n:qs.length, code:taskCodeOf(t) });
     if(!qs.length) return;
-    if(wantProb) sections.push(`<section class="probsec">
+    if(wantProb) sections.push(padWrap(`<section class="probsec">
       <div class="sheet-title">${esc(t.title)}</div>
       <div class="sheet-meta">${esc(c.name)} · ${esc(weekText(selWeek))} · 총 ${qs.length}문항</div>
       <div class="two-col">${qs.map((q,i)=>buildPrintQuestionHtml(q,i+1)).join('')}</div>
-    </section>`);
+    </section>`, 'brk'));
     if(wantOmr) sections.push(omrPagesHtml(t, qs, '', c.name));
   });
   const html = `<!DOCTYPE html><html lang="ko"><head><meta charset="UTF-8">
 <title>${esc(c.name)} ${esc(weekText(selWeek))} 과제 묶음</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
 <style>
-  @page{ size:A4; margin:16mm 14mm; }
+${PRINT_PAD_CSS}
   @page cover{ size:A4; margin:0; }
   @page omr{ size:A4; margin:0; }
   body{font-family:'Pretendard Variable','Pretendard','Noto Sans KR',-apple-system,sans-serif; color:#111; line-height:1.6; letter-spacing:-.01em; margin:0; -webkit-font-smoothing:antialiased;}
@@ -9178,7 +9188,7 @@ function renderFirebaseGuide(){
     <li><b>복수 정답</b> — 정답이 여러 개인 문항은 체크박스로 여러 개를 고릅니다. 문제 등록 · PDF 추출 · AI 생성 · 학생 풀이 · 답안 수정 · 인쇄 <b>모든 화면</b>에서 지원됩니다.</li>
     <li><b>이미지 붙여넣기</b> — 캡처 후 입력칸을 클릭하고 <b>Ctrl+V</b>. "클립보드에서 붙여넣기" 버튼은 https에서만 동작합니다.</li>
     <li><b>문제은행 정렬</b> — <b>최근 등록순</b> / <b>세트·문항 순서</b>. 2026-09-24 이전 문제는 등록 시각 정보가 없어 최근순에서 뒤에 옵니다.</li>
-    <li><b>인쇄</b> — 문제은행에서 선택 → 인쇄하기 → 문제 / 빠른 정답 / 해설을 골라 출력. 각 항목은 새 페이지에서 시작합니다.</li>
+    <li><b>인쇄</b> — 문제은행에서 선택 → 인쇄하기 → 문제 / 빠른 정답 / 해설을 골라 출력. 각 항목은 새 페이지에서 시작합니다. 문제지·묶음·학습관리표는 <b>머리글·바닥글(날짜, 제목, 주소, 쪽번호)이 찍히지 않도록</b> 여백을 직접 만들어 두었으니 인쇄 창에서 따로 끌 필요가 없습니다.</li>
     <li><b>오답노트 인쇄</b> — 학생 상세에서 <b>복습 필요만</b> 또는 <b>전체</b>를 문제지로 뽑습니다. 인쇄 창을 닫으면 문제은행에서 골라둔 선택과 제목이 원래대로 돌아옵니다.</li>
     <li><b>채점 확인</b> — 과제별로 접혀 있고 제목 줄에 제출 인원·채점 대기 건수가 보입니다. 아직 시작 전인 과제는 <b>시작 전</b>으로 표시되며 미제출로 세지 않습니다.</li>
     <li><b>파일 제출 채점</b> — 학생이 사진·PDF만 내면 "채점중"으로 남습니다. <b>성적 관리</b>에서 점수를 입력해야 채점 완료가 되고, 그때 학생에게 정답·해설이 공개됩니다.</li>
