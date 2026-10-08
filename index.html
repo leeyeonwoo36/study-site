@@ -142,6 +142,12 @@
     border-radius:20px; cursor:pointer; font-size:13px; background:#fff;}
   .omr-bubble input{margin:0;}
   .omr-bubble.picked{border-color:var(--brand); background:var(--brand); color:#fff;}
+  .ch-hang{display:flex; gap:.4em; align-items:flex-start; text-align:left;}
+  .ch-hang .ch-n{flex:0 0 auto;}
+  .ch-hang .ch-t{flex:1; min-width:0; line-height:1.55;}
+  .omr-choices.omr-list{flex-direction:column; flex-wrap:nowrap; align-items:stretch; gap:8px;}
+  .omr-bubble:has(.ch-hang){border-radius:14px; align-items:flex-start; text-align:left;}
+  .omr-bubble:has(.ch-hang) input{margin-top:.3em;}
   .choice-line{padding:5px 10px; border-radius:var(--radius); font-size:13px; margin-bottom:3px; border:1px solid transparent;}
   .choice-line.correct{background:var(--good-soft); border-color:var(--good); font-weight:700;}
   .choice-line.mine-wrong{background:var(--accent-soft); border-color:var(--accent);}
@@ -2617,7 +2623,7 @@ function renderAdminWrongPicker(){
         ${q.type==='mc'
           ? `<div style="margin-top:4px;">${(q.choices||[]).map((c,ci)=>{
               const isAns = isAnsChoice(q, ci)
-              return `<div class="choice-line ${isAns?'correct':''}">${CIRCLE[ci]} ${esc(c)}${isAns?' <span class="badge good" style="margin-left:6px;">정답</span>':''}</div>`;
+              return `<div class="choice-line ${isAns?'correct':''}">${chHtml(q,ci,c)}${isAns?' <span class="badge good" style="margin-left:6px;">정답</span>':''}</div>`;
             }).join('')}</div>`
           : `<div class="ans-row"><b>정답:</b> ${esc(q.answer)}</div>`}
         ${q.explain ? `<div class="exam-explain"><b>해설</b><br>${esc(q.explain)}</div>` : ''}
@@ -3731,7 +3737,7 @@ function qsetQuestionHtml(q,n,total){
     <span class="qset-tag type">${q.type==='mc'?'객관식':'단답형'}</span>${esc(q.body)}
     <span class="qset-tag ans">정답 ${esc(answerLabel(q))}</span>
     ${renderPassageBoxHtml(getPassages(q))}
-    ${q.type==='mc'? `<div style="margin-top:4px; color:#4C5875;">${(q.choices||[]).map((c,i)=>CIRCLE[i]+' '+esc(c)).join(' &nbsp; ')}</div>`:''}
+    ${q.type==='mc'? `<div style="margin-top:4px; color:#4C5875;">${(q.choices||[]).map((c,i)=>isGnChoices(q)?CIRCLE[i]+' '+esc(c):'<div>'+chHtml(q,i,c)+'</div>').join(isGnChoices(q)?' &nbsp; ':'')}</div>`:''}
     ${q.explain? `<div style="color:#8993AA; font-size:12px; margin-top:4px;">해설: ${esc(q.explain)}</div>`:''}</div>`;
 }
  /* Firestore는 중첩 배열 저장 불가 → 저장 시 {cells:[]} 객체 배열로 변환 */
@@ -3939,14 +3945,24 @@ function circleLabel(a){
   return list.length ? list.map(n=>CIRCLE[n-1]).join('') : '';
 }
 
+/* 선지 표시: ㄱㄴㄷ 조합형은 그대로, 문장형은 번호 아래로 줄이 맞게(내어쓰기) */
+function isGnChoices(q){
+  const cs = (q&&q.choices)||[];
+  return cs.length>0 && cs.every(c=>/^[\sㄱ-ㅎ,，、·ㆍ./]+$/.test(String(c==null?'':c)));
+}
+function chHtml(q, i, c){
+  if(isGnChoices(q)) return CIRCLE[i]+' '+esc(c);
+  return `<span class="ch-hang"><span class="ch-n">${CIRCLE[i]}</span><span class="ch-t">${esc(c)}</span></span>`;
+}
+
 /* OMR 선지 (체크박스, 여러 개 선택) */
 function omrChoicesHtml(q, name, mine){
   const picked = parseAnsList(mine);
-  return `<div class="omr-choices">${(q.choices||[]).map((c,ci)=>{
+  return `<div class="omr-choices${isGnChoices(q)?'':' omr-list'}">${(q.choices||[]).map((c,ci)=>{
     const on = picked.includes(ci+1);
     return `<label class="omr-bubble ${on?'picked':''}">
       <input type="checkbox" name="${name}" value="${ci+1}" ${on?'checked':''}
-        onchange="this.parentElement.classList.toggle('picked', this.checked)">${CIRCLE[ci]} ${esc(c)}</label>`;
+        onchange="this.parentElement.classList.toggle('picked', this.checked)">${chHtml(q,ci,c)}</label>`;
   }).join('')}</div>`;
 }
 function readOmrChoices(name){
@@ -4447,7 +4463,7 @@ function renderBank(){
         </div>
         <b>${esc(q.body)}</b>
         ${renderPassageBoxHtml(getPassages(q))}
-        ${q.type==='mc'? `<div style="margin-top:4px; color:#4C5875;">${(q.choices||[]).map((c,i)=>CIRCLE[i]+' '+esc(c)).join('<br>')}</div>`:''}
+        ${q.type==='mc'? `<div style="margin-top:4px; color:#4C5875;">${(q.choices||[]).map((c,i)=>'<div>'+chHtml(q,i,c)+'</div>').join('')}</div>`:''}
         <div style="margin-top:6px; font-size:12.5px;"><b>정답:</b> ${esc(answerLabel(q))}</div>
         ${q.explain? `<div class="exam-explain" style="margin-top:6px;">${esc(q.explain)}</div>`:''}
         <div style="margin-top:8px;">
@@ -4569,6 +4585,9 @@ function printWithOptions(){
   .passage img{break-inside:avoid;}
   .choices{margin-top:5px; font-size:13px;}
   .choice{margin-bottom:2px;}
+  .ch-hang{display:flex; gap:.4em; align-items:flex-start;}
+  .ch-hang .ch-n{flex:0 0 auto;}
+  .ch-hang .ch-t{flex:1; min-width:0;}
   .short-answer-line{border-bottom:1px solid #999; display:block; margin-top:8px; height:1.6em;}
 
   .back-title{font-size:18px; font-weight:900; margin:0 0 14px; padding-bottom:8px; border-bottom:2px solid #111;}
@@ -4611,7 +4630,7 @@ function buildPrintQuestionHtml(q, n){
 
   let body;
   if(q.type==='mc'){
-    const choices = (q.choices||[]).map((c,i)=>`<div class="choice">${CIRCLE[i]} ${esc(c)}</div>`).join('');
+    const choices = (q.choices||[]).map((c,i)=>`<div class="choice">${chHtml(q,i,c)}</div>`).join('');
     body = `<div class="choices">${choices}</div>`;
   } else {
     body = `<div class="short-answer-line"></div>`;
@@ -4827,7 +4846,7 @@ function renderPicker(){
       <div style="margin-top:8px; padding-top:8px; border-top:1px dashed var(--border);"
            onclick="event.preventDefault();">
         ${renderPassageBoxHtml(ps)}
-        ${q.type==='mc'? `<div style="margin-top:4px; color:#4C5875;">${(q.choices||[]).map((c,i)=>CIRCLE[i]+' '+esc(c)).join('<br>')}</div>`:''}
+        ${q.type==='mc'? `<div style="margin-top:4px; color:#4C5875;">${(q.choices||[]).map((c,i)=>'<div>'+chHtml(q,i,c)+'</div>').join('')}</div>`:''}
         <div style="margin-top:6px; font-size:12.5px;"><b>정답:</b> ${esc(answerLabel(q))}</div>
         ${q.explain? `<div class="exam-explain" style="margin-top:6px;">${esc(q.explain)}</div>`:''}
       </div>` : '';
@@ -4894,7 +4913,7 @@ function renderDraft(kind){
         <div style="margin:6px 0 6px 34px; padding:8px 10px; background:var(--paper); border:1px solid var(--border); border-radius:var(--radius);">
           <div style="font-weight:700; margin-bottom:6px;">${esc(q.body)}</div>
           ${renderPassageBoxHtml(getPassages(q))}
-          ${q.type==='mc'? `<div style="margin-top:4px; color:#4C5875;">${(q.choices||[]).map((c,i2)=>CIRCLE[i2]+' '+esc(c)).join('<br>')}</div>`:''}
+          ${q.type==='mc'? `<div style="margin-top:4px; color:#4C5875;">${(q.choices||[]).map((c,i2)=>'<div>'+chHtml(q,i2,c)+'</div>').join('')}</div>`:''}
           <div style="margin-top:6px; font-size:12.5px;"><b>정답:</b> ${esc(answerLabel(q))}</div>
           ${q.explain? `<div class="exam-explain" style="margin-top:6px;">${esc(q.explain)}</div>`:''}
         </div>` : '';
@@ -6454,7 +6473,7 @@ function renderWrongNote(){
     const detail = isOpen ? `
       <div style="margin-top:8px; padding-top:8px; border-top:1px dashed var(--border);">
         ${renderPassageBoxHtml(getPassages(q))}
-        ${q.type==='mc'? `<div style="margin-top:4px; color:#4C5875;">${(q.choices||[]).map((c,ci)=>CIRCLE[ci]+' '+esc(c)).join('<br>')}</div>`:''}
+        ${q.type==='mc'? `<div style="margin-top:4px; color:#4C5875;">${(q.choices||[]).map((c,ci)=>'<div>'+chHtml(q,ci,c)+'</div>').join('')}</div>`:''}
         <p class="note" style="margin-top:8px;">정답·해설은 아래 "원본 다시 풀기" 또는 "변형 문제 풀기"로 채점을 완료하면 확인할 수 있습니다.</p>
       </div>` : '';
     return `<div class="bank-item">
@@ -7051,7 +7070,7 @@ function openReview(kind,tid,stuUid,isAdmin){
       const isMine = !isPhoto && mineList.includes(ci+1);
       const isMineWrong = isMine && !isAns;
       return `<div class="choice-line ${isAns?'correct':''} ${isMineWrong?'mine-wrong':''}">
-        ${CIRCLE[ci]} ${esc(c)} ${isAns?'<span class="badge good" style="margin-left:6px;">정답</span>':''}
+        ${chHtml(q,ci,c)} ${isAns?'<span class="badge good" style="margin-left:6px;">정답</span>':''}
         ${isMine?`<span class="badge ${isMineWrong?'warn':'muted'}" style="margin-left:6px;">내 선택</span>`:''}</div>`;
     }).join('') : '';
 
