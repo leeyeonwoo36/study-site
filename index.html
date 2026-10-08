@@ -410,6 +410,24 @@
     border-radius:0; padding:12px 14px; margin-bottom:8px; background:#fff;}
   .variant-meta{font-size:11.5px; color:var(--muted); margin-bottom:6px;}
 
+/* 문항 통계 · 복제 */
+.stats-table td{vertical-align:top; white-space:normal;}
+.st-bar{height:8px; border-radius:20px; background:var(--paper-line); overflow:hidden; min-width:80px;}
+.st-bar > i{display:block; height:100%; background:var(--good);}
+.st-bar.low > i{background:var(--accent);}
+.st-dist{display:flex; flex-direction:column; gap:3px; font-size:12px;}
+.st-dist .d{display:flex; align-items:center; gap:6px;}
+.st-dist .d b{width:20px;}
+.st-dist .d .bar{flex:1; height:6px; background:var(--paper-line); border-radius:6px; overflow:hidden; min-width:60px;}
+.st-dist .d .bar i{display:block; height:100%; background:#b8c2d6;}
+.st-dist .d.ans .bar i{background:var(--good);}
+.st-dist .d.ans b{color:var(--good);}
+.st-dist .d.top-wrong .bar i{background:var(--accent);}
+.st-sum{display:flex; gap:10px; flex-wrap:wrap;}
+.st-sum .box{flex:1; min-width:120px; border:1px solid var(--border); border-radius:12px; padding:10px 14px; background:#fff;}
+.st-sum .box small{display:block; color:var(--muted); font-size:12px;}
+.st-sum .box strong{font-size:20px;}
+.dup-opt{display:flex; align-items:center; gap:8px; margin-top:12px; font-size:13.5px; font-weight:600; cursor:pointer;}
 /* 필기(펜) 레이어 */
 .omr-q{position:relative;}
 .ink-cv{position:absolute; left:0; top:0; width:100%; height:100%; z-index:3; pointer-events:none; touch-action:auto;}
@@ -711,6 +729,7 @@ body.quiet-preview .sidebar{ padding-top:22px; }
           <div class="nav-sub">
             <button class="admin-nav" data-tab="a-grading" onclick="setAdminTab('a-grading')">채점 확인 <span id="nav-grading-badge"></span></button>
             <button class="admin-nav" data-tab="a-scores" onclick="setAdminTab('a-scores')">성적 관리</button>
+            <button class="admin-nav" data-tab="a-stats" onclick="setAdminTab('a-stats')">문항 통계</button>
             <button class="admin-nav" data-tab="a-preview" onclick="setAdminTab('a-preview')">학생 화면 보기</button>
             <button class="admin-nav" data-tab="a-firebase" onclick="setAdminTab('a-firebase')">운영 안내</button>
           </div>
@@ -1234,6 +1253,26 @@ body.quiet-preview .sidebar{ padding-top:22px; }
       </div>
 
       <!-- 성적 관리 -->
+      <div class="tabpanel" id="tab-a-stats">
+        <div class="page-head"><div><h1>문항 통계</h1><p>과제·시험별로 문항 정답률과 선지별 선택 분포를 봅니다. 온라인 OMR로 제출한 답안만 집계합니다.</p></div></div>
+        <div class="card">
+          <div class="form-grid">
+            <div><label>과제 · 시험</label><select id="stats-task" onchange="renderStats()"></select></div>
+            <div><label>정렬</label>
+              <select id="stats-sort" onchange="renderStats()">
+                <option value="order">문항 순서</option>
+                <option value="hard">정답률 낮은 순</option>
+              </select></div>
+          </div>
+          <div id="stats-summary" style="margin-top:14px;"></div>
+        </div>
+        <div class="card">
+          <table class="stats-table">
+            <tr><th>번호</th><th>문제</th><th>정답</th><th>정답률</th><th>선택 분포</th></tr>
+            <tbody id="stats-table"></tbody></table>
+        </div>
+      </div>
+
       <div class="tabpanel" id="tab-a-scores">
         <div class="page-head"><div><h1>성적 관리</h1><p>과제·시험별로 학생 점수를 직접 입력해 누적 관리합니다.</p></div></div>
         <div class="card">
@@ -1553,6 +1592,24 @@ body.quiet-preview .sidebar{ padding-top:22px; }
     <button class="btn ghost" onclick="closeModal('admin-wrong-picker-modal')">닫기</button>
   </div>
 </div>
+<!-- 과제·시험 복제 -->
+<div class="modal-bg" id="dup-modal">
+  <div class="modal">
+    <button class="modal-close" onclick="closeModal('dup-modal')">✕</button>
+    <h3 id="dup-heading">복제</h3>
+    <div class="form-grid full"><div><label>제목</label><input type="text" id="dup-title"></div></div>
+    <div class="form-grid">
+      <div><label>복제할 수업</label><select id="dup-class" onchange="renderDupWeeks()"></select></div>
+      <div></div>
+    </div>
+    <label style="margin-top:10px;">복제할 주차 (여러 개 선택 가능)</label>
+    <div class="tgt-chips" id="dup-weeks"></div>
+    <label class="dup-opt"><input type="checkbox" id="dup-shift" checked> 시작·마감 일시를 주차 차이만큼 옮기기 (1주 = 7일)</label>
+    <p class="note" style="margin-top:8px;">문항 구성은 그대로 복사됩니다. 첨부 PDF와 대상 학생 선택은 복사하지 않고, 같은 수업 안에서 복제할 때만 대상 학생을 유지합니다.</p>
+    <button class="btn" style="width:100%; margin-top:10px;" onclick="doDuplicateTask()">복제하기</button>
+  </div>
+</div>
+
 <!-- 학생 문제 풀이 -->
 <div class="modal-bg" id="solve-modal">
   <div class="modal wide">
@@ -1896,6 +1953,7 @@ function setAdminTab(id){
   if(id==='a-bank') renderBank();
   if(id==='a-ai') renderAiSetOptions();
   if(id==='a-grading') renderGradingTable();
+  if(id==='a-stats') renderStats();
   syncNavSects();
   closeNavPopups();
 }
@@ -2043,6 +2101,7 @@ function renderAll(){
   renderTasks(); renderBank(); renderScoreSelects();
   renderScoreTable('hw'); renderScoreTable('exam');
   renderGradingTable(); renderStudentSite();
+  if($('tab-a-stats') && $('tab-a-stats').classList.contains('active')) renderStats();
 }
 
 const CLOUDINARY_CLOUD_NAME = 'vuszb14k';
@@ -3205,10 +3264,10 @@ function renderWeekContent(){
   const rows = [];
   tasks.hw.filter(t=>t.classId===c.cid && (t.week||1)===selWeek).forEach(t=>rows.push(
     `<div class="wc-row"><span><span class="badge muted">과제</span> ${esc(t.title)} ${tgtBadge(t)} <span style="color:var(--muted); font-size:12px;">${fmtPeriod(t)}</span></span>
-     <button class="btn small secondary" onclick="startTaskEdit('hw','${t.tid}')">수정</button></div>`));
+     <span><button class="btn small secondary" onclick="startTaskEdit('hw','${t.tid}')">수정</button> <button class="btn small secondary" onclick="openDuplicateTask('hw','${t.tid}')">복제</button></span></div>`));
   tasks.exam.filter(t=>t.classId===c.cid && (t.week||1)===selWeek).forEach(t=>rows.push(
     `<div class="wc-row"><span><span class="badge part">시험</span> ${esc(t.title)} ${tgtBadge(t)} <span style="color:var(--muted); font-size:12px;">${fmtPeriod(t)}</span></span>
-     <button class="btn small secondary" onclick="startTaskEdit('exam','${t.tid}')">수정</button></div>`));
+     <span><button class="btn small secondary" onclick="startTaskEdit('exam','${t.tid}')">수정</button> <button class="btn small secondary" onclick="openDuplicateTask('exam','${t.tid}')">복제</button></span></div>`));
   videos.filter(v=>v.classId===c.cid && (v.week||1)===selWeek).forEach(v=>rows.push(
     `<div class="wc-row"><span><span class="badge good">영상</span> ${esc(v.title)} ${tgtBadge(v)}</span>
      <button class="btn small secondary" onclick="editVideo('${v.vid}')">수정</button></div>`));
@@ -6291,6 +6350,7 @@ function renderTasks(){
     <td><span class="badge muted">제출 ${submitCount(t)}/${targetCount}</span></td>
     <td class="row-actions">
       <button class="btn small secondary" onclick="startTaskEdit('${kind}','${t.tid}')">수정</button>
+      <button class="btn small secondary" onclick="openDuplicateTask('${kind}','${t.tid}')">복제</button>
       <button class="btn small danger" onclick="removeTask('${kind}','${t.tid}')">삭제</button>
     </td></tr>`;
   };
@@ -6300,10 +6360,151 @@ function renderTasks(){
     || '<tr><td colspan="7" class="empty-hint">등록된 시험이 없습니다.</td></tr>';
 }
   
+/* =========================================================
+   문항 통계
+   ========================================================= */
+function fillStatsSelect(){
+  const sel = $('stats-task'); if(!sel) return;
+  const prev = sel.value;
+  const opt = (kind,t)=>`<option value="${kind}|${t.tid}">[${kind==='hw'?'과제':'시험'}] ${esc(t.title)} · ${esc(classWeekText(t))}</option>`;
+  const list = tasks.hw.map(t=>opt('hw',t)).concat(tasks.exam.map(t=>opt('exam',t)));
+  sel.innerHTML = list.join('') || '<option value="">(등록된 과제·시험이 없습니다)</option>';
+  if(prev && [...sel.options].some(o=>o.value===prev)) sel.value = prev;
+}
+function renderStats(){
+  const sel = $('stats-task'), tb = $('stats-table'), sum = $('stats-summary'); if(!sel||!tb||!sum) return;
+  fillStatsSelect();
+  const [kind,tid] = (sel.value||'').split('|');
+  const t = kind && tasks[kind] ? tasks[kind].find(x=>x.tid===tid) : null;
+  if(!t){ sum.innerHTML=''; tb.innerHTML='<tr><td colspan="5" class="empty-hint">과제나 시험을 선택하세요.</td></tr>'; return; }
+  const byId = new Map(questions.map(q=>[q.qid,q]));
+  const qs = (t.qids||[]).map(id=>byId.get(id)).filter(Boolean);
+  const targets = taskTargetStudents(t);
+  const subs = targets.map(st=>submissions[t.tid+'|'+st.uid]).filter(Boolean);
+  const omr = subs.filter(x=>x.mode==='omr' && x.answers);
+  const fileOnly = subs.length - omr.length;
+
+  const rows = qs.map((q,i)=>{
+    const answered = omr.filter(x=>x.answers[q.qid]!==undefined && String(x.answers[q.qid])!=='');
+    const n = omr.length;
+    const correct = omr.filter(x=>isCorrect(q, x.answers[q.qid]===undefined?'':x.answers[q.qid])).length;
+    const rate = n ? correct/n : null;
+    let dist = '';
+    let topWrong = null;
+    if(q.type==='mc'){
+      const counts = (q.choices||[]).map(()=>0); let blank = 0;
+      omr.forEach(x=>{
+        const list = parseAnsList(x.answers[q.qid]);
+        if(!list.length) blank++;
+        list.forEach(k=>{ if(counts[k-1]!==undefined) counts[k-1]++; });
+      });
+      let max = -1;
+      counts.forEach((c,ci)=>{ if(!isAnsChoice(q,ci) && c>max && c>0){ max = c; topWrong = ci; } });
+      dist = '<div class="st-dist">' + counts.map((c,ci)=>{
+        const pct = n ? Math.round(c/n*100) : 0;
+        const cls = isAnsChoice(q,ci) ? 'ans' : (ci===topWrong ? 'top-wrong' : '');
+        return `<div class="d ${cls}"><b>${CIRCLE[ci]}</b><span class="bar"><i style="width:${pct}%"></i></span><span>${c}명 (${pct}%)</span></div>`;
+      }).join('') + (blank ? `<div class="d"><b>—</b><span>무응답 ${blank}명</span></div>` : '') + '</div>';
+    } else {
+      const m = new Map();
+      omr.forEach(x=>{
+        const v = String(x.answers[q.qid]===undefined?'':x.answers[q.qid]).trim();
+        if(v && !isCorrect(q,v)) m.set(v,(m.get(v)||0)+1);
+      });
+      const top = [...m.entries()].sort((a,b)=>b[1]-a[1]).slice(0,3);
+      dist = top.length ? '<div class="st-dist">자주 나온 오답: ' + top.map(([v,c])=>`${esc(v)} (${c}명)`).join(', ') + '</div>' : '<span style="color:var(--muted); font-size:12px;">오답 없음</span>';
+    }
+    return { i, q, n, correct, rate, dist };
+  });
+  if($('stats-sort').value==='hard') rows.sort((a,b)=> (a.rate===null)-(b.rate===null) || (a.rate??2)-(b.rate??2));
+
+  const rated = rows.filter(r=>r.rate!==null);
+  const avg = rated.length ? Math.round(rated.reduce((a,r)=>a+r.rate,0)/rated.length*100) : null;
+  const hardest = rated.length ? rated.slice().sort((a,b)=>a.rate-b.rate)[0] : null;
+  sum.innerHTML = `<div class="st-sum">
+    <div class="box"><small>OMR 제출</small><strong>${omr.length} / ${targets.length}명</strong></div>
+    <div class="box"><small>평균 정답률</small><strong>${avg===null?'-':avg+'%'}</strong></div>
+    <div class="box"><small>가장 어려웠던 문항</small><strong>${hardest?('문제 '+(hardest.i+1)+' · '+Math.round(hardest.rate*100)+'%'):'-'}</strong></div>
+  </div>` + (fileOnly ? `<p class="note" style="margin-top:8px;">파일(사진·PDF)로만 제출한 ${fileOnly}명은 문항별 집계에서 제외했습니다.</p>` : '');
+
+  tb.innerHTML = rows.map(r=>{
+    const pct = r.rate===null ? null : Math.round(r.rate*100);
+    const body = String(r.q.body||'').replace(/\s+/g,' ');
+    return `<tr>
+      <td><b>${r.i+1}</b></td>
+      <td style="max-width:260px;">${esc(body.length>46 ? body.slice(0,46)+'…' : body)}</td>
+      <td>${esc(answerLabel(r.q))}</td>
+      <td style="min-width:110px;">${pct===null ? '-' : `<b>${pct}%</b> <span style="color:var(--muted); font-size:12px;">(${r.correct}/${r.n})</span><div class="st-bar ${pct<50?'low':''}" style="margin-top:4px;"><i style="width:${pct}%"></i></div>`}</td>
+      <td>${r.dist}</td></tr>`;
+  }).join('') || '<tr><td colspan="5" class="empty-hint">이 과제에는 문항이 없습니다.</td></tr>';
+}
+
+/* =========================================================
+   과제 · 시험 복제
+   ========================================================= */
+let dupSrc = null;
+function openDuplicateTask(kind, tid){
+  const t = tasks[kind].find(x=>x.tid===tid); if(!t) return;
+  if(!classes.length){ alert('먼저 수업을 개설하세요.'); return; }
+  dupSrc = { kind, tid };
+  $('dup-heading').textContent = (kind==='hw'?'과제':'시험') + ' 복제';
+  $('dup-title').value = t.title + ' (복사)';
+  $('dup-class').innerHTML = classes.map(c=>`<option value="${c.cid}">${esc(c.name)}</option>`).join('');
+  $('dup-class').value = classOf(t.classId) ? t.classId : classes[0].cid;
+  $('dup-shift').checked = !!(t.startAt || t.due);
+  renderDupWeeks();
+  openModal('dup-modal');
+}
+function renderDupWeeks(){
+  const c = classOf($('dup-class').value); const box = $('dup-weeks'); if(!c||!box) return;
+  const t = dupSrc ? tasks[dupSrc.kind].find(x=>x.tid===dupSrc.tid) : null;
+  const n = Math.max(1, c.weekCount||1);
+  let html = '';
+  for(let i=1;i<=n;i++){
+    const isSrc = t && t.classId===c.cid && (t.week||1)===i;
+    html += `<label class="tgt-chip" style="${isSrc?'opacity:.55;':''}"><input type="checkbox" class="dup-wk" value="${i}">${weekText(i)}${isSrc?' (원본)':''}</label>`;
+  }
+  box.innerHTML = html;
+  box.onchange = e=>{ if(e.target.classList.contains('dup-wk')) e.target.parentElement.classList.toggle('on', e.target.checked); };
+}
+function shiftLocalDt(str, days){
+  if(!str || !days) return str||'';
+  const d = new Date(str); if(isNaN(d)) return str;
+  d.setDate(d.getDate()+days);
+  const p = n=>String(n).padStart(2,'0');
+  return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+function doDuplicateTask(){
+  if(!dupSrc) return;
+  const t = tasks[dupSrc.kind].find(x=>x.tid===dupSrc.tid); if(!t) return;
+  const title = $('dup-title').value.trim();
+  if(!title){ alert('제목을 입력하세요.'); return; }
+  const cid = $('dup-class').value;
+  const weeks = [...document.querySelectorAll('#dup-weeks .dup-wk:checked')].map(x=>Number(x.value));
+  if(!cid || !weeks.length){ alert('복제할 주차를 하나 이상 선택하세요.'); return; }
+  const shift = $('dup-shift').checked;
+  const { db, collection, doc, setDoc } = window.fb;
+  const same = t.classId===cid;
+  const jobs = weeks.map(w=>{
+    const days = shift ? (w-(t.week||1))*7 : 0;
+    const data = {
+      kind: t.kind || dupSrc.kind, title,
+      startAt: shiftLocalDt(t.startAt, days), due: shiftLocalDt(t.due, days),
+      qids: (t.qids||[]).slice(), pdfName:'', pdfUrl:null,
+      classId: cid, week: w, targetUids: same && Array.isArray(t.targetUids) ? t.targetUids.slice() : []
+    };
+    return setDoc(doc(collection(db,'tasks')), data);
+  });
+  Promise.all(jobs).then(()=>{
+    closeModal('dup-modal'); dupSrc = null;
+    alert(`${weeks.length}개를 복제했습니다. 날짜와 대상 학생은 각 항목의 수정에서 다시 확인하세요.`);
+  }).catch(e=>alert('복제 실패: '+e.message));
+}
+
 function showAssignedStudents(kind, tid){
   const t = tasks[kind].find(x=>x.tid===tid);
   if(!t) return;
-  const list = classStudentsOf(t.classId);
+  const list = targetsOf(t);
 
   $('view-assignees-title').textContent = t.title;
   $('view-assignees-count').textContent = `${classWeekText(t)} · 학생 ${list.length}명`;
@@ -8184,6 +8385,8 @@ function renderFirebaseGuide(){
     <li><b>파일 제출 채점</b> — 학생이 사진·PDF만 내면 "채점중"으로 남습니다. <b>성적 관리</b>에서 점수를 입력해야 채점 완료가 되고, 그때 학생에게 정답·해설이 공개됩니다.</li>
     <li><b>현장 제출</b> — 종이로 받은 과제는 채점 확인 탭에서 직접 기록합니다. 문항별 O/X를 찍으면 점수·완료 여부가 반영되고 틀린 문항은 오답노트에 등록됩니다.</li>
     <li><b>모바일 메뉴</b> — 하단에 대분류 4개(수업·출제·문제·채점·확인)와 로그아웃이 있습니다. 대분류를 누르면 위로 세부 메뉴가 뜨고, 고르거나 바깥을 누르면 닫힙니다.</li>
+    <li><b>문항 통계</b> — 채점·확인 → 문항 통계. 과제·시험을 고르면 문항별 정답률, 선지별 선택 분포, 가장 많이 고른 오답이 보입니다. 정답률 낮은 순으로 정렬하면 수업에서 다시 짚을 문제를 바로 찾을 수 있습니다. 파일(사진·PDF)로만 낸 제출은 집계에서 빠집니다.</li>
+    <li><b>과제·시험 복제</b> — 과제 관리·시험 관리 목록 또는 수업·주차 화면의 <b>복제</b> 버튼. 수업과 주차(여러 개 가능)를 고르면 문항 구성이 그대로 복사되고, 시작·마감 일시는 주차 차이만큼 옮길 수 있습니다. 첨부 PDF는 복사하지 않습니다(한쪽을 지울 때 파일이 같이 지워지는 것을 막기 위해).</li>
     <li><b>공지사항</b> — 학생 메인 맨 위에 표시됩니다. 본문에 붙인 주소는 자동으로 링크가 되고 새 탭에서 열립니다. <b>중요</b>로 체크하면 강조되고 맨 위에 고정됩니다.</li>
   </ul>
 
@@ -8241,7 +8444,7 @@ function renderFirebaseGuide(){
   <ul ${ul}>
     <li><b>관리자용 AI 변형 문제 관리</b> — 학생별 변형 문제 모아 보기, 문제은행에 추가, 인쇄 <i>(미구현)</i></li>
     <li><b>마감 리포트</b> — 과제 마감 후 제출/미제출 명단을 텔레그램으로 <i>(동작 확인 중)</i></li>
-    <li>문항별 정답률 통계, 과제 복제 (주차 간·수업 간)</li>
+    <li>영상 복제, 학생별 소그룹, 정답 데이터 분리(보안)</li>
     <li>"일부완료" 명칭 정리 — 지금은 "일부만 정답"이라는 뜻인데 "일부만 제출"로 오해할 수 있음</li>
     <li>정답 데이터를 학생이 못 읽는 컬렉션으로 분리 (보안)</li>
     <li>공지사항을 수업별로 보내기, 수업 구조 이전의 숨겨진 옛 데이터 정리</li>
