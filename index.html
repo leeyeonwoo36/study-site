@@ -473,6 +473,13 @@
 #solve-body.ink-on .ink-tools{display:inline-flex;}
 .ink-bar .ink-dot{width:26px; height:26px; padding:0; border-radius:50%; border:2px solid #fff; box-shadow:0 0 0 1px var(--border);}
 .ink-bar .ink-dot.on{box-shadow:0 0 0 2px var(--brand);}
+.ink-bar .ink-sep{width:1px; height:20px; background:var(--border); margin:0 2px;}
+.ink-bar .ink-wd{width:34px; height:28px; padding:0; display:inline-flex; align-items:center; justify-content:center;}
+.ink-bar .ink-wd i{display:block; width:18px; background:var(--ink); border-radius:3px;}
+.ink-bar .ink-wd.on{background:var(--card); border-color:var(--brand); box-shadow:0 0 0 1px var(--brand);}
+.ink-bar .ink-wd.on i{background:var(--brand);}
+.ink-bar .ink-hlc{display:none; gap:5px; align-items:center;}
+.ink-bar .ink-hdot{width:22px; height:22px;}
 /* 풀이 화면 진행률 바 */
 .solve-progress{position:sticky; top:0; z-index:5; background:var(--card);
   border-bottom:1px solid var(--border); padding:10px 0 12px; margin-bottom:6px;}
@@ -2062,10 +2069,32 @@ function applyTheme(t){
   document.documentElement.setAttribute('data-theme', t==='dark' ? 'dark' : 'light');
   document.querySelectorAll('.theme-btn').forEach(b=>{ b.textContent = t==='dark' ? '라이트 모드' : '다크 모드'; });
 }
+/* 클립보드 복사: Clipboard API가 막힌 환경(권한·http·iframe)에서는 textarea + execCommand로 대체 */
+function copyText(text){
+  const fallback = ()=>{
+    const ta = document.createElement('textarea');
+    ta.value = text; ta.setAttribute('readonly','');
+    ta.style.cssText = 'position:fixed; left:0; top:0; width:1px; height:1px; opacity:0;';
+    document.body.appendChild(ta); ta.focus(); ta.select(); ta.setSelectionRange(0, text.length);
+    let ok = false; try{ ok = document.execCommand('copy'); }catch(e){}
+    ta.remove(); return ok;
+  };
+  if(navigator.clipboard && navigator.clipboard.writeText && window.isSecureContext){
+    return navigator.clipboard.writeText(text).then(()=>true, ()=>fallback());
+  }
+  return Promise.resolve(fallback());
+}
+function selectNode(el){
+  try{ const r = document.createRange(); r.selectNodeContents(el); const sel = getSelection(); sel.removeAllRanges(); sel.addRange(r); }catch(e){}
+}
 function copyRulesFull(btn){
   const el = $('rules-full'); if(!el) return;
-  const done = ok => { const o = btn.textContent; btn.textContent = ok ? '복사했어요' : '복사 실패 — 직접 선택해 복사하세요'; setTimeout(()=>{ btn.textContent = o; }, 1800); };
-  try{ navigator.clipboard.writeText(el.textContent).then(()=>done(true), ()=>done(false)); }catch(e){ done(false); }
+  const o = btn.dataset.label || (btn.dataset.label = btn.textContent);
+  copyText(el.textContent).then(ok=>{
+    if(!ok) selectNode(el);                       // 실패하면 전체를 선택해 두어 Ctrl+C만 누르면 되게
+    btn.textContent = ok ? '복사했어요 ✓' : '복사 실패 — 전체 선택했어요. Ctrl+C(⌘C)를 눌러주세요';
+    setTimeout(()=>{ btn.textContent = o; }, ok ? 1800 : 4000);
+  });
 }
 function toggleTheme(){
   const n = document.documentElement.getAttribute('data-theme')==='dark' ? 'light' : 'dark';
@@ -8536,8 +8565,12 @@ function updateSolveProgress(){
    - 이 기기(브라우저)에만 임시 저장되고 제출 내용에는 포함되지 않는다
    ========================================================= */
 const LASER_MS = 900;   // 레이저 자국이 사라지기까지 걸리는 시간
-const INK = { laser:{}, raf:0, on:false, tool:'pen', color:'#1f2937', finger:false, data:{}, undo:[], key:null, saveTimer:null, cvs:{}, ro:null };
-const INK_COLORS = ['#1f2937','#2563eb','#dc2626'];
+const INK = { laser:{}, raf:0, on:false, tool:'pen', color:'#1f2937', finger:false, wi:1, hi:0, snap:true, redo:[], data:{}, undo:[], key:null, saveTimer:null, cvs:{}, ro:null };
+const INK_COLORS = ['#1f2937','#2563eb','#dc2626','#16a34a','#9333ea'];
+const INK_WIDTHS = [1.4, 2.4, 4.2];            // 가늘게 · 보통 · 굵게
+const INK_HL = ['#facc15','#fb7185','#4ade80']; // 형광펜 색
+function inkPrefsLoad(){ try{ const o = JSON.parse(localStorage.getItem('ink-prefs')||'{}'); if(INK_COLORS.includes(o.color)) INK.color = o.color; if(o.wi>=0 && o.wi<3) INK.wi = o.wi; if(o.hi>=0 && o.hi<3) INK.hi = o.hi; if(typeof o.finger==='boolean') INK.finger = o.finger; if(typeof o.snap==='boolean') INK.snap = o.snap; }catch(e){} }
+function inkPrefsSave(){ try{ localStorage.setItem('ink-prefs', JSON.stringify({color:INK.color, wi:INK.wi, hi:INK.hi, finger:INK.finger, snap:INK.snap})); }catch(e){} }
 function inkKey(tid){ return 'ink:'+(currentStudent||'x')+':'+tid; }
 function inkLoad(){
   INK.data = {};
@@ -8555,7 +8588,7 @@ function inkSaveSoon(){
 }
 function inkClearStored(tid){ try{ localStorage.removeItem(inkKey(tid)); }catch(e){} }
 function inkInit(tid){
-  INK.on = false; INK.tool = 'pen'; INK.color = INK_COLORS[0]; INK.undo = []; INK.key = inkKey(tid); INK.cvs = {}; INK.laser = {}; INK.laserHeld = null;
+  INK.on = false; INK.tool = 'pen'; INK.color = INK_COLORS[0]; INK.undo = []; INK.redo = []; inkPrefsLoad(); INK.key = inkKey(tid); INK.cvs = {}; INK.laser = {}; INK.laserHeld = null;
   if(INK.ro){ INK.ro.disconnect(); INK.ro = null; }
   inkLoad();
   const body = $('solve-body'); if(!body) return;
@@ -8565,12 +8598,19 @@ function inkInit(tid){
     const bar = document.createElement('div'); bar.className = 'ink-bar'; bar.id = 'ink-bar';
     bar.innerHTML = `<button type="button" id="ink-toggle" onclick="inkToggle()">✏️ 필기</button>
       <span class="ink-tools">
-        ${INK_COLORS.map((c,i)=>`<button type="button" class="ink-dot${i===0?' on':''}" data-c="${c}" style="background:${c}" onclick="inkPickColor('${c}')" title="펜"></button>`).join('')}
+        ${INK_COLORS.map(c=>`<button type="button" class="ink-dot" data-c="${c}" style="background:${c}" onclick="inkPickColor('${c}')" title="펜 색"></button>`).join('')}
+        <span class="ink-sep"></span>
+        ${INK_WIDTHS.map((w,i)=>`<button type="button" class="ink-wd" data-i="${i}" onclick="inkPickWidth(${i})" title="펜 굵기"><i style="height:${Math.max(2,w)}px"></i></button>`).join('')}
+        <span class="ink-sep"></span>
         <button type="button" id="ink-hl" onclick="inkPickTool('hl')">형광펜</button>
+        <span class="ink-hlc">${INK_HL.map((c,i)=>`<button type="button" class="ink-dot ink-hdot" data-i="${i}" style="background:${c}" onclick="inkPickHl(${i})" title="형광펜 색"></button>`).join('')}</span>
         <button type="button" id="ink-er" onclick="inkPickTool('eraser')">지우개</button>
         <button type="button" id="ink-laser" onclick="inkPickTool('laser')" title="굿노트 레이저 포인터처럼, 그린 선이 잠깐 뒤 사라져요">레이저</button>
-        <button type="button" onclick="inkUndo()">↶ 되돌리기</button>
+        <span class="ink-sep"></span>
+        <button type="button" onclick="inkUndo()" title="Ctrl+Z">↶</button>
+        <button type="button" onclick="inkRedo()" title="Ctrl+Shift+Z">↷</button>
         <button type="button" onclick="inkClearAll()">전체 지우기</button>
+        <button type="button" id="ink-snap" onclick="inkToggleSnap()" title="펜을 멈추고 잠깐 누르고 있으면 직선으로 바로잡아요">직선 보정</button>
         <button type="button" id="ink-fg" onclick="inkToggleFinger()">손가락도 쓰기</button>
       </span>`;
     prog.appendChild(bar);
@@ -8601,7 +8641,14 @@ function inkDrawStroke(ctx, st, W, dpr){
   ctx.globalAlpha = st.h ? 0.32 : 1;
   ctx.beginPath(); ctx.moveTo(pts[0]*W, pts[1]*W);
   if(pts.length===2) ctx.lineTo(pts[0]*W+0.1, pts[1]*W);
-  for(let i=2;i<pts.length;i+=2) ctx.lineTo(pts[i]*W, pts[i+1]*W);
+  else if(pts.length<6 || st.line){ for(let i=2;i<pts.length;i+=2) ctx.lineTo(pts[i]*W, pts[i+1]*W); }
+  else{                                    // 중간점을 이은 2차 곡선으로 손떨림을 부드럽게
+    for(let i=2;i<pts.length-2;i+=2){
+      const mx = (pts[i]+pts[i+2])/2, my = (pts[i+1]+pts[i+3])/2;
+      ctx.quadraticCurveTo(pts[i]*W, pts[i+1]*W, mx*W, my*W);
+    }
+    ctx.lineTo(pts[pts.length-2]*W, pts[pts.length-1]*W);
+  }
   ctx.stroke(); ctx.restore();
 }
 /* 레이저 포인터: 저장되지 않고, 그린 선이 점점 흐려지며 사라진다 */
@@ -8648,7 +8695,7 @@ function inkRedraw(qid){
   (INK.data[qid]||[]).forEach(st=>inkDrawStroke(ctx, st, r.width*dpr, dpr));
 }
 function inkBind(cv, qid){
-  let cur = null, erased = false;
+  let cur = null, erased = false, holdT = 0;
   const pos = e=>{ const r = cv.getBoundingClientRect(); return [ (e.clientX-r.left)/r.width, (e.clientY-r.top)/r.width, r ]; };
   const eraseAt = e=>{
     const [x,y,r] = pos(e); const rad = 12/r.width;
@@ -8659,13 +8706,13 @@ function inkBind(cv, qid){
       if(!hit) keep.push(st);
     });
     if(keep.length!==list.length){
-      if(!erased){ INK.undo.push({qid, prev:list.slice()}); erased = true; }
+      if(!erased){ INK.undo.push({qid, prev:list.slice()}); INK.redo = []; erased = true; }
       INK.data[qid] = keep; inkRedraw(qid); inkSaveSoon();
     }
   };
   cv.addEventListener('pointerdown', e=>{
     if(!INK.on) return;
-    if(e.pointerType==='touch' && !INK.finger) return;     // 손가락은 스크롤
+    if(e.pointerType==='touch' && (!INK.finger || INK.sawPen)) return;     // 손가락은 스크롤 (애플펜슬 등 펜을 쓰는 중이면 손바닥 무시)
     e.preventDefault(); cv.setPointerCapture(e.pointerId);
     if(INK.tool==='eraser'){ erased = false; cur = 'erase'; eraseAt(e); return; }
     if(INK.tool==='laser'){
@@ -8674,9 +8721,11 @@ function inkBind(cv, qid){
       tr.push({x:lx, y:ly, t:performance.now(), brk:true}); INK.laserLast = {x:lx, y:ly}; inkLaserKick(); return;
     }
     const [x,y] = pos(e);
-    cur = { c: INK.tool==='hl' ? '#facc15' : INK.color, w: INK.tool==='hl' ? 14 : 2.2, h: INK.tool==='hl', p:[x,y] };
+    const hl = INK.tool==='hl';
+    cur = { c: hl ? INK_HL[INK.hi] : INK.color, w: hl ? 14 : INK_WIDTHS[INK.wi], h: hl, p:[x,y] };
+    if(e.pointerType==='pen') INK.sawPen = true;
     if(!INK.data[qid]) INK.data[qid] = [];
-    INK.undo.push({qid, prev:INK.data[qid].slice()});
+    INK.undo.push({qid, prev:INK.data[qid].slice()}); INK.redo = [];
     INK.data[qid].push(cur);
   });
   cv.addEventListener('pointermove', e=>{
@@ -8690,9 +8739,16 @@ function inkBind(cv, qid){
     }
     const evs = e.getCoalescedEvents ? e.getCoalescedEvents() : [e];
     (evs.length?evs:[e]).forEach(ev=>{ const [x,y] = pos(ev); cur.p.push(x,y); });
+    if(cur.line){ const n = cur.p.length; const ex = cur.p[n-2], ey = cur.p[n-1]; cur.p.length = 2; cur.p.push(ex,ey); }   // 직선 보정 중에는 끝점만 따라간다
     inkRedraw(qid);
+    clearTimeout(holdT);
+    if(INK.snap && cur.p.length>=8 && !cur.line){
+      const st = cur;
+      holdT = setTimeout(()=>{ if(cur!==st) return; const n = st.p.length; st.p = [st.p[0], st.p[1], st.p[n-2], st.p[n-1]]; st.line = true; inkRedraw(qid); }, 550);
+    }
   });
   const end = e=>{
+    clearTimeout(holdT);
     if(!cur) return;
     if(cur==='laser'){ INK.laserHeld = null; inkLaserKick(); }
     else if(cur!=='erase') inkSaveSoon();
@@ -8711,24 +8767,43 @@ function inkRefreshBar(){
   body.classList.toggle('ink-finger', INK.on && INK.finger);
   body.classList.toggle('ink-eraser', INK.tool==='eraser');
   const t = $('ink-toggle'); if(t){ t.classList.toggle('on', INK.on); t.textContent = INK.on ? '✏️ 필기 끄기 (답 선택)' : '✏️ 필기'; }
-  document.querySelectorAll('#ink-bar .ink-dot').forEach(b=>b.classList.toggle('on', INK.tool==='pen' && b.dataset.c===INK.color));
+  document.querySelectorAll('#ink-bar .ink-dot[data-c]').forEach(b=>b.classList.toggle('on', INK.tool==='pen' && b.dataset.c===INK.color));
+  document.querySelectorAll('#ink-bar .ink-wd').forEach(b=>b.classList.toggle('on', +b.dataset.i===INK.wi));
+  document.querySelectorAll('#ink-bar .ink-hdot').forEach(b=>b.classList.toggle('on', INK.tool==='hl' && +b.dataset.i===INK.hi));
+  const hc = document.querySelector('#ink-bar .ink-hlc'); if(hc) hc.style.display = INK.tool==='hl' ? 'inline-flex' : 'none';
+  const sn = $('ink-snap'); if(sn) sn.classList.toggle('on', INK.snap);
   const hl = $('ink-hl'); if(hl) hl.classList.toggle('on', INK.tool==='hl');
   const er = $('ink-er'); if(er) er.classList.toggle('on', INK.tool==='eraser');
   const lz = $('ink-laser'); if(lz) lz.classList.toggle('on', INK.tool==='laser');
   const fg = $('ink-fg'); if(fg) fg.classList.toggle('on', INK.finger);
 }
 function inkToggle(){ INK.on = !INK.on; inkRefreshBar(); }
-function inkPickColor(c){ INK.tool = 'pen'; INK.color = c; inkRefreshBar(); }
+function inkPickColor(c){ INK.tool = 'pen'; INK.color = c; inkPrefsSave(); inkRefreshBar(); }
 function inkPickTool(t){ INK.tool = (INK.tool===t) ? 'pen' : t; inkRefreshBar(); }
-function inkToggleFinger(){ INK.finger = !INK.finger; inkRefreshBar(); }
+function inkToggleFinger(){ INK.finger = !INK.finger; inkPrefsSave(); inkRefreshBar(); }
+function inkToggleSnap(){ INK.snap = !INK.snap; inkPrefsSave(); inkRefreshBar(); }
+function inkPickWidth(i){ INK.wi = i; INK.tool = 'pen'; inkPrefsSave(); inkRefreshBar(); }
+function inkPickHl(i){ INK.hi = i; INK.tool = 'hl'; inkPrefsSave(); inkRefreshBar(); }
 function inkUndo(){
   const u = INK.undo.pop(); if(!u) return;
+  INK.redo.push({qid:u.qid, prev:(INK.data[u.qid]||[]).slice()});
   INK.data[u.qid] = u.prev; inkRedraw(u.qid); inkSaveSoon();
 }
+function inkRedo(){
+  const u = INK.redo.pop(); if(!u) return;
+  INK.undo.push({qid:u.qid, prev:(INK.data[u.qid]||[]).slice()});
+  INK.data[u.qid] = u.prev; inkRedraw(u.qid); inkSaveSoon();
+}
+document.addEventListener('keydown', e=>{
+  if(!INK.on || !(e.ctrlKey||e.metaKey) || e.key.toLowerCase()!=='z') return;
+  const t = e.target; if(t && /^(INPUT|TEXTAREA)$/.test(t.tagName)) return;
+  e.preventDefault(); e.shiftKey ? inkRedo() : inkUndo();
+});
 function inkClearAll(){
   const any = Object.values(INK.data).some(a=>a && a.length);
   if(!any) return;
   if(!confirm('이 과제에 쓴 필기를 모두 지울까요?')) return;
+  INK.redo = [];
   Object.keys(INK.data).forEach(q=>{ INK.undo.push({qid:q, prev:(INK.data[q]||[]).slice()}); INK.data[q] = []; inkRedraw(q); });
   inkSaveSoon();
 }
@@ -10102,7 +10177,7 @@ function renderFirebaseGuide(){
     <li><b>로그인 · 학생 등록</b> — 로그인 아이디는 <b>전화번호</b>(또는 기존 이메일)입니다. 학생 관리의 <b>학생 직접 등록</b>에서 이름·전화번호·이메일·<b>초기 비밀번호</b>를 넣으면 계정이 바로 만들어지고 승인까지 끝납니다. 그 정보를 학생에게 알려 주면, 학생이 처음 로그인할 때 <b>새 비밀번호를 정해야</b> 화면을 쓸 수 있습니다(내 정보에서 언제든 다시 변경 가능). 목록의 '초기 비번' 표시는 아직 바꾸지 않았다는 뜻입니다.</li>
     <li><b>비밀번호 재설정</b> — 학생 목록의 <b>비번 재설정</b>(또는 학생 상세)을 누르면 학생 이메일로 재설정 링크가 갑니다. 학생이 링크에서 새 비밀번호를 정합니다. 서버 없이 무료로 되는 방식이라, 관리자가 다른 사람 비밀번호를 <b>직접 지정해서</b> 바꾸지는 못합니다(Firebase가 허용하지 않음). 그래서 등록 때 받는 이메일은 꼭 쓰는 주소여야 합니다.</li>
     <li><b>전화번호 로그인 원리</b> — 계정은 이메일 그대로이고, 관리자 화면을 열 때마다 '전화번호(해시) → 이메일' 색인(<code>phoneIndex</code>)이 자동으로 맞춰집니다. 가입 기본값(010-0000-0000)이거나 이메일이 없는 학생, 같은 번호를 쓰는 학생은 색인에서 빠지니 이메일로 로그인해야 합니다. 색인은 로그인 전에도 읽혀야 해서 누구나 번호를 알면 그 학생의 이메일 주소를 조회할 수 있습니다(번호는 해시로만 저장되어 목록 조회는 불가). 이 점이 걸리면 이메일 로그인만 쓰면 됩니다. <b>규칙 전문을 다시 게시해야 동작합니다.</b></li>
-    <li><b>필기 · 레이저 포인터</b> — 풀이 화면의 '✏️ 필기'를 켜면 펜(3색)·형광펜·지우개에 더해 <b>레이저</b>가 있습니다. 레이저는 굿노트처럼 그은 선이 붉게 빛나다가 약 1초 뒤 사라지고, 저장되지 않으며 되돌리기에도 남지 않습니다. 필기는 이 기기에만 임시 저장되고 제출 내용에는 포함되지 않습니다.</li>
+    <li><b>필기 · 레이저 포인터</b> — 풀이 화면의 '✏️ 필기'를 켜면 펜(5색·굵기 3단계)·형광펜(3색)·지우개·<b>레이저</b>를 쓸 수 있고, 선이 부드럽게 보정됩니다. 선을 긋고 펜을 멈춘 채 잠깐 누르고 있으면 <b>직선</b>으로 바로잡히며('직선 보정'으로 끄기), ↶ 되돌리기 · ↷ 다시 실행(Ctrl+Z / Ctrl+Shift+Z)과 색·굵기 기억도 됩니다. 펜(애플펜슬 등)을 쓰는 중에는 손바닥 터치가 무시됩니다. 레이저는 굿노트처럼 그은 선이 붉게 빛나다가 약 1초 뒤 사라지고, 저장되지 않으며 되돌리기에도 남지 않습니다. 필기는 이 기기에만 임시 저장되고 제출 내용에는 포함되지 않습니다.</li>
     <li><b>마감 임박 배너</b> — 학생 메인 맨 위에, 마감까지 24시간 이내이고 아직 제출하지 않은 과제·시험이 있으면 남은 시간과 '풀기' 버튼이 나옵니다(3시간 이내는 강조). 마감을 정하지 않은 과제는 나오지 않습니다.</li>
     <li><b>제출 결과 화면</b> — 제출 직후 점수 원, 틀린 문항 번호, 오답노트에 담긴 안내와 '해설 보기' 버튼이 나옵니다. 파일 제출은 '제출 완료'만 표시됩니다.</li>
     <li><b>별표 · 메모</b> — 학생이 해설 화면에서 문제마다 ★와 메모를 남기고, 오답노트 탭의 '별표·메모 문제 보기'에서 모아 봅니다. 이 기기의 브라우저에만 저장되므로 기기를 바꾸거나 브라우저 데이터를 지우면 사라집니다.</li>
@@ -10159,7 +10234,7 @@ function renderFirebaseGuide(){
     <li>새 컬렉션을 만들면 이 규칙에 추가하지 않는 한 <b>전부 차단</b>됩니다.</li>
   </ul>
   <button class="btn small secondary" style="margin-bottom:8px;" onclick="copyRulesFull(this)">규칙 전문 복사</button>
-  <pre id="rules-full" style="background:#0f1a15; color:#d6efe2; padding:14px 16px; border-radius:12px; font-size:12px; line-height:1.55; overflow:auto; white-space:pre; max-height:560px;">rules_version = '2';
+  <pre id="rules-full" tabindex="0" ondblclick="selectNode(this)" style="user-select:text; -webkit-user-select:text; background:#0f1a15; color:#d6efe2; padding:14px 16px; border-radius:12px; font-size:12px; line-height:1.55; overflow:auto; white-space:pre; max-height:560px;">rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
