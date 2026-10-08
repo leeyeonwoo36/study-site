@@ -6609,50 +6609,79 @@ function omrSheetHtml(t, qs, who, clsName){
   const bubble = n=>`<span class="b">${n}</span>`;
   const rows = qs.map((q,i)=>{
     const n = i+1;
-    if(q.type==='mc') return `<div class="r"><span class="n">${n}</span>${[1,2,3,4,5].map(bubble).join('')}</div>`;
-    return `<div class="r"><span class="n">${n}</span><span class="w"></span><span class="wl">단답</span></div>`;
+    const grp = Math.floor(i/5)%2 ? ' alt' : '';
+    if(q.type==='mc') return `<div class="r${grp}"><span class="n">${n}</span><span class="bs">${[1,2,3,4,5].map(bubble).join('')}</span></div>`;
+    return `<div class="r${grp}"><span class="n">${n}</span><span class="w"></span><span class="wl">단답</span></div>`;
   });
-  const perCol = 25;
+  const perCol = 20;
   const cols = [];
   for(let i=0;i<rows.length;i+=perCol) cols.push(rows.slice(i,i+perCol).join(''));
+  const totalPages = Math.max(1, Math.ceil(cols.length/2));
+  const cn = clsName || classNameOf(t.classId) || '';
+  const meta = (cn ? cn+' · ' : '') + weekText(t.week);
   const pages = [];
   for(let i=0;i<cols.length;i+=2){
     pages.push(`<section class="page">
-      <div class="m tl"></div><div class="m tr"></div><div class="m bl"></div><div class="m br"></div>
-      <div class="head">
-        <div class="ttl">${esc(t.title)} · OMR 답안지</div>
-        <div class="sub">${esc((clsName || classNameOf(t.classId) || '') + (clsName || classNameOf(t.classId) ? ' · ' : '') + weekText(t.week))} · 총 ${qs.length}문항 · 코드 ${esc(t.tid.slice(0,6))}</div>
-        <div class="who"><span>이름: <i>${esc(who||'')}</i></span><span>날짜: <i></i></span></div>
+      <i class="m tl"></i><i class="m tr"></i><i class="m bl"></i><i class="m br"></i>
+      <header>
+        <div class="kick">OMR ANSWER SHEET</div>
+        <h1>${esc(t.title)}</h1>
+        <div class="chips"><span>${esc(meta)}</span><span>총 ${qs.length}문항</span><span>코드 ${esc(t.tid.slice(0,6))}</span></div>
+      </header>
+      <div class="who">
+        <div class="f"><label>이름</label><span class="line">${esc(who||'')}</span></div>
+        <div class="f"><label>날짜</label><span class="line"></span></div>
       </div>
-      <div class="guide">진한 펜으로 보기 번호를 <b>완전히 칠하세요</b>. 정답이 여러 개인 문항은 해당하는 번호를 모두 칠합니다. 고칠 때는 새 용지를 쓰세요.</div>
+      <div class="guide">
+        <b>마킹 방법</b>
+        <span class="eg"><i class="b ok"></i> 올바름 (완전히 칠하기)</span>
+        <span class="eg"><i class="b half"></i> 약하게 · <i class="b dot"></i> 점 · <i class="b x"></i> 체크 ✕</span>
+        <span>복수 정답은 해당 번호를 모두 칠하고, 고칠 때는 새 용지를 쓰세요.</span>
+      </div>
       <div class="grid"><div class="col">${cols[i]||''}</div><div class="col">${cols[i+1]||''}</div></div>
-      <div class="foot">${pages.length+1} / ${Math.ceil(cols.length/2)}</div>
+      <footer>${Math.floor(i/2)+1} / ${totalPages}</footer>
     </section>`);
   }
   return `<!DOCTYPE html><html lang="ko"><head><meta charset="UTF-8"><title>${esc(t.title)} OMR</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
 <style>
   @page{ size:A4; margin:0; }
-  *{box-sizing:border-box;}
-  body{font-family:'Pretendard Variable','Pretendard','Noto Sans KR',sans-serif; margin:0; color:#111;}
-  .page{position:relative; width:210mm; height:297mm; padding:18mm 16mm; page-break-after:always; break-after:page; overflow:hidden;}
-  .m{position:absolute; width:8mm; height:8mm; background:#000;}
-  .tl{left:6mm; top:6mm;} .tr{right:6mm; top:6mm;} .bl{left:6mm; bottom:6mm;} .br{right:6mm; bottom:6mm;}
-  .ttl{font-size:20px; font-weight:900; text-align:center;}
-  .sub{text-align:center; font-size:12px; color:#555; margin:3px 0 10px;}
-  .who{display:flex; gap:30px; justify-content:center; font-size:14px; margin-bottom:8px;}
-  .who span{display:inline-flex; align-items:flex-end; gap:6px;} .who i{display:inline-block; width:52mm; border-bottom:1.5px solid #111; height:18px;}
-  .guide{border:1px solid #999; padding:6px 10px; font-size:11.5px; margin-bottom:12px;}
-  .grid{display:flex; gap:12mm;}
-  .col{flex:1;}
-  .r{display:flex; align-items:center; gap:3.2mm; height:9.2mm; border-bottom:1px dotted #bbb;}
-  .n{width:8mm; text-align:right; font-weight:800; font-size:13px; margin-right:1mm;}
-  .b{width:6.2mm; height:6.2mm; border:1.3px solid #111; border-radius:50%; font-size:9px; display:inline-flex; align-items:center; justify-content:center; color:#444;}
-  .w{flex:1; height:6.5mm; border:1.3px solid #111;}
-  .wl{font-size:10px; color:#666;}
-  .foot{position:absolute; bottom:12mm; left:0; right:0; text-align:center; font-size:10px; color:#777;}
+  *{box-sizing:border-box; -webkit-print-color-adjust:exact; print-color-adjust:exact;}
+  body{font-family:'Pretendard Variable','Pretendard','Noto Sans KR',sans-serif; margin:0; color:#14211c;}
+  .page{position:relative; width:210mm; height:297mm; padding:20mm 16mm 18mm; page-break-after:always; break-after:page; overflow:hidden;}
+  /* 모서리 표식: 배경색 대신 테두리로 그려서 '배경 그래픽' 설정과 상관없이 인쇄된다 */
+  .m{position:absolute; display:block; width:0; height:0; border:3.5mm solid #000;}
+  .tl{left:7mm; top:7mm;} .tr{right:7mm; top:7mm;} .bl{left:7mm; bottom:7mm;} .br{right:7mm; bottom:7mm;}
+  header{text-align:center; padding-bottom:5mm; border-bottom:2.2px solid #2F5D50; margin-bottom:5mm;}
+  .kick{font-size:9.5px; letter-spacing:.32em; color:#2F5D50; font-weight:700;}
+  h1{margin:3px 0 7px; font-size:23px; font-weight:900; letter-spacing:-.02em;}
+  .chips{display:flex; gap:6px; justify-content:center;}
+  .chips span{font-size:11px; font-weight:600; color:#2F5D50; background:#e6efeb; border-radius:99px; padding:3px 11px;}
+  .who{display:flex; gap:10mm; margin-bottom:4.5mm;}
+  .f{flex:1; display:flex; align-items:flex-end; gap:8px;}
+  .f label{font-size:12px; font-weight:800; color:#2F5D50; white-space:nowrap;}
+  .f .line{flex:1; border-bottom:1.6px solid #14211c; height:21px; font-size:15px; font-weight:700; padding:0 4px;}
+  .guide{display:flex; flex-wrap:wrap; gap:4px 14px; align-items:center; font-size:10.5px; color:#44514b; background:#f4f7f5; border:1px solid #d5e0db; border-radius:8px; padding:6px 11px; margin-bottom:5mm;}
+  .guide b{color:#2F5D50;}
+  .eg{display:inline-flex; align-items:center; gap:4px;}
+  .guide .b{display:inline-block; width:12px; height:12px; border:1.3px solid #14211c; border-radius:50%; position:relative; vertical-align:middle;}
+  .guide .ok{background:#14211c;}
+  .guide .half{background:linear-gradient(#bbb,#bbb);}
+  .guide .dot::after{content:""; position:absolute; left:50%; top:50%; width:3px; height:3px; margin:-1.5px; background:#14211c; border-radius:50%;}
+  .guide .x::after{content:"✕"; position:absolute; inset:0; font-size:9px; line-height:10px; text-align:center; font-style:normal;}
+  .grid{display:flex; gap:7mm;}
+  .col{flex:1; border:1.4px solid #2F5D50; border-radius:10px; overflow:hidden;}
+  .r{display:flex; align-items:center; gap:3mm; height:9.6mm; padding:0 4mm 0 3mm; background:#fff; border-bottom:1px solid #e4ebe8;}
+  .r.alt{background:#f2f6f4;}
+  .r:last-child{border-bottom:none;}
+  .n{flex:0 0 7.5mm; height:6.2mm; line-height:6.2mm; text-align:center; font-weight:800; font-size:12px; color:#fff; background:#2F5D50; border-radius:99px;}
+  .bs{display:flex; gap:3.4mm; margin-left:auto;}
+  .b{width:6.3mm; height:6.3mm; border:1.4px solid #14211c; border-radius:50%; font-size:9px; font-weight:600; display:inline-flex; align-items:center; justify-content:center; color:#6b7872; background:#fff;}
+  .w{flex:1; height:6.6mm; border:1.4px solid #14211c; border-radius:4px; background:#fff;}
+  .wl{font-size:9.5px; color:#6b7872;}
+  footer{position:absolute; bottom:11mm; left:0; right:0; text-align:center; font-size:10px; color:#8a958f; letter-spacing:.12em;}
 </style></head><body>${pages.join('') || '<p>문항이 없습니다.</p>'}
-<script>window.onload=function(){ setTimeout(function(){ window.print(); }, 500); };<\/script>
+<script>window.onload=function(){ setTimeout(function(){ window.print(); }, 600); };<\/script>
 </body></html>`;
 }
 function printOmrSheet(kind, tid){
