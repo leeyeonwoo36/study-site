@@ -271,13 +271,24 @@ body.on-login{
   .sidebar nav button.active:hover{background:rgba(255,255,255,.95);}
   .sidebar nav .nav-logout{border-radius:12px; margin-top:0; border-left:none;}
   th,td{padding:9px 8px;}
-  /* 관리자 하단바: 열린 그룹도 한 줄로, 높이 고정 */
-  .sidebar nav, #shell-admin .sidebar nav{display:flex !important; flex-direction:row; flex-wrap:nowrap; align-items:stretch; overflow-x:auto; overflow-y:hidden; max-height:60px;}
-  .sidebar nav .nav-sect, .sidebar nav .nav-sect.open, .sidebar nav .nav-sub, .sidebar nav .nav-sect.open .nav-sub{display:contents !important; background:none; padding:0;}
-  .sidebar nav .nav-group{display:none !important;}
-  .sidebar nav button.admin-nav, .sidebar nav .nav-sub .admin-nav{
-    flex:0 0 auto; width:auto; margin:0 1px; padding:9px 11px; font-size:12px; white-space:nowrap; text-align:center; border-radius:12px;}
-  .sidebar nav .nav-logout{flex:0 0 auto; padding:9px 11px; font-size:12px; margin:0 1px; border-top:none;}
+  /* 관리자 하단바: 대분류 4개 + 로그아웃, 누르면 위로 세부 메뉴가 뜬다 */
+  #shell-admin .sidebar nav{display:flex !important; flex-direction:row; flex-wrap:nowrap; align-items:stretch; overflow:visible; max-height:none; gap:2px;}
+  #shell-admin .sidebar nav .nav-sect{display:contents !important; background:none;}
+  #shell-admin .sidebar nav .nav-group{
+    display:flex !important; align-items:center; justify-content:center; gap:3px; flex:1 1 0; min-width:0; width:auto; margin:0;
+    padding:12px 2px; font-size:12.5px; font-weight:700; letter-spacing:-.02em; color:rgba(255,255,255,.8);
+    border-radius:12px; white-space:nowrap; background:none;}
+  #shell-admin .sidebar nav .nav-group .ng-arrow{margin:0 !important; position:static !important; font-size:9px; opacity:.7; transition:transform .15s;}
+  #shell-admin .sidebar nav .nav-sect.m-open .nav-group{background:rgba(255,255,255,.16); color:#fff;}
+  #shell-admin .sidebar nav .nav-sect.m-open .ng-arrow{transform:rotate(180deg);}
+  #shell-admin .sidebar nav .nav-sect.has-active:not(.m-open) .nav-group{background:rgba(255,255,255,.95); color:var(--brand-deep);}
+  #shell-admin .sidebar nav .nav-sub, #shell-admin .sidebar nav .nav-sect.open .nav-sub{display:none !important;}
+  #shell-admin .sidebar nav .nav-sect.m-open .nav-sub{
+    display:flex !important; flex-direction:column; gap:2px; position:absolute; left:8px; right:8px; bottom:calc(100% + 8px);
+    background:rgba(31,64,54,.98); border-radius:18px; padding:8px; box-shadow:0 -8px 30px rgba(0,0,0,.28);}
+  #shell-admin .sidebar nav .nav-sub .admin-nav{
+    width:100%; margin:0; padding:13px 14px; font-size:14.5px; text-align:left; border-radius:12px; flex:0 0 auto; white-space:nowrap;}
+  #shell-admin .sidebar nav .nav-logout{flex:0 0 auto; width:auto; padding:12px 10px; font-size:12px; margin:0; border-top:none; align-self:center;}
   .main{padding-bottom:84px;}
 }
 

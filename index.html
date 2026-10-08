@@ -1825,8 +1825,21 @@ function switchSite(site){
 /* 대분류 펼치기/접기 — 여러 개를 동시에 열어둘 수 있다 */
 function toggleNavSect(id){
   const el = $(id); if(!el) return;
+  if(window.matchMedia('(max-width:760px)').matches){
+    /* 모바일: 한 번에 하나만 팝업으로 */
+    const was = el.classList.contains('m-open');
+    closeNavPopups();
+    if(!was) el.classList.add('m-open');
+    return;
+  }
   el.classList.toggle('open');
 }
+function closeNavPopups(){
+  document.querySelectorAll('#shell-admin .nav-sect.m-open').forEach(e=>e.classList.remove('m-open'));
+}
+document.addEventListener('click', e=>{
+  if(!e.target.closest('#shell-admin .nav-sect')) closeNavPopups();
+});
 
 /* 현재 탭이 속한 대분류를 펼치고 표시한다 */
 function syncNavSects(){
@@ -1851,6 +1864,7 @@ function setAdminTab(id){
   if(id==='a-ai') renderAiSetOptions();
   if(id==='a-grading') renderGradingTable();
   syncNavSects();
+  closeNavPopups();
 }
 function setStudentTab(id){
   document.querySelectorAll('#shell-student .tabpanel').forEach(p=>p.classList.remove('active'));
