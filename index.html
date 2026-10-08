@@ -1423,14 +1423,14 @@ body.quiet-preview .sidebar{ padding-top:22px; }
     <div class="sidebar">
       <div class="brand"><h3 style="color:#fff; font-size:16px; margin:0;" id="stu-name">학생</h3><small id="stu-sub">명덕외고</small></div>
       <nav>
-        <button class="student-nav active" data-tab="t-main" onclick="setStudentTab('t-main')">메인</button>
-        <button class="student-nav" data-tab="t-hw" onclick="setStudentTab('t-hw')">과제</button>
-        <button class="student-nav" data-tab="t-exam" onclick="setStudentTab('t-exam')">시험</button>
-        <button class="student-nav" data-tab="t-wrong" onclick="setStudentTab('t-wrong')">오답노트</button>
-        <button class="student-nav" data-tab="t-video" onclick="setStudentTab('t-video')">수업 영상</button>
-        <button class="student-nav" data-tab="t-me" onclick="setStudentTab('t-me')">내 정보</button>
-        <button class="student-nav theme-btn" onclick="toggleTheme()" style="margin-top:14px; border-top:1px solid rgba(255,255,255,.18);">다크 모드</button>
-        <button class="student-nav" onclick="logout()">로그아웃</button>
+        <button class="student-nav active" data-tab="t-main" onclick="setStudentTab('t-main')"><svg class="ni" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11.5 12 4l9 7.5"/><path d="M5.5 10v9.5h13V10"/></svg><span>메인</span></button>
+        <button class="student-nav" data-tab="t-hw" onclick="setStudentTab('t-hw')"><svg class="ni" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="3.5" width="14" height="17" rx="2.5"/><path d="M9 8.5h6M9 12.5h6M9 16.5h3.5"/></svg><span>과제</span></button>
+        <button class="student-nav" data-tab="t-exam" onclick="setStudentTab('t-exam')"><svg class="ni" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5 4 7v5c0 4.2 3.2 7.3 8 8.5 4.8-1.2 8-4.3 8-8.5V7z"/><path d="m9 12 2.2 2.2L15.5 10"/></svg><span>시험</span></button>
+        <button class="student-nav" data-tab="t-wrong" onclick="setStudentTab('t-wrong')"><svg class="ni" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 4.5h10.5a1.5 1.5 0 0 1 1.5 1.5v13.5H7.5A1.5 1.5 0 0 1 6 18z"/><path d="M6 17h12M9.5 9h5"/></svg><span>오답노트</span></button>
+        <button class="student-nav" data-tab="t-video" onclick="setStudentTab('t-video')"><svg class="ni" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="5.5" width="17" height="13" rx="3"/><path d="m10.5 9.5 4 2.5-4 2.5z"/></svg><span>수업 영상</span></button>
+        <button class="student-nav" data-tab="t-me" onclick="setStudentTab('t-me')"><svg class="ni" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8.5" r="3.5"/><path d="M5 20c.8-3.6 3.6-5.5 7-5.5s6.2 1.9 7 5.5"/></svg><span>내 정보</span></button>
+        <button class="student-nav theme-btn nav-extra" onclick="toggleTheme()" style="margin-top:14px; border-top:1px solid rgba(255,255,255,.18);">다크 모드</button>
+        <button class="student-nav nav-extra" onclick="logout()">로그아웃</button>
       </nav>
     </div>
     <div class="main">
@@ -1510,6 +1510,7 @@ body.quiet-preview .sidebar{ padding-top:22px; }
 
       <div class="tabpanel" id="tab-t-me">
         <div class="page-head"><div><h1>내 정보</h1><p>인적사항은 본인이 수정할 수 없으며, 이메일 변경은 본인 확인이 필요합니다.</p></div></div>
+        <div class="card me-acct"><div class="me-acct-row"><button class="btn small secondary theme-btn" onclick="toggleTheme()">다크 모드</button><button class="btn small secondary" onclick="logout()">로그아웃</button></div></div>
 
                <div class="card">
           <p class="note">인적사항 수정이 필요하면 관리자에게 문의해주세요. 이메일은 아래에서 직접 변경할 수 있습니다.</p>
