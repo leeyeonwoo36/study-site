@@ -7740,11 +7740,13 @@ async function omrPrepare(file){
       norm[y*w+x] = v>1 ? 1 : v;
     }
   }
-  return { w, h, norm };
+  /* 종이 밝기 기준(전체 밝기의 70% 지점): 모서리 표식 주변이 종이처럼 밝은지 가릴 때 쓴다 */
+  const samp = []; for(let i=0;i<gray.length;i+=37) samp.push(gray[i]); samp.sort((a,b)=>a-b);
+  return { w, h, norm, gray, paper: samp[Math.floor(samp.length*0.7)] || 200 };
 }
 /* 검은 정사각형 후보를 찾고, 그중 바깥 네 점(볼록 껍질에서 넓이가 최대인 사각형)을 모서리 표식으로 쓴다 */
 function omrFindQuad(im){
-  const { w, h, norm } = im, N = w*h;
+  const { w, h, norm, gray, paper } = im, N = w*h;
   const dark = new Uint8Array(N);
   for(let i=0;i<N;i++) dark[i] = norm[i] < 0.66 ? 1 : 0;
   const stack = new Int32Array(N), list = new Int32Array(N);
@@ -7775,8 +7777,16 @@ function omrFindQuad(im){
     let inner = 0, tot = 0; const hw = Math.max(1, Math.floor(Math.min(bw,bh)*0.2));
     for(let yy=Math.round(cy)-hw; yy<=Math.round(cy)+hw; yy++) for(let xx=Math.round(cx)-hw; xx<=Math.round(cx)+hw; xx++){ if(xx<0||yy<0||xx>=w||yy>=h) continue; tot++; if(norm[yy*w+xx]<0.66) inner++; }
     if(tot && inner/tot < 0.7) continue;
+    /* 주변이 종이처럼 밝아야 한다 (키보드 키·책상 위 검은 물건 같은 것을 표식으로 착각하지 않도록) */
+    { const hs = Math.sqrt(cnt)/2, rr = hs*2.0, ring = [];
+      for(let k=0;k<16;k++){ const a = k*Math.PI/8, xx = Math.round(cx+Math.cos(a)*rr), yy = Math.round(cy+Math.sin(a)*rr); if(xx<0||yy<0||xx>=w||yy>=h) continue; ring.push(gray[yy*w+xx]); }
+      ring.sort((p,q)=>p-q);
+      const med = ring.length>=8 ? ring[Math.floor(ring.length/2)] : 0;
+      if(window.__omrDebug && cnt>120) window.__omrDebug.push({ring:Math.round(med), paper:Math.round(paper), cx:Math.round(cx), cy:Math.round(cy)});
+      if(med < paper*0.45) continue; }
     cands.push({ x:cx, y:cy, a:cnt });
   }
+  if(window.__omrDebug) window.__omrDebug.cands = cands.map(c=>({x:Math.round(c.x),y:Math.round(c.y),a:c.a}));
   if(cands.length < 4) return null;
   // 볼록 껍질
   const pts = cands.slice().sort((p,q)=>p.x-q.x || p.y-q.y);
@@ -7793,8 +7803,11 @@ function omrFindQuad(im){
   const n = hull.length;
   for(let a=0;a<n-3;a++) for(let b=a+1;b<n-2;b++) for(let c=b+1;c<n-1;c++) for(let d=c+1;d<n;d++){
     const q = [hull[a],hull[b],hull[c],hull[d]]; const ar = area(q);
-    if(ar>bestA){ bestA = ar; best = q; }
+    if(ar<=bestA) continue;
+    const sz = q.map(p=>p.a); if(Math.max(...sz) > 5*Math.min(...sz)) continue;   // 네 표식은 크기가 비슷해야 한다
+    bestA = ar; best = q;
   }
+  if(window.__omrDebug) window.__omrDebug.best = best && best.map(c=>({x:Math.round(c.x),y:Math.round(c.y),a:c.a}));
   if(!best || bestA < N*0.04) return null;
   return best;                                   // 이미지에서 시계 방향 순서
 }
