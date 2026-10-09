@@ -562,3 +562,5 @@ body.on-login{
   .task-tbl .c-act .btn{width:100%;padding:11px;font-size:14px}
   .task-tbl td.empty-hint{display:block;flex:0 0 100%;text-align:center;padding:24px}
 }
+
+.solve-clear-row{display:flex;justify-content:flex-end;margin:0 0 8px}

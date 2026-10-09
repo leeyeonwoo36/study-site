@@ -1806,6 +1806,7 @@ body.quiet-preview .sidebar{ padding-top:22px; }
          </div>
          <div id="omr-scan-status" style="font-size:12.5px; margin-top:8px;"></div>
        </div>
+       <div class="solve-clear-row"><button type="button" class="btn small ghost" id="solve-clear-btn" onclick="clearSolveAnswers()">↺ 체크한 답 전체 지우기</button></div>
        <div id="solve-body"></div>
            <div class="field-section">
       <span class="section-label">손으로 푼 답안 사진 첨부 (선택)</span>
@@ -8707,6 +8708,25 @@ function collectSolveAnswers(qs){
   return answers;
 }
 
+function clearSolveAnswers(){
+  if(!currentSolve) return;
+  const t = tasks[currentSolve.kind].find(x=>x.tid===currentSolve.tid); if(!t) return;
+  const qs = (t.qids||[]).map(q=>questions.find(x=>x.qid===q)).filter(Boolean);
+  const n = Object.values(collectSolveAnswers(qs)).filter(Boolean).length;
+  if(!n){ alert('지울 답이 없습니다.'); return; }
+  if(!confirm(`체크하거나 입력한 답 ${n}개를 모두 지울까요?\n(★ 표시와 첨부한 사진은 그대로 남습니다.)`)) return;
+  qs.forEach(q=>{
+    if(q.type==='mc'){
+      document.querySelectorAll(`input[name="ans_${q.qid}"]`).forEach(cb=>{
+        cb.checked = false; cb.parentElement.classList.remove('picked');
+      });
+    } else {
+      const el = $('ans_'+q.qid); if(el) el.value = '';
+    }
+  });
+  updateSolveProgress();
+  saveSolveDraftNow();
+}
 function restoreSolveAnswers(qs, answers){
   qs.forEach(q=>{
     const v = answers[q.qid];
