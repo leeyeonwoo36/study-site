@@ -1760,12 +1760,13 @@ body.quiet-preview .sidebar{ padding-top:22px; }
   <div class="modal">
     <button class="modal-close" onclick="closeModal('bundle-modal')">✕</button>
     <h3 id="bundle-heading">묶음 인쇄</h3>
-    <p class="note">고른 과제를 <b>표지 → (문제지 → OMR) 순서</b>로 한 번에 인쇄합니다. 답지(정답·해설)는 포함하지 않습니다.</p>
+    <p class="note">고른 과제를 <b>표지 → (문제지 → OMR → 해설지) 순서</b>로 한 번에 인쇄합니다. 해설지는 기본으로 빠져 있으니, 필요하면 아래에서 켜세요.</p>
     <label>인쇄할 과제 · 시험</label>
     <div id="bundle-list" class="bundle-list"></div>
     <label class="dup-opt"><input type="checkbox" id="bundle-cover" checked> 표지 포함</label>
     <label class="dup-opt"><input type="checkbox" id="bundle-problem" checked> 문제지 포함</label>
     <label class="dup-opt"><input type="checkbox" id="bundle-omr" checked> OMR 답안지 포함</label>
+    <label class="dup-opt"><input type="checkbox" id="bundle-explain"> 해설지 포함 (빠른 정답 + 정답·해설, 과제마다 뒤에 붙음)</label>
     <button class="btn" style="width:100%; margin-top:12px;" onclick="doBundlePrint()">인쇄 창 열기</button>
   </div>
 </div>
@@ -7566,8 +7567,8 @@ function doBundlePrint(){
   const c = classOf(selClassId); if(!c) return;
   const picks = [...document.querySelectorAll('#bundle-list .bundle-ck:checked')].map(x=>x.value.split('|'));
   if(!picks.length){ alert('인쇄할 과제를 하나 이상 고르세요.'); return; }
-  const wantCover = $('bundle-cover').checked, wantProb = $('bundle-problem').checked, wantOmr = $('bundle-omr').checked;
-  if(!wantCover && !wantProb && !wantOmr){ alert('인쇄할 항목을 하나 이상 고르세요.'); return; }
+  const wantCover = $('bundle-cover').checked, wantProb = $('bundle-problem').checked, wantOmr = $('bundle-omr').checked, wantExp = $('bundle-explain').checked;
+  if(!wantCover && !wantProb && !wantOmr && !wantExp){ alert('인쇄할 항목을 하나 이상 고르세요.'); return; }
   const byId = new Map(questions.map(q=>[q.qid,q]));
   let hwNo = 0; const items = []; const sections = [];
   picks.forEach(([kind,tid])=>{
@@ -7582,6 +7583,7 @@ function doBundlePrint(){
       <div class="two-col">${qs.map((q,i)=>buildPrintQuestionHtml(q,i+1)).join('')}</div>
     </section>`, 'brk'));
     if(wantOmr) sections.push(omrPagesHtml(t, qs, '', c.name));
+    if(wantExp) sections.push(padWrap(buildQuickAnswerHtml(qs, t.title) + buildAnswerExplainHtml(qs, t.title), 'brk'));
   });
   const html = `<!DOCTYPE html><html lang="ko"><head><meta charset="UTF-8">
 <title>${esc(c.name)} ${esc(weekText(selWeek))} 과제 묶음</title>
@@ -7594,6 +7596,7 @@ ${PRINT_PAD_CSS}
   .no-print{text-align:center; padding:12px;} .no-print button{padding:10px 20px; font-size:14px; cursor:pointer;}
   @media print{ .no-print{display:none;} }
 ${PRINT_PROBLEM_CSS}
+${PRINT_KEY_CSS}
 ${COVER_CSS}
 ${scopeCss(OMR_CSS,'.omrdoc')}
 </style></head><body>
@@ -10553,7 +10556,7 @@ function renderFirebaseGuide(){
     <li><b>현장 제출</b> — 종이로 받은 과제는 채점 확인 탭에서 직접 기록합니다. 문항별 O/X를 찍으면 점수·완료 여부가 반영되고 틀린 문항은 오답노트에 등록됩니다.</li>
     <li><b>모바일 메뉴</b> — 하단에 아이콘 대분류 5개(수업·출제·문제·채점·확인·더보기)가 있습니다. 누르면 위로 세부 메뉴가 뜨고, 고르거나 바깥을 누르면 닫힙니다. 학생 화면 보기·운영 안내·다크 모드·로그아웃은 '더보기'에 있습니다. PC에서는 대분류가 접히지 않는 구획 제목으로 항상 펼쳐져 있습니다.</li>
     <li><b>문제 JSON 가져오기</b> — 문제 → 문제은행 맨 위 카드. <b>Claude용 안내문 복사</b>를 Claude에게 붙여넣고 문제를 만들어 달라고 하면 규격에 맞는 JSON이 나옵니다. 그 파일을 올리면 <b>등록할 세트 선택(기존 세트·새 세트·JSON에 적힌 세트) → 검사(오류·중복 확인) → 등록</b> 순서로 진행됩니다. 오류가 있는 문제는 등록되지 않고 이유가 표시됩니다. 이미지는 JSON으로 넣을 수 없으니 필요하면 등록 후 문제 수정에서 붙이세요. 보기 본문의 HTML은 굵게·밑줄 등 기본 태그만 남기고 나머지는 제거됩니다.</li>
-    <li><b>주차 묶음 인쇄</b> — 수업 · 주차 탭의 '이 주차의 과제·시험·영상' 카드에서 <b>이 주차 묶음 인쇄</b>. 고른 과제·시험을 <b>표지 → 과제1 문제지 → 과제1 OMR → 과제2 문제지 → …</b> 순서로 한 번에 뽑습니다. 표지에는 수업 이름, 주차, 과제 이름과 코드가 들어갑니다. 정답·해설은 포함하지 않으니 따로 배부하세요. 인쇄 창의 <b>배경 그래픽</b>을 켜면 표지의 초록 색면이 선명하게 나옵니다.</li>
+    <li><b>주차 묶음 인쇄</b> — 수업 · 주차 탭의 '이 주차의 과제·시험·영상' 카드에서 <b>이 주차 묶음 인쇄</b>. 고른 과제·시험을 <b>표지 → 과제1 문제지 → 과제1 OMR → 과제2 문제지 → …</b> 순서로 한 번에 뽑습니다. 표지에는 수업 이름, 주차, 과제 이름과 코드가 들어갑니다. <b>해설지 포함</b>을 켜면 각 과제 뒤에 빠른 정답·정답·해설이 붙습니다(기본은 꺼짐, 학생 배부용이면 끄세요). 인쇄 창의 <b>배경 그래픽</b>을 켜면 표지의 초록 색면이 선명하게 나옵니다.</li>
     <li><b>종이 OMR</b> — 과제 관리·시험 관리의 <b>OMR 인쇄</b>(학생은 풀이 화면에서도 가능)로 답안지를 뽑습니다. 학생이 종이에 마킹한 뒤(틀리면 <b>수정테이프로 덮고 다시 칠하면 됩니다</b>) 풀이 화면의 <b>📷 카메라로 바로 찍기</b>(폰 카메라가 바로 열립니다) 또는 <b>🖼 앨범에서 고르기</b>로 사진을 올리면 답이 채워지고, 학생이 확인한 뒤 제출하면 온라인 OMR과 똑같이 자동 채점됩니다. <b>판독은 AI가 아니라 브라우저의 이미지 처리</b>입니다: 용지 네 모서리의 검은 네모를 찾아 사진을 바로잡고, 보기 원이 얼마나 어두운지로 마킹을 판정합니다. 서버·AI 호출·한도가 필요 없고 결과가 항상 같습니다. 약하게 칠한 칸은 ★와 주황색으로 표시됩니다. 네 모서리가 모두 나오고, 그림자가 적고, 용지가 접히지 않았을수록 정확합니다. 읽지 못하면(모서리가 잘림, 옛 용지 등) 자동으로 AI(Gemini)로 넘어가며, 그때만 호출 1회를 씁니다. <b>단답형 손글씨 칸은 이미지 처리로 읽을 수 없어</b> 그 문항만 AI(키가 있을 때)가 읽습니다. 답안지 오른쪽 위에는 과제마다 다른 <b>숫자 4자리 과제 코드</b>가 칠해진 채 인쇄되며(과제 목록의 '코드' 배지와 같은 값) 지금 푸는 과제와 다르면 경고합니다. 아래쪽의 <b>쪽 표시(●)</b>로 몇 쪽인지 알아 36문항을 넘는 과제는 쪽마다 사진을 올리면 이어서 채워집니다. <b>이번 업데이트 이전에 인쇄한 답안지에는 쪽 표시가 없어</b> AI로 읽습니다. 가능하면 새로 인쇄해 쓰세요. 코드가 없는 기존 과제는 관리자가 접속할 때 자동으로 부여됩니다.</li>
     <li><b>문항 통계</b> — 채점·확인 → 문항 통계. 과제·시험을 고르면 문항별 정답률, 선지별 선택 분포, 가장 많이 고른 오답이 보입니다. 정답률 낮은 순으로 정렬하면 수업에서 다시 짚을 문제를 바로 찾을 수 있습니다. 파일(사진·PDF)로만 낸 제출은 집계에서 빠집니다.</li>
     <li><b>과제·시험 복제</b> — 과제 관리·시험 관리 목록 또는 수업·주차 화면의 <b>복제</b> 버튼. 수업과 주차(여러 개 가능)를 고르면 문항 구성이 그대로 복사되고, 시작·마감 일시는 주차 차이만큼 옮길 수 있습니다. 첨부 PDF는 복사하지 않습니다(한쪽을 지울 때 파일이 같이 지워지는 것을 막기 위해).</li>
