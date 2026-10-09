@@ -1730,6 +1730,8 @@ body.quiet-preview .sidebar{ padding-top:22px; }
     <h3>OMR 사진 일괄 채점</h3>
     <p class="note">종이로 받은 OMR 사진을 여러 장 한꺼번에 올리세요. <b>과제 코드</b>로 과제를, <b>전화번호 끝 4자리</b>로 학생을 찾아 채점합니다. 과제가 서로 달라도 한 번에 올릴 수 있습니다. 반영하기 전에 아래에서 확인·수정할 수 있습니다.</p>
     <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-bottom:12px;">
+      <label class="btn secondary" style="margin:0; cursor:pointer;">📷 카메라로 찍기
+        <input type="file" accept="image/*" capture="environment" style="display:none;" onchange="onBulkFiles(this)"></label>
       <label class="btn secondary" style="margin:0; cursor:pointer;">사진 고르기 (여러 장)
         <input type="file" id="bulk-files" accept="image/*" multiple style="display:none;" onchange="onBulkFiles(this)"></label>
       <span id="bulk-sum" class="note" style="margin:0;"></span>
@@ -1797,7 +1799,9 @@ body.quiet-preview .sidebar{ padding-top:22px; }
          <b>종이 OMR로 푸셨나요?</b>
          <div style="display:flex; gap:6px; flex-wrap:wrap; margin-top:8px;">
            <button type="button" class="btn small secondary" onclick="printOmrSheet(currentSolve.kind, currentSolve.tid)">OMR 답안지 인쇄</button>
-           <button type="button" class="btn small" onclick="$('omr-scan-file').click()">마킹한 OMR 사진으로 답 채우기</button>
+           <button type="button" class="btn small" onclick="$('omr-scan-cam').click()">📷 카메라로 바로 찍기</button>
+           <button type="button" class="btn small secondary" onclick="$('omr-scan-file').click()">🖼 앨범에서 고르기</button>
+           <input type="file" id="omr-scan-cam" accept="image/*" capture="environment" style="display:none;" onchange="scanOmrPhoto(this)">
            <input type="file" id="omr-scan-file" accept="image/*" style="display:none;" onchange="scanOmrPhoto(this)">
          </div>
          <div id="omr-scan-status" style="font-size:12.5px; margin-top:8px;"></div>
@@ -7372,10 +7376,10 @@ const OMR_CSS = `
   .m{position:absolute; display:block; width:0; height:0; border:3.5mm solid #000;}
   .tl{left:7mm; top:7mm;} .tr{right:7mm; top:7mm;} .bl{left:7mm; bottom:7mm;} .br{right:7mm; bottom:7mm;}
 
-  header{display:flex; gap:6mm; align-items:stretch; margin-bottom:4.5mm; padding:4.2mm 5mm 4.4mm; border:1px solid #cddad4; border-top:3mm solid #2F5D50; border-radius:0 0 12px 12px; background:#f1f6f3;}
+  header{display:flex; gap:6mm; align-items:stretch; height:27mm; overflow:hidden; margin-bottom:4.5mm; padding:4.2mm 5mm 4.4mm; border:1px solid #cddad4; border-top:3mm solid #2F5D50; border-radius:0 0 12px 12px; background:#f1f6f3;}
   .hl{flex:1; min-width:0; display:flex; flex-direction:column; justify-content:center;}
   .kick{font-size:8.5px; letter-spacing:.34em; color:#2F5D50; font-weight:800;}
-  h1{margin:2px 0 6px; font-size:22px; font-weight:900; letter-spacing:-.025em; line-height:1.2;}
+  h1{margin:2px 0 6px; font-size:22px; font-weight:900; letter-spacing:-.025em; line-height:1.2; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
   .chips{display:flex; gap:5px; flex-wrap:wrap;}
   .chips span{font-size:10.5px; font-weight:700; color:#2F5D50; background:#fff; border:1px solid #c5d6ce; border-radius:99px; padding:2px 10px;}
   .hr{flex:0 0 62mm; display:flex; flex-direction:column; justify-content:center; gap:3.6mm;}
@@ -7383,16 +7387,16 @@ const OMR_CSS = `
   .f label{flex:0 0 8mm; font-size:11.5px; font-weight:800; color:#2F5D50; white-space:nowrap;}
   .f .line{flex:1; border-bottom:1.5px solid #14211c; height:6.6mm; font-size:14px; font-weight:700; padding:0 3px;}
 
-  .ids{display:flex; gap:5mm; margin-bottom:4.5mm;}
+  .ids{display:flex; gap:5mm; height:34mm; margin-bottom:4.5mm;}
   .idbox{flex:1; border:1.4px solid #2F5D50; border-radius:12px; padding:2.2mm 3.2mm 2.4mm; background:#fff;}
-  .ct{display:flex; justify-content:space-between; align-items:baseline; gap:6px; font-size:10.5px; font-weight:800; color:#2F5D50; margin-bottom:1.1mm;}
+  .ct{height:4.5mm; overflow:hidden; white-space:nowrap; display:flex; justify-content:space-between; align-items:baseline; gap:6px; font-size:10.5px; font-weight:800; color:#2F5D50; margin-bottom:1.1mm;}
   .ct small{font-weight:500; color:#7b8a83; font-size:8.2px;}
   .cr{display:flex; align-items:center; justify-content:space-between; height:5.7mm;}
   .cd{flex:0 0 4.2mm; font-size:8.5px; font-weight:700; color:#9aa7a0; text-align:center;}
   .cb{width:4.7mm; height:4.7mm; border:1.2px solid #14211c; border-radius:50%; font-size:7.3px; display:inline-flex; align-items:center; justify-content:center; color:#6b7872; background:#fff;}
   .cb.on{background:#14211c; color:#fff; font-weight:700;}
 
-  .guide{display:flex; flex-wrap:wrap; gap:3px 14px; align-items:center; font-size:10px; color:#44514b; background:#f4f7f5; border:1px solid #d5e0db; border-radius:9px; padding:5px 11px; margin-bottom:4.5mm;}
+  .guide{display:flex; flex-wrap:wrap; gap:2px 14px; align-items:center; height:15mm; overflow:hidden; font-size:9.5px; color:#44514b; background:#f4f7f5; border:1px solid #d5e0db; border-radius:9px; padding:5px 11px; margin-bottom:4.5mm;}
   .guide b{color:#2F5D50;}
   .eg{display:inline-flex; align-items:center; gap:4px;}
   .guide .b{display:inline-block; width:12px; height:12px; border:1.3px solid #14211c; border-radius:50%; position:relative; vertical-align:middle;}
@@ -7411,7 +7415,10 @@ const OMR_CSS = `
   .b{width:6.3mm; height:6.3mm; border:1.4px solid #14211c; border-radius:50%; font-size:9px; font-weight:600; display:inline-flex; align-items:center; justify-content:center; color:#6b7872; background:#fff;}
   .w{flex:1; height:6.6mm; border:1.4px solid #14211c; border-radius:5px; background:#fff;}
   .wl{font-size:9.5px; color:#6b7872;}
-  footer{position:absolute; bottom:11mm; left:0; right:0; text-align:center; font-size:10px; color:#8a958f; letter-spacing:.12em;}
+  footer{position:absolute; bottom:11mm; left:0; right:0; display:flex; justify-content:center; align-items:center; gap:5mm; height:4mm; font-size:10px; color:#8a958f; letter-spacing:.12em;}
+  .pgs{display:inline-flex; gap:1.6mm; align-items:center;}
+  .pgd{width:3.6mm; height:3.6mm; border:1.1px solid #14211c; border-radius:50%; font-size:6px; letter-spacing:0; display:inline-flex; align-items:center; justify-content:center; color:#6b7872; background:#fff;}
+  .pgd.on{background:#14211c; color:#fff;}
 `;
 function scopeCss(css, scope){
   return css.replace(/(^|\})\s*([^{}]+)\{/g,(m,a,sel)=>{
@@ -7420,11 +7427,11 @@ function scopeCss(css, scope){
   });
 }
 function omrPagesHtml(t, qs, who, clsName){
-  const bubble = n=>`<span class="b">${n}</span>`;
+  const bubble = (qn,n)=>`<span class="b" data-q="${qn}" data-k="${n}">${n}</span>`;
   const rows = qs.map((q,i)=>{
     const n = i+1;
     const grp = Math.floor(i/5)%2 ? ' alt' : '';
-    if(q.type==='mc') return `<div class="r${grp}"><span class="n">${n}</span><span class="bs">${[1,2,3,4,5].map(bubble).join('')}</span></div>`;
+    if(q.type==='mc') return `<div class="r${grp}"><span class="n">${n}</span><span class="bs">${[1,2,3,4,5].map(k=>bubble(n,k)).join('')}</span></div>`;
     return `<div class="r${grp}"><span class="n">${n}</span><span class="w"></span><span class="wl">단답</span></div>`;
   });
   const perCol = 18;
@@ -7432,7 +7439,7 @@ function omrPagesHtml(t, qs, who, clsName){
   for(let i=0;i<rows.length;i+=perCol) cols.push(rows.slice(i,i+perCol).join(''));
   const totalPages = Math.max(1, Math.ceil(cols.length/2));
   const code = taskCodeOf(t);
-  const digitRows = on => [0,1,2,3].map(pos=>`<div class="cr"><span class="cd">${pos+1}</span>${[0,1,2,3,4,5,6,7,8,9].map(n=>`<span class="cb${on && String(n)===on[pos]?' on':''}">${n}</span>`).join('')}</div>`).join('');
+  const digitRows = (on,box) => [0,1,2,3].map(pos=>`<div class="cr"><span class="cd">${pos+1}</span>${[0,1,2,3,4,5,6,7,8,9].map(n=>`<span class="cb${on && String(n)===on[pos]?' on':''}" data-box="${box}" data-r="${pos}" data-d="${n}">${n}</span>`).join('')}</div>`).join('');
   const cn = clsName || classNameOf(t.classId) || '';
   const meta = (cn ? cn+' · ' : '') + weekText(t.week);
   const pages = [];
@@ -7453,21 +7460,22 @@ function omrPagesHtml(t, qs, who, clsName){
       <div class="ids">
         <div class="idbox">
           <div class="ct">과제 코드 ${esc(code)} <small>인쇄되어 있으니 그대로 두세요</small></div>
-          ${digitRows(code)}
+          ${digitRows(code,'code')}
         </div>
         <div class="idbox">
           <div class="ct">전화번호 끝 4자리 <small>본인 확인 · 직접 칠하세요</small></div>
-          ${digitRows(null)}
+          ${digitRows(null,'phone')}
         </div>
       </div>
       <div class="guide">
         <b>마킹 방법</b>
         <span class="eg"><i class="b ok"></i> 올바름 (완전히 칠하기)</span>
         <span class="eg"><i class="b half"></i> 약하게 · <i class="b dot"></i> 점 · <i class="b x"></i> 체크 ✕</span>
-        <span>복수 정답은 해당 번호를 모두 칠하세요. 고칠 때는 <b>수정테이프로 틀린 칸을 완전히 덮은 뒤</b> 다시 칠하세요. (테이프 위에 칠해도 됩니다 · 번지거나 두 번 덮이면 읽기 어려워요)</span>
+        <span>복수 정답은 모두 칠하세요. 고칠 때는 <b>수정테이프로 틀린 칸을 완전히 덮고</b> 다시 칠하세요.</span>
+        <span style="flex:1 1 100%; color:#7b8a83;">사진을 찍을 땐 네 모서리의 검은 네모가 모두 보이게, 그림자 없이 위에서 찍어주세요.</span>
       </div>
       <div class="grid"><div class="col">${cols[i]||''}</div><div class="col">${cols[i+1]||''}</div></div>
-      <footer>${Math.floor(i/2)+1} / ${totalPages}</footer>
+      <footer><span>${Math.floor(i/2)+1} / ${totalPages}</span><span class="pgs">${[1,2,3,4,5,6].map(n=>`<span class="pgd${n===Math.floor(i/2)+1?' on':''}" data-p="${n}">${n}</span>`).join('')}</span></footer>
     </section>`);
   }
   return `<div class="omrdoc">${pages.join('') || ''}</div>`;
@@ -7664,6 +7672,221 @@ async function omrFileToB64(f){
   const cv = document.createElement('canvas'); cv.width = img.naturalWidth; cv.height = img.naturalHeight; cv.getContext('2d').drawImage(img,0,0);
   return canvasToBase64(cv, 2000);
 }
+/* =========================================================
+   고전 OMR 판독 — 사진에서 네 모서리 검은 네모를 찾아 펴고, 보기 원의 어두운 정도로 마킹을 판정한다.
+   브라우저 안에서만 처리하므로 AI·서버·호출 한도가 필요 없다. (읽지 못하면 AI로 넘긴다)
+   ========================================================= */
+const OMR_PER_PAGE = 36;                       // 한 장에 36문항 (18문항 × 2단)
+const OMR_BASE_TASK = { tid:'_base', title:'', code:'0000', week:1, classId:'' };
+const omrLayoutCache = {};
+/* 인쇄되는 답안지와 똑같은 HTML을 화면 밖에 그려 보고, 모든 표식·보기 원의 위치(mm)를 잰다 */
+function omrMeasure(t, qs){
+  const key = (t.tid||'_')+'|'+(t.code||'')+'|'+qs.map(q=>q.type==='mc'?'m':'s').join('');
+  if(omrLayoutCache[key]) return omrLayoutCache[key];
+  const host = document.createElement('div');
+  host.style.cssText = 'position:absolute; left:-12000px; top:0; width:210mm; visibility:hidden; pointer-events:none;';
+  host.innerHTML = `<style>${scopeCss(OMR_CSS,'.omrdoc')}</style>` + omrPagesHtml(t, qs, '', '');
+  document.body.appendChild(host);
+  let out;
+  try{
+    const pages = [...host.querySelectorAll('.page')].map(pg=>{
+      const pr = pg.getBoundingClientRect(); const sx = 210/pr.width, sy = 297/pr.height;
+      const c = el=>{ const r = el.getBoundingClientRect(); return { x:(r.left+r.width/2-pr.left)*sx, y:(r.top+r.height/2-pr.top)*sy, r:Math.min(r.width*sx, r.height*sy)/2 }; };
+      const grid = box => [0,1,2,3].map(r=>[0,1,2,3,4,5,6,7,8,9].map(d=>c(pg.querySelector(`.cb[data-box="${box}"][data-r="${r}"][data-d="${d}"]`))));
+      return {
+        markers: ['tl','tr','br','bl'].map(k=>c(pg.querySelector('.m.'+k))),
+        bubbles: [...pg.querySelectorAll('.b[data-q]')].map(e=>Object.assign({ q:+e.dataset.q, k:+e.dataset.k }, c(e))),
+        code: grid('code'), phone: grid('phone'),
+        dots: [...pg.querySelectorAll('.pgd')].map(e=>Object.assign({ p:+e.dataset.p }, c(e)))
+      };
+    });
+    out = { pages };
+  } finally { host.remove(); }
+  omrLayoutCache[key] = out;
+  return out;
+}
+/* 사진 → 조명 보정된 밝기 배열(0=검정, 1=종이 흰색) */
+async function omrPrepare(file){
+  const img = await new Promise((res,rej)=>{ const u = URL.createObjectURL(file); const im = new Image(); im.onload=()=>{ URL.revokeObjectURL(u); res(im); }; im.onerror=()=>rej(new Error('이미지를 열 수 없습니다.')); im.src=u; });
+  const sc = Math.min(1, 1700/Math.max(img.naturalWidth, img.naturalHeight));
+  const w = Math.max(8, Math.round(img.naturalWidth*sc)), h = Math.max(8, Math.round(img.naturalHeight*sc));
+  const cv = document.createElement('canvas'); cv.width = w; cv.height = h;
+  const ctx = cv.getContext('2d', { willReadFrequently:true }); ctx.drawImage(img, 0, 0, w, h);
+  const d = ctx.getImageData(0,0,w,h).data;
+  const gray = new Float32Array(w*h);
+  for(let i=0,j=0;i<gray.length;i++,j+=4) gray[i] = 0.299*d[j] + 0.587*d[j+1] + 0.114*d[j+2];
+  const W1 = w+1, S = new Float64Array(W1*(h+1));
+  for(let y=0;y<h;y++){ let row = 0; for(let x=0;x<w;x++){ row += gray[y*w+x]; S[(y+1)*W1+x+1] = S[y*W1+x+1] + row; } }
+  const R = Math.max(12, Math.round(Math.max(w,h)/18));
+  const norm = new Float32Array(w*h);
+  for(let y=0;y<h;y++){
+    const y0 = Math.max(0,y-R), y1 = Math.min(h-1,y+R);
+    for(let x=0;x<w;x++){
+      const x0 = Math.max(0,x-R), x1 = Math.min(w-1,x+R);
+      const area = (x1-x0+1)*(y1-y0+1);
+      const mean = (S[(y1+1)*W1+x1+1] - S[y0*W1+x1+1] - S[(y1+1)*W1+x0] + S[y0*W1+x0]) / area;
+      const v = gray[y*w+x] / (mean+2);
+      norm[y*w+x] = v>1 ? 1 : v;
+    }
+  }
+  return { w, h, norm };
+}
+/* 검은 정사각형 후보를 찾고, 그중 바깥 네 점(볼록 껍질에서 넓이가 최대인 사각형)을 모서리 표식으로 쓴다 */
+function omrFindQuad(im){
+  const { w, h, norm } = im, N = w*h;
+  const dark = new Uint8Array(N);
+  for(let i=0;i<N;i++) dark[i] = norm[i] < 0.66 ? 1 : 0;
+  const stack = new Int32Array(N), list = new Int32Array(N);
+  const cands = [];
+  for(let s0=0;s0<N;s0++){
+    if(dark[s0]!==1) continue;
+    let sp = 0, cnt = 0; stack[sp++] = s0; dark[s0] = 2;
+    let minx=w, maxx=0, miny=h, maxy=0, sx=0, sy=0;
+    while(sp){
+      const p = stack[--sp]; list[cnt++] = p;
+      const x = p % w, y = (p - x) / w;
+      sx += x; sy += y; if(x<minx)minx=x; if(x>maxx)maxx=x; if(y<miny)miny=y; if(y>maxy)maxy=y;
+      if(x>0 && dark[p-1]===1){ dark[p-1]=2; stack[sp++]=p-1; }
+      if(x<w-1 && dark[p+1]===1){ dark[p+1]=2; stack[sp++]=p+1; }
+      if(y>0 && dark[p-w]===1){ dark[p-w]=2; stack[sp++]=p-w; }
+      if(y<h-1 && dark[p+w]===1){ dark[p+w]=2; stack[sp++]=p+w; }
+    }
+    if(cnt < 70 || cnt > N*0.02) continue;
+    const bw = maxx-minx+1, bh = maxy-miny+1, asp = bw/bh;
+    if(asp<0.5 || asp>2) continue;
+    const cx = sx/cnt, cy = sy/cnt;
+    let md = 0;
+    for(let i=0;i<cnt;i++){ const p = list[i], x = p % w, y = (p-x)/w; const dd = (x-cx)*(x-cx)+(y-cy)*(y-cy); if(dd>md) md = dd; }
+    const sq = md/cnt;                       // 정사각형은 약 0.5, 원은 약 0.32, 글자는 그보다 불규칙
+    if(window.__omrDebug && cnt>120) window.__omrDebug.push({cnt, bw, bh, sq:+sq.toFixed(3), cx:Math.round(cx), cy:Math.round(cy)});
+    if(sq < 0.36 || sq > 0.68) continue;
+    // 속이 꽉 찬 정도: 가운데 영역이 대부분 어두워야 한다
+    let inner = 0, tot = 0; const hw = Math.max(1, Math.floor(Math.min(bw,bh)*0.2));
+    for(let yy=Math.round(cy)-hw; yy<=Math.round(cy)+hw; yy++) for(let xx=Math.round(cx)-hw; xx<=Math.round(cx)+hw; xx++){ if(xx<0||yy<0||xx>=w||yy>=h) continue; tot++; if(norm[yy*w+xx]<0.66) inner++; }
+    if(tot && inner/tot < 0.7) continue;
+    cands.push({ x:cx, y:cy, a:cnt });
+  }
+  if(cands.length < 4) return null;
+  // 볼록 껍질
+  const pts = cands.slice().sort((p,q)=>p.x-q.x || p.y-q.y);
+  const cross = (o,a,b)=>(a.x-o.x)*(b.y-o.y)-(a.y-o.y)*(b.x-o.x);
+  const lo = []; for(const p of pts){ while(lo.length>=2 && cross(lo[lo.length-2],lo[lo.length-1],p)<=0) lo.pop(); lo.push(p); }
+  const up = []; for(let i=pts.length-1;i>=0;i--){ const p = pts[i]; while(up.length>=2 && cross(up[up.length-2],up[up.length-1],p)<=0) up.pop(); up.push(p); }
+  let hull = lo.slice(0,-1).concat(up.slice(0,-1));
+  if(hull.length < 4) return null;
+  if(hull.length > 14) hull = hull.sort((p,q)=>q.a-p.a).slice(0,14);
+  const ordc = hull.reduce((a,p)=>({x:a.x+p.x/hull.length, y:a.y+p.y/hull.length}), {x:0,y:0});
+  hull.sort((p,q)=>Math.atan2(p.y-ordc.y,p.x-ordc.x)-Math.atan2(q.y-ordc.y,q.x-ordc.x));
+  const area = pl=>{ let s=0; for(let i=0;i<pl.length;i++){ const a=pl[i], b=pl[(i+1)%pl.length]; s += a.x*b.y-b.x*a.y; } return Math.abs(s)/2; };
+  let best = null, bestA = 0;
+  const n = hull.length;
+  for(let a=0;a<n-3;a++) for(let b=a+1;b<n-2;b++) for(let c=b+1;c<n-1;c++) for(let d=c+1;d<n;d++){
+    const q = [hull[a],hull[b],hull[c],hull[d]]; const ar = area(q);
+    if(ar>bestA){ bestA = ar; best = q; }
+  }
+  if(!best || bestA < N*0.04) return null;
+  return best;                                   // 이미지에서 시계 방향 순서
+}
+/* 평면 호모그래피: 4쌍의 대응점(템플릿 mm → 사진 px) */
+function omrHomography(src, dst){
+  const A = [], b = [];
+  for(let i=0;i<4;i++){
+    const {x,y} = src[i], {x:u,y:v} = dst[i];
+    A.push([x,y,1,0,0,0,-u*x,-u*y]); b.push(u);
+    A.push([0,0,0,x,y,1,-v*x,-v*y]); b.push(v);
+  }
+  const M = A.map((row,i)=>row.concat([b[i]]));
+  for(let c=0;c<8;c++){
+    let piv = c; for(let r=c+1;r<8;r++) if(Math.abs(M[r][c])>Math.abs(M[piv][c])) piv = r;
+    if(Math.abs(M[piv][c])<1e-12) return null;
+    [M[c],M[piv]] = [M[piv],M[c]];
+    for(let r=0;r<8;r++){ if(r===c) continue; const f = M[r][c]/M[c][c]; for(let k=c;k<9;k++) M[r][k] -= f*M[c][k]; }
+  }
+  const h = M.map((row,i)=>row[8]/row[i]);
+  return h;                                      // [h0..h7], h8 = 1
+}
+function omrMap(H, x, y){ const w = H[6]*x+H[7]*y+1; return [(H[0]*x+H[1]*y+H[2])/w, (H[3]*x+H[4]*y+H[5])/w]; }
+/* 보기 원 안쪽의 어두운 정도 (0=깨끗한 종이, 1=완전히 검정) */
+function omrDisc(im, H, cx, cy, r){
+  const rr = r*0.72, step = rr/3; let sum = 0, n = 0;
+  for(let dy=-rr; dy<=rr+1e-9; dy+=step) for(let dx=-rr; dx<=rr+1e-9; dx+=step){
+    if(dx*dx+dy*dy > rr*rr) continue;
+    const [u,v] = omrMap(H, cx+dx, cy+dy); const xi = Math.round(u), yi = Math.round(v);
+    if(xi<0||yi<0||xi>=im.w||yi>=im.h) return null;     // 사진 밖으로 나가면 읽을 수 없다
+    sum += im.norm[yi*im.w+xi]; n++;
+  }
+  return n ? 1 - sum/n : null;
+}
+const omrMedian = a=>{ const s = a.filter(v=>v!=null).sort((x,y)=>x-y); return s.length ? s[Math.floor(s.length/2)] : 0; };
+/* 숫자 칸(4줄 × 0~9) 읽기 */
+function omrReadGrid(im, H, grid, base){
+  let digits = '', unsure = false, contrast = 0, minC = 1, bad = false;
+  grid.forEach(row=>{
+    const sc = row.map(c=>omrDisc(im,H,c.x,c.y,c.r));
+    if(sc.some(v=>v==null)){ bad = true; digits += '?'; unsure = true; return; }
+    const order = sc.map((v,i)=>[v,i]).sort((a,b)=>b[0]-a[0]);
+    const gap = order[0][0]-order[1][0];
+    contrast += gap; if(gap<minC) minC = gap;
+    const ok = base==null ? gap >= 0.3 : (order[0][0]-base >= 0.25);
+    if(!ok){ digits += '?'; unsure = true; return; }
+    if(order[1][0]-(base==null?0:base) >= 0.15 && gap < 0.15) unsure = true;
+    digits += String(order[0][1]);
+  });
+  return { digits, unsure, contrast, minGap:minC, bad };
+}
+/* 사진 한 장을 고전 방식으로 읽는다. opt.resolve(code) → {t, qs} (과제를 모르면 null).
+   반환: {ok:true, ...} 또는 {ok:false, reason} (이 경우 호출자가 AI로 넘긴다) */
+async function omrReadClassic(file, opt){
+  const base = omrMeasure(OMR_BASE_TASK, [{type:'mc'}]).pages[0];
+  const im = await omrPrepare(file);
+  const quad = omrFindQuad(im);
+  if(!quad) return { ok:false, reason:'모서리의 검은 네모 4개를 찾지 못했습니다' };
+  const tpl = base.markers;
+  let best = null;
+  for(let r=0;r<4;r++){
+    const img = [0,1,2,3].map(i=>quad[(i+r)%4]);
+    const dTop = Math.hypot(img[1].x-img[0].x, img[1].y-img[0].y), dRight = Math.hypot(img[2].x-img[1].x, img[2].y-img[1].y);
+    const ratio = dTop/Math.max(1,dRight);
+    if(ratio<0.4 || ratio>1.0) continue;                    // 세로 용지가 아닌 배치는 제외
+    const H = omrHomography(tpl, img); if(!H) continue;
+    const g = omrReadGrid(im, H, base.code, null);
+    if(!best || g.contrast > best.g.contrast) best = { H, g };
+  }
+  if(!best || best.g.bad || best.g.minGap < 0.3) return { ok:false, reason:'과제 코드 칸이 또렷하게 보이지 않습니다' };
+  const H = best.H;
+  const code = best.g.digits;
+  const codeBase = (()=>{ const v = []; base.code.forEach((row,ri)=>{ const sc = row.map(c=>omrDisc(im,H,c.x,c.y,c.r)); const mx = Math.max(...sc); sc.forEach(s=>{ if(s!==mx) v.push(s); }); }); return omrMedian(v); })();
+  const ph = omrReadGrid(im, H, base.phone, codeBase);
+  // 쪽 번호: 새 답안지에만 있는 점. 없으면 옛 용지이므로 정확한 위치를 보장할 수 없어 AI에 맡긴다
+  const dsc = base.dots.map(d=>omrDisc(im,H,d.x,d.y,d.r));
+  if(dsc.some(v=>v==null)) return { ok:false, reason:'용지 아래쪽이 사진에 모두 담기지 않았습니다' };
+  const dOrd = dsc.map((v,i)=>[v,i]).sort((a,b)=>b[0]-a[0]);
+  if(dOrd[0][0]-codeBase < 0.3 || dOrd[0][0]-dOrd[1][0] < 0.2) return { ok:false, reason:'새 형식의 답안지가 아닙니다(쪽 표시 없음)' };
+  const page = dOrd[0][1];
+  const res = { ok:true, via:'scan', code, code_unsure:/\?/.test(code), phone:ph.digits, phone_unsure:ph.unsure, page, pages:1, answers:[], needText:[] };
+  const ctx = opt && opt.resolve ? opt.resolve(code) : null;
+  if(!ctx || !ctx.qs){ res.needTask = true; return res; }
+  const layout = omrMeasure(ctx.t, ctx.qs);
+  res.pages = layout.pages.length;
+  const pg = layout.pages[page];
+  if(!pg) return { ok:false, reason:'쪽 번호가 이 과제와 맞지 않습니다' };
+  const byQ = {};
+  let bad = false;
+  pg.bubbles.forEach(b=>{ const s = omrDisc(im,H,b.x,b.y,b.r); if(s==null){ bad = true; return; } (byQ[b.q] = byQ[b.q] || [])[b.k-1] = s; });
+  if(bad) return { ok:false, reason:'답안 칸 일부가 사진 밖으로 나갔습니다' };
+  const allS = [].concat(...Object.values(byQ));
+  const bm = omrMedian(allS);
+  Object.keys(byQ).map(Number).sort((a,b)=>a-b).forEach(n=>{
+    const sc = byQ[n];
+    const strong = [], weak = [];
+    sc.forEach((s,i)=>{ if(s-bm >= 0.22) strong.push(i+1); else if(s-bm >= 0.12) weak.push([s,i+1]); });
+    if(strong.length) res.answers.push({ n, marked:strong, unsure:false });
+    else if(weak.length){ weak.sort((a,b)=>b[0]-a[0]); res.answers.push({ n, marked:[weak[0][1]], unsure:true }); }
+  });
+  for(let i=page*OMR_PER_PAGE; i<Math.min(ctx.qs.length,(page+1)*OMR_PER_PAGE); i++) if(ctx.qs[i].type!=='mc') res.needText.push(i+1);
+  return res;
+}
+
 /* OMR 사진 한 장 읽기. qs를 모르는 일괄 채점에서는 qs 없이 부른다(과제 코드로 과제를 찾은 뒤 문항에 맞춘다). */
 async function omrReadSheet(apiKey, b64, qs){
   const types = qs ? ` 총 ${qs.length}문항이다. (${qs.map((q,i)=>`${i+1}번: ${q.type==='mc'?'객관식(보기 ①~⑤)':'단답형(손글씨 칸)'}`).join(', ')})` : '';
@@ -7688,6 +7911,34 @@ async function omrReadSheet(apiKey, b64, qs){
   const { parsed } = await callGemini({ apiKey, parts:[{text:prompt},{inline_data:{mime_type:'image/jpeg', data:b64}}], schema, timeoutMs:90000 });
   return parsed;
 }
+/* 고전 판독을 먼저 시도하고, 못 읽거나 단답형 손글씨가 있으면 AI로 보충한다 */
+async function omrReadHybrid(file, opt){
+  const getKey = ()=>localStorage.getItem('ai-gemini-apikey') || sharedAiKey;
+  let why = '';
+  try{
+    const r = await omrReadClassic(file, opt);
+    if(r.ok){
+      if(r.needText && r.needText.length){
+        const ctx = opt.resolve ? opt.resolve(r.code) : null, key = getKey();
+        if(key && ctx && ctx.qs){
+          try{
+            const ai = await omrReadSheet(key, await omrFileToB64(file), ctx.qs);
+            (ai.answers||[]).forEach(a=>{ if(r.needText.includes(a.n) && String(a.text||'').trim()) r.answers.push({ n:a.n, text:String(a.text).trim(), unsure:!!a.unsure }); });
+            r.usedAi = true;
+          }catch(e){ r.aiErr = e.message; }
+        }
+        r.needText.forEach(n=>{ if(!r.answers.some(a=>a.n===n)) r.answers.push({ n, text:'', unsure:true }); });
+      }
+      return r;
+    }
+    why = r.reason;
+  }catch(e){ why = e.message; }
+  const key = getKey();
+  if(!key) throw new Error((why||'사진을 읽지 못했습니다')+'. 용지 네 모서리의 검은 네모가 모두 나오도록, 그림자 없이 다시 찍어 주세요.');
+  const parsed = await omrReadSheet(key, await omrFileToB64(file), opt.qsForAi || null);
+  parsed.via = 'ai'; parsed.fallbackWhy = why;
+  return parsed;
+}
 let omrScanBusy = false;
 async function scanOmrPhoto(input){
   const f = input.files && input.files[0]; input.value = '';
@@ -7695,16 +7946,13 @@ async function scanOmrPhoto(input){
   const st = $('omr-scan-status');
   if(omrScanBusy) return;
   if(!f.type.startsWith('image/')){ alert('사진(이미지) 파일만 가능합니다.'); return; }
-  const apiKey = localStorage.getItem('ai-gemini-apikey') || sharedAiKey;
-  if(!apiKey){ alert('AI 키가 설정되어 있지 않습니다. 선생님께 문의하세요.'); return; }
   const t = tasks[currentSolve.kind].find(x=>x.tid===currentSolve.tid); if(!t) return;
   const qs = (t.qids||[]).map(id=>questions.find(x=>x.qid===id)).filter(Boolean);
   if(Object.keys(collectSolveAnswers(qs)).some(k=>collectSolveAnswers(qs)[k]) && !confirm('이미 입력한 답이 있습니다. 사진에서 읽은 답으로 덮어쓸까요?')) return;
 
-  omrScanBusy = true; st.style.color = 'var(--ink-soft)'; st.textContent = '사진을 읽는 중입니다… (10~30초)';
+  omrScanBusy = true; st.style.color = 'var(--ink-soft)'; st.textContent = '사진을 읽는 중입니다…';
   try{
-    const b64 = await omrFileToB64(f);
-    const parsed = await omrReadSheet(apiKey, b64, qs);
+    const parsed = await omrReadHybrid(f, { resolve:()=>({ t, qs }), qsForAi:qs });
     const read = String(parsed.code||'').replace(/\D/g,'');
     const want = taskCodeOf(t);
     if(read && read.length===4 && read!==want){
@@ -7723,8 +7971,11 @@ async function scanOmrPhoto(input){
     const list = Array.isArray(parsed.answers) ? parsed.answers : [];
     const map = {}; let filled = 0, unsure = 0;
     document.querySelectorAll('.omr-q.scanned-unsure').forEach(e=>e.classList.remove('scanned-unsure'));
+    /* 여러 쪽짜리 답안지는 이 쪽의 문항만 바꾼다 (다른 쪽에서 읽은 답을 지우지 않는다) */
+    const scoped = parsed.via==='scan' && parsed.pages>1;
+    const inScope = i => !scoped || Math.floor(i/OMR_PER_PAGE)===parsed.page;
     list.forEach(a=>{
-      const q = qs[(a.n||0)-1]; if(!q) return;
+      const q = qs[(a.n||0)-1]; if(!q || !inScope((a.n||1)-1)) return;
       let v = '';
       if(q.type==='mc'){ const ms = [...new Set((a.marked||[]).filter(n=>n>=1&&n<=5))].sort((x,y)=>x-y); v = ansToStr(ms); }
       else v = String(a.text||'').trim();
@@ -7732,7 +7983,8 @@ async function scanOmrPhoto(input){
       if(a.unsure || (!v)){ if(a.unsure){ unsure++; solveFlags.add(q.qid); const w = $('qwrap_'+q.qid); if(w) w.classList.add('scanned-unsure'); } }
     });
     // 먼저 전부 비운 뒤 읽은 답만 채운다
-    qs.forEach(q=>{
+    qs.forEach((q,qi)=>{
+      if(!inScope(qi)) return;
       if(q.type==='mc') document.querySelectorAll(`input[name="ans_${q.qid}"]`).forEach(cb=>{ cb.checked=false; cb.parentElement.classList.remove('picked'); });
       else { const el = $('ans_'+q.qid); if(el) el.value=''; }
     });
@@ -7744,7 +7996,9 @@ async function scanOmrPhoto(input){
     });
     updateSolveProgress(); saveSolveDraftNow();
     st.style.color = unsure ? 'var(--warn)' : 'var(--good)';
-    st.innerHTML = `${filled}/${qs.length}문항을 읽었습니다.${codeNote}` + (unsure ? ` 확신이 낮은 <b>${unsure}문항</b>은 ★와 주황색으로 표시했어요.` : '') + '<br><b>AI가 읽은 결과는 틀릴 수 있으니 직접 확인한 뒤 제출하세요.</b>';
+    const pageNote = scoped ? ` (${parsed.page+1}/${parsed.pages}쪽)` : '';
+    const viaNote = parsed.via==='scan' ? '' : (parsed.fallbackWhy ? ` (${parsed.fallbackWhy} — AI로 읽었어요)` : ' (AI로 읽었어요)');
+    st.innerHTML = `${filled}/${qs.length}문항을 읽었습니다.${pageNote}${viaNote}${codeNote}` + (unsure ? ` 확신이 낮은 <b>${unsure}문항</b>은 ★와 주황색으로 표시했어요.` : '') + (scoped ? '<br>다른 쪽도 사진을 올려 이어서 채우세요.' : '') + '<br><b>읽은 결과가 틀릴 수 있으니 직접 확인한 뒤 제출하세요.</b>';
   }catch(e){
     st.style.color = 'var(--accent)'; st.textContent = '읽기 실패: ' + e.message;
   }finally{ omrScanBusy = false; }
@@ -9260,11 +9514,14 @@ async function commitOfflineRecord(kind, tid, uid, qs, marks, answers, opts){
    ========================================================= */
 let bulk = { rows:[], seq:0, running:0, committing:false };
 function openBulkOmr(){
-  const key = localStorage.getItem('ai-gemini-apikey') || sharedAiKey;
-  if(!key){ alert('AI 키가 없습니다. 문제 → AI 문제 생성에서 키를 먼저 저장하거나 공유 키를 설정하세요.'); return; }
   bulk.rows.forEach(r=>{ if(r.thumb) URL.revokeObjectURL(r.thumb); });
   bulk = { rows:[], seq:0, running:0, committing:false };
   renderBulk(); openModal('bulk-omr-modal');
+}
+/* 과제 코드로 과제를 찾는다 (고전 판독이 문항 위치를 알려면 과제의 문항 구성이 필요하다) */
+function bulkResolve(code){
+  const hit = bulkTasks().find(x=>taskCodeOf(x.t)===code);
+  return hit ? { t:hit.t, qs:(hit.t.qids||[]).map(id=>questions.find(x=>x.qid===id)).filter(Boolean) } : null;
 }
 function bulkTasks(){
   return tasks.hw.map(t=>({kind:'hw',t})).concat(tasks.exam.map(t=>({kind:'exam',t})));
@@ -9302,10 +9559,10 @@ function bulkMatch(row, keepUid){
   bulkRecompute(row);
 }
 async function bulkReadOne(row){
-  const apiKey = localStorage.getItem('ai-gemini-apikey') || sharedAiKey;
   try{
-    const b64 = await omrFileToB64(row.file);
-    const parsed = await omrReadSheet(apiKey, b64, null);
+    const parsed = await omrReadHybrid(row.file, { resolve:bulkResolve });
+    row.via = parsed.via; row.page = parsed.page; row.pages = parsed.pages; row.fallbackWhy = parsed.fallbackWhy || '';
+    row.needRead = !!parsed.needTask;
     row.code = String(parsed.code||'').replace(/\D/g,'').slice(0,4);
     row.phone = String(parsed.phone||'').replace(/\D/g,'').slice(0,4);
     row.codeUnsure = !!parsed.code_unsure || row.code.length!==4;
@@ -9315,6 +9572,15 @@ async function bulkReadOne(row){
     row.tkey = hit ? hit.kind+'|'+hit.t.tid : '';
     bulkMatch(row, false);
     row.status = 'done';
+    /* 여러 쪽짜리 과제: 같은 학생의 다른 쪽 사진은 한 행으로 합친다 */
+    if(row.pages>1 && row.code.length===4 && /^\d{4}$/.test(row.phone)){
+      const other = bulk.rows.find(x=>x!==row && x.status==='done' && x.pages>1 && x.code===row.code && x.phone===row.phone && x.page!==row.page && !(x.mergedPages||[x.page]).includes(row.page));
+      if(other){
+        other.list = (other.list||[]).concat(row.list||[]); other.mergedPages = (other.mergedPages||[other.page]).concat(row.page);
+        other.name += ' + ' + row.name; URL.revokeObjectURL(row.thumb);
+        bulk.rows = bulk.rows.filter(x=>x!==row); bulkMatch(other, true);
+      }
+    }
   }catch(e){ row.status = 'error'; row.err = e.message; }
   bulk.running--; renderBulk(); pumpBulk();
 }
@@ -9335,7 +9601,22 @@ function onBulkFiles(input){
   pumpBulk();
 }
 function bulkRow(id){ return bulk.rows.find(r=>r.id===id); }
-function bulkPickTask(id, v){ const r = bulkRow(id); if(!r) return; r.tkey = v; bulkMatch(r, false); renderBulk(); }
+async function bulkPickTask(id, v){
+  const r = bulkRow(id); if(!r) return; r.tkey = v;
+  /* 과제를 몰라 답을 못 읽은 사진은, 고른 과제 기준으로 다시 읽는다 */
+  if(r.needRead && v){
+    const bt = bulkTaskOf(r);
+    if(bt){
+      r.status = 'reading'; renderBulk();
+      try{
+        const parsed = await omrReadHybrid(r.file, { resolve:()=>({ t:bt.t, qs:bt.qs }), qsForAi:bt.qs });
+        r.list = Array.isArray(parsed.answers) ? parsed.answers : []; r.needRead = false; r.page = parsed.page; r.pages = parsed.pages; r.via = parsed.via;
+        r.status = 'done';
+      }catch(e){ r.status = 'error'; r.err = e.message; }
+    }
+  }
+  bulkMatch(r, false); renderBulk();
+}
 function bulkPickStudent(id, v){ const r = bulkRow(id); if(!r) return; r.uid = v; renderBulk(); }
 function bulkToggleInclude(id, on){ const r = bulkRow(id); if(r){ r.include = on; renderBulk(); } }
 function bulkToggleOpen(id){ const r = bulkRow(id); if(r){ r.open = !r.open; renderBulk(); } }
@@ -10201,7 +10482,7 @@ function renderFirebaseGuide(){
     <li><b>모바일 메뉴</b> — 하단에 아이콘 대분류 5개(수업·출제·문제·채점·확인·더보기)가 있습니다. 누르면 위로 세부 메뉴가 뜨고, 고르거나 바깥을 누르면 닫힙니다. 학생 화면 보기·운영 안내·다크 모드·로그아웃은 '더보기'에 있습니다. PC에서는 대분류가 접히지 않는 구획 제목으로 항상 펼쳐져 있습니다.</li>
     <li><b>문제 JSON 가져오기</b> — 문제 → 문제은행 맨 위 카드. <b>Claude용 안내문 복사</b>를 Claude에게 붙여넣고 문제를 만들어 달라고 하면 규격에 맞는 JSON이 나옵니다. 그 파일을 올리면 <b>등록할 세트 선택(기존 세트·새 세트·JSON에 적힌 세트) → 검사(오류·중복 확인) → 등록</b> 순서로 진행됩니다. 오류가 있는 문제는 등록되지 않고 이유가 표시됩니다. 이미지는 JSON으로 넣을 수 없으니 필요하면 등록 후 문제 수정에서 붙이세요. 보기 본문의 HTML은 굵게·밑줄 등 기본 태그만 남기고 나머지는 제거됩니다.</li>
     <li><b>주차 묶음 인쇄</b> — 수업 · 주차 탭의 '이 주차의 과제·시험·영상' 카드에서 <b>이 주차 묶음 인쇄</b>. 고른 과제·시험을 <b>표지 → 과제1 문제지 → 과제1 OMR → 과제2 문제지 → …</b> 순서로 한 번에 뽑습니다. 표지에는 수업 이름, 주차, 과제 이름과 코드가 들어갑니다. 정답·해설은 포함하지 않으니 따로 배부하세요. 인쇄 창의 <b>배경 그래픽</b>을 켜면 표지의 초록 색면이 선명하게 나옵니다.</li>
-    <li><b>종이 OMR</b> — 과제 관리·시험 관리의 <b>OMR 인쇄</b>(학생은 풀이 화면에서도 가능)로 답안지를 뽑습니다. 학생이 종이에 마킹한 뒤(틀리면 <b>수정테이프로 덮고 다시 칠하면 됩니다</b> — AI가 테이프로 덮인 칸은 지운 것으로 읽고, 번지거나 애매하면 ★로 표시합니다) 풀이 화면의 <b>마킹한 OMR 사진으로 답 채우기</b>에 사진을 올리면 AI(Gemini)가 마킹을 읽어 답안을 채우고, 학생이 확인한 뒤 제출하면 온라인 OMR과 똑같이 자동 채점됩니다. 확신이 낮은 문항은 ★와 주황색으로 표시됩니다. AI가 틀리게 읽을 수 있으니 학생이 꼭 확인해야 하고, 어두운 사진·접힌 용지는 정확도가 떨어집니다. 사진 인식은 Gemini 호출 1회를 씁니다. 답안지 오른쪽 위에는 과제마다 다른 <b>숫자 4자리 과제 코드</b>가 0~9 칸에 칠해진 채 인쇄되며(과제 목록의 '코드' 배지와 같은 값), 사진을 올리면 AI가 이 코드를 읽어 지금 푸는 과제와 다르면 경고하고 답을 채우지 않습니다. 코드가 없는 기존 과제는 관리자가 접속할 때 자동으로 부여됩니다.</li>
+    <li><b>종이 OMR</b> — 과제 관리·시험 관리의 <b>OMR 인쇄</b>(학생은 풀이 화면에서도 가능)로 답안지를 뽑습니다. 학생이 종이에 마킹한 뒤(틀리면 <b>수정테이프로 덮고 다시 칠하면 됩니다</b>) 풀이 화면의 <b>📷 카메라로 바로 찍기</b>(폰 카메라가 바로 열립니다) 또는 <b>🖼 앨범에서 고르기</b>로 사진을 올리면 답이 채워지고, 학생이 확인한 뒤 제출하면 온라인 OMR과 똑같이 자동 채점됩니다. <b>판독은 AI가 아니라 브라우저의 이미지 처리</b>입니다: 용지 네 모서리의 검은 네모를 찾아 사진을 바로잡고, 보기 원이 얼마나 어두운지로 마킹을 판정합니다. 서버·AI 호출·한도가 필요 없고 결과가 항상 같습니다. 약하게 칠한 칸은 ★와 주황색으로 표시됩니다. 네 모서리가 모두 나오고, 그림자가 적고, 용지가 접히지 않았을수록 정확합니다. 읽지 못하면(모서리가 잘림, 옛 용지 등) 자동으로 AI(Gemini)로 넘어가며, 그때만 호출 1회를 씁니다. <b>단답형 손글씨 칸은 이미지 처리로 읽을 수 없어</b> 그 문항만 AI(키가 있을 때)가 읽습니다. 답안지 오른쪽 위에는 과제마다 다른 <b>숫자 4자리 과제 코드</b>가 칠해진 채 인쇄되며(과제 목록의 '코드' 배지와 같은 값) 지금 푸는 과제와 다르면 경고합니다. 아래쪽의 <b>쪽 표시(●)</b>로 몇 쪽인지 알아 36문항을 넘는 과제는 쪽마다 사진을 올리면 이어서 채워집니다. <b>이번 업데이트 이전에 인쇄한 답안지에는 쪽 표시가 없어</b> AI로 읽습니다. 가능하면 새로 인쇄해 쓰세요. 코드가 없는 기존 과제는 관리자가 접속할 때 자동으로 부여됩니다.</li>
     <li><b>문항 통계</b> — 채점·확인 → 문항 통계. 과제·시험을 고르면 문항별 정답률, 선지별 선택 분포, 가장 많이 고른 오답이 보입니다. 정답률 낮은 순으로 정렬하면 수업에서 다시 짚을 문제를 바로 찾을 수 있습니다. 파일(사진·PDF)로만 낸 제출은 집계에서 빠집니다.</li>
     <li><b>과제·시험 복제</b> — 과제 관리·시험 관리 목록 또는 수업·주차 화면의 <b>복제</b> 버튼. 수업과 주차(여러 개 가능)를 고르면 문항 구성이 그대로 복사되고, 시작·마감 일시는 주차 차이만큼 옮길 수 있습니다. 첨부 PDF는 복사하지 않습니다(한쪽을 지울 때 파일이 같이 지워지는 것을 막기 위해).</li>
     <li><b>로그인 · 학생 등록</b> — 로그인 아이디는 <b>전화번호</b>(또는 기존 이메일)입니다. 학생 관리의 <b>학생 직접 등록</b>에서 이름·전화번호·이메일·<b>초기 비밀번호</b>를 넣으면 계정이 바로 만들어지고 승인까지 끝납니다. 그 정보를 학생에게 알려 주면, 학생이 처음 로그인할 때 <b>새 비밀번호를 정해야</b> 화면을 쓸 수 있습니다(내 정보에서 언제든 다시 변경 가능). 목록의 '초기 비번' 표시는 아직 바꾸지 않았다는 뜻입니다.</li>
@@ -10214,7 +10495,7 @@ function renderFirebaseGuide(){
     <li><b>다크 모드</b> — 학생·관리자 왼쪽 메뉴의 '다크 모드' 버튼. 기기마다 선택이 저장됩니다.</li>
     <li><b>공지 읽음</b> — 학생 메인에서 안 읽은 공지에 NEW가 붙고, 약 4초 보거나 눌러 보면 읽음 처리됩니다. 관리자 공지 목록의 '읽음 n / m명'을 누르면 아직 안 본 학생 명단이 나옵니다. 집계에는 아래 <b>규칙 전문</b>(noticeReads 포함)이 게시되어 있어야 합니다.</li>
     <li><b>OMR 본인 확인</b> — OMR 답안지 위쪽에는 <b>과제 코드</b>(미리 칠해져 있음)와 <b>전화번호 끝 4자리</b>(학생이 직접 칠함, 0~9) 마킹 칸이 있습니다. 학생 화면에서 사진으로 답을 채울 때 전화번호가 내 정보와 다르면 경고합니다. 학생 정보에 전화번호가 없으면 자동 식별이 되지 않으니 학생 관리에서 확인하세요.</li>
-    <li><b>OMR 사진 일괄 채점</b> — 채점 · 확인 탭의 <b>OMR 사진 일괄 채점</b> 버튼 → 사진을 여러 장 선택. 과제 코드로 과제를, 전화번호 끝 4자리로 학생(해당 과제 대상 중)을 찾아 채점합니다. 과제가 서로 달라도 됩니다. 같은 끝 4자리가 둘 이상이면 학생을 직접 고르고, 확신이 낮은 문항은 주황 테두리로 표시되니 '문항별 확인'에서 눌러 정오를 고친 뒤 반영하세요. 반영하면 현장 제출 기록·점수·오답노트가 저장됩니다. 온라인으로 낸 기록이 있는 학생은 반영되지 않습니다. 이 기능은 AI(Gemini) 키가 필요하고, AI 읽기는 틀릴 수 있어 확인 단계를 거치도록 했습니다.</li>
+    <li><b>OMR 사진 일괄 채점</b> — 채점 · 확인 탭의 <b>OMR 사진 일괄 채점</b> 버튼 → <b>📷 카메라로 찍기</b> 또는 사진을 여러 장 선택. 과제 코드로 과제를, 전화번호 끝 4자리로 학생(해당 과제 대상 중)을 찾아 채점합니다. 과제가 서로 달라도 됩니다. 같은 끝 4자리가 둘 이상이면 학생을 직접 고르고, 확신이 낮은 문항은 주황 테두리로 표시되니 '문항별 확인'에서 눌러 정오를 고친 뒤 반영하세요. 36문항을 넘는 과제는 같은 학생의 쪽별 사진이 한 줄로 합쳐집니다. 반영하면 현장 제출 기록·점수·오답노트가 저장됩니다. 온라인으로 낸 기록이 있는 학생은 반영되지 않습니다. 판독은 브라우저 이미지 처리라 키가 없어도 되고, 읽지 못한 사진·옛 답안지만 AI로 넘어갑니다.</li>
     <li><b>주차별 보기</b> — 학생 · 관리자 과제/시험 목록은 클래스·주차별로 묶여 나오며, 위쪽 칩/필터로 주차를 골라 볼 수 있습니다. 학생 관리의 명렬표는 가나다순입니다.</li>
     <li><b>정답 · 해설 공개 시점</b> — 온라인 OMR은 제출 직후, 사진·파일 제출은 관리자가 점수를 입력한 뒤에 학생에게 열립니다. 학생 화면에서는 제출 전에는 정답이 어디에도 내려오지 않습니다.</li>
     <li><b>공지사항</b> — 학생 메인 맨 위에 표시됩니다. 본문에 붙인 주소는 자동으로 링크가 되고 새 탭에서 열립니다. <b>중요</b>로 체크하면 강조되고 맨 위에 고정됩니다.</li>
