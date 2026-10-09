@@ -495,3 +495,47 @@ body.on-login{
   #shell-student .me-acct-row{display:flex; gap:8px;}
   #shell-student .me-acct-row .btn{flex:1;}
 }
+
+/* ---------- 관리자 메뉴: 아이콘 + 대분류 구분 ---------- */
+#shell-admin .sidebar nav .ni{width:18px; height:18px; flex:0 0 auto;}
+#shell-admin .sidebar nav .nav-sub .admin-nav{display:flex; align-items:center; gap:11px;}
+#shell-admin .sidebar nav .nav-sub .admin-nav .ni{opacity:.75;}
+#shell-admin .sidebar nav .nav-sub .admin-nav.active .ni{opacity:1;}
+@media (min-width:761px){
+  #shell-admin .sidebar{overflow-y:auto; padding-bottom:16px;}
+  /* 대분류는 접지 않고 항상 펼쳐 두는 구획 머리글로 */
+  #shell-admin .sidebar nav .nav-sect{margin:0 0 2px; padding-top:4px; background:none !important; border-top:1px solid rgba(255,255,255,.1);}
+  #shell-admin .sidebar nav .nav-sect:first-child{border-top:none; padding-top:0;}
+  #shell-admin .sidebar nav .nav-group{
+    pointer-events:none; cursor:default; padding:6px 22px 4px; font-size:11px; font-weight:800; letter-spacing:.09em;
+    color:rgba(255,255,255,.5) !important; background:none !important; border-left:none !important;}
+  #shell-admin .sidebar nav .nav-group .ni{display:none;}
+  #shell-admin .sidebar nav .nav-group .ng-arrow{display:none;}
+  #shell-admin .sidebar nav .nav-sect.has-active .nav-group{color:rgba(255,255,255,.85) !important;}
+  #shell-admin .sidebar nav .nav-sub, #shell-admin .sidebar nav .nav-sect.open .nav-sub{display:block !important; padding-bottom:2px;}
+  #shell-admin .sidebar nav .nav-sub .admin-nav{padding:5px 12px 5px 16px; margin:1px 8px; width:calc(100% - 16px); font-size:14px; border-left:none;}
+  #shell-admin .sidebar nav .nav-sect:last-child .nav-sub .admin-nav.nav-logout{margin-top:2px; border-top:none; border-radius:10px; color:rgba(255,255,255,.62);}
+  #shell-admin .sidebar nav .nav-sect:last-child .nav-sub .admin-nav:not(.active){color:rgba(255,255,255,.78);}
+}
+@media (max-width:760px){
+  /* 하단바: 대분류 5개(아이콘+이름), 누르면 위로 세부 메뉴 */
+  #shell-admin .sidebar nav{display:grid !important; grid-template-columns:repeat(5,1fr);}
+  #shell-admin .sidebar nav .nav-group{flex-direction:column; gap:3px; padding:7px 0 6px; font-size:10.5px; letter-spacing:-.04em; line-height:1.1;}
+  #shell-admin .sidebar nav .nav-group .ni{width:21px; height:21px;}
+  #shell-admin .sidebar nav .nav-group .ng-arrow{display:none;}
+  #shell-admin .sidebar nav .nav-sub .admin-nav.nav-logout{margin-top:4px; border-top:1px solid rgba(255,255,255,.14) !important; border-radius:0 0 12px 12px;}
+  #shell-admin .sidebar nav .nav-sub .admin-nav .ni{width:19px; height:19px;}
+}
+
+@media (min-width:761px){ #shell-admin .sidebar .brand{padding-bottom:14px; margin-bottom:8px;} #shell-admin .sidebar{padding-top:18px;} }
+@media (min-width:761px){
+  /* 다크 모드·로그아웃은 한 줄에 나란히 (세로 공간 절약) */
+  #shell-admin #sect-more .nav-sub{display:flex !important; flex-wrap:wrap;}
+  #shell-admin #sect-more .nav-sub .admin-nav{flex:1 1 100%;}
+  #shell-admin #sect-more .nav-sub .theme-btn, #shell-admin #sect-more .nav-sub .nav-logout{flex:1 1 calc(50% - 16px); width:auto; min-width:0; margin-top:4px; padding-left:10px; padding-right:6px; font-size:13px;}
+  #shell-admin #sect-more .nav-sub .nav-logout{border:none;}
+}
+@media (min-width:761px){
+  #shell-admin #sect-more .nav-sub .theme-btn, #shell-admin #sect-more .nav-sub .nav-logout{white-space:nowrap; gap:6px; font-size:12.5px; padding-left:8px; padding-right:4px;}
+  #shell-admin #sect-more .nav-sub .theme-btn .ni, #shell-admin #sect-more .nav-sub .nav-logout .ni{width:16px; height:16px;}
+}

@@ -737,46 +737,51 @@ body.quiet-preview .sidebar{ padding-top:22px; }
       <div class="brand"><h3 style="color:#fff; font-size:16px; margin:0;">관리자</h3><small>명덕외고 국제정치 스터디</small></div>
       <nav>
         <div class="nav-sect" id="sect-class">
-          <button type="button" class="nav-group" onclick="toggleNavSect('sect-class')">수업<span class="ng-arrow">▾</span></button>
+          <button type="button" class="nav-group" onclick="toggleNavSect('sect-class')"><svg class="ni gi" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9.5 12 5l9 4.5-9 4.5z"/><path d="M7 11.8v4.2c0 1 2.2 2.5 5 2.5s5-1.5 5-2.5v-4.2"/></svg><span class="gl">수업</span><span class="ng-arrow">▾</span></button>
           <div class="nav-sub">
-            <button class="admin-nav active" data-tab="a-schedule" onclick="setAdminTab('a-schedule')">수업 · 주차</button>
-            <button class="admin-nav" data-tab="a-attendance" onclick="setAdminTab('a-attendance')">출석 체크</button>
-            <button class="admin-nav" data-tab="a-students" onclick="setAdminTab('a-students')">학생 관리</button>
-            <button class="admin-nav" data-tab="a-notice" onclick="setAdminTab('a-notice')">공지사항</button>
+            <button class="admin-nav active" data-tab="a-schedule" onclick="setAdminTab('a-schedule')"><svg class="ni" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="5.5" width="16" height="14" rx="2.5"/><path d="M4 10h16M9 3.5v4M15 3.5v4"/></svg><span>수업 · 주차</span></button>
+            <button class="admin-nav" data-tab="a-attendance" onclick="setAdminTab('a-attendance')"><svg class="ni" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="4" width="14" height="16.5" rx="2.5"/><path d="m9 12.5 2 2 4-4.5"/></svg><span>출석 체크</span></button>
+            <button class="admin-nav" data-tab="a-students" onclick="setAdminTab('a-students')"><svg class="ni" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8.5" r="3.2"/><path d="M3.5 19c.6-3.2 2.8-4.8 5.5-4.8s4.9 1.6 5.5 4.8"/><path d="M16 5.6a3 3 0 0 1 0 5.8M17.5 14.5c1.7.5 2.8 2 3 4.5"/></svg><span>학생 관리</span></button>
+            <button class="admin-nav" data-tab="a-notice" onclick="setAdminTab('a-notice')"><svg class="ni" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 10v4h3l6 4V6l-6 4z"/><path d="M17 9.5a3.5 3.5 0 0 1 0 5"/></svg><span>공지사항</span></button>
           </div>
         </div>
 
         <div class="nav-sect" id="sect-make">
-          <button type="button" class="nav-group" onclick="toggleNavSect('sect-make')">출제<span class="ng-arrow">▾</span></button>
+          <button type="button" class="nav-group" onclick="toggleNavSect('sect-make')"><svg class="ni gi" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20l1-4L16.5 4.5a2 2 0 0 1 3 3L8 19z"/><path d="M14.5 6.5l3 3"/></svg><span class="gl">출제</span><span class="ng-arrow">▾</span></button>
           <div class="nav-sub">
-            <button class="admin-nav" data-tab="a-hw" onclick="setAdminTab('a-hw')">과제 관리</button>
-            <button class="admin-nav" data-tab="a-exam" onclick="setAdminTab('a-exam')">시험 관리</button>
-            <button class="admin-nav" data-tab="a-video" onclick="setAdminTab('a-video')">동영상 관리</button>
+            <button class="admin-nav" data-tab="a-hw" onclick="setAdminTab('a-hw')"><svg class="ni" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="3.5" width="14" height="17" rx="2.5"/><path d="M9 8.5h6M9 12.5h6M9 16.5h3.5"/></svg><span>과제 관리</span></button>
+            <button class="admin-nav" data-tab="a-exam" onclick="setAdminTab('a-exam')"><svg class="ni" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5 4 7v5c0 4.2 3.2 7.3 8 8.5 4.8-1.2 8-4.3 8-8.5V7z"/><path d="m9 12 2.2 2.2L15.5 10"/></svg><span>시험 관리</span></button>
+            <button class="admin-nav" data-tab="a-video" onclick="setAdminTab('a-video')"><svg class="ni" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="5.5" width="17" height="13" rx="3"/><path d="m10.5 9.5 4 2.5-4 2.5z"/></svg><span>동영상 관리</span></button>
           </div>
         </div>
 
         <div class="nav-sect" id="sect-question">
-          <button type="button" class="nav-group" onclick="toggleNavSect('sect-question')">문제<span class="ng-arrow">▾</span></button>
+          <button type="button" class="nav-group" onclick="toggleNavSect('sect-question')"><svg class="ni gi" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><path d="M9.6 9.6a2.5 2.5 0 1 1 3.4 2.3c-.7.3-1 .8-1 1.6"/><path d="M12 16.6v.1"/></svg><span class="gl">문제</span><span class="ng-arrow">▾</span></button>
           <div class="nav-sub">
-            <button class="admin-nav" data-tab="a-questions" onclick="setAdminTab('a-questions')">문제 등록</button>
-            <button class="admin-nav" data-tab="a-bank" onclick="setAdminTab('a-bank')">문제은행</button>
-            <button class="admin-nav" data-tab="a-ai" onclick="setAdminTab('a-ai')">AI 문제 생성</button>
+            <button class="admin-nav" data-tab="a-questions" onclick="setAdminTab('a-questions')"><svg class="ni" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4.5" y="4.5" width="15" height="15" rx="3"/><path d="M12 8.5v7M8.5 12h7"/></svg><span>문제 등록</span></button>
+            <button class="admin-nav" data-tab="a-bank" onclick="setAdminTab('a-bank')"><svg class="ni" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="6.5" rx="7" ry="3"/><path d="M5 6.5v5c0 1.7 3.1 3 7 3s7-1.3 7-3v-5M5 11.5v5c0 1.7 3.1 3 7 3s7-1.3 7-3v-5"/></svg><span>문제은행</span></button>
+            <button class="admin-nav" data-tab="a-ai" onclick="setAdminTab('a-ai')"><svg class="ni" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5l1.6 4.4 4.4 1.6-4.4 1.6L12 15.5l-1.6-4.4L6 9.5l4.4-1.6z"/><path d="M18 15.5l.7 1.8 1.8.7-1.8.7-.7 1.8-.7-1.8-1.8-.7 1.8-.7z"/></svg><span>AI 문제 생성</span></button>
           </div>
         </div>
 
         <div class="nav-sect" id="sect-grade">
-          <button type="button" class="nav-group" onclick="toggleNavSect('sect-grade')">채점 · 확인<span class="ng-arrow">▾</span></button>
+          <button type="button" class="nav-group" onclick="toggleNavSect('sect-grade')"><svg class="ni gi" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12.5 4.2 4.2L19 7"/></svg><span class="gl">채점 · 확인</span><span class="ng-arrow">▾</span></button>
           <div class="nav-sub">
-            <button class="admin-nav" data-tab="a-grading" onclick="setAdminTab('a-grading')">채점 확인 <span id="nav-grading-badge"></span></button>
-            <button class="admin-nav" data-tab="a-scores" onclick="setAdminTab('a-scores')">성적 관리</button>
-            <button class="admin-nav" data-tab="a-stats" onclick="setAdminTab('a-stats')">문항 통계</button>
-            <button class="admin-nav" data-tab="a-preview" onclick="setAdminTab('a-preview')">학생 화면 보기</button>
-            <button class="admin-nav" data-tab="a-firebase" onclick="setAdminTab('a-firebase')">운영 안내</button>
+            <button class="admin-nav" data-tab="a-grading" onclick="setAdminTab('a-grading')"><svg class="ni" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="4" width="14" height="16.5" rx="2.5"/><path d="M9 9h6M9 13h3"/><path d="m13.5 16.5 1.5 1.5 3-3"/></svg><span>채점 확인</span><span id="nav-grading-badge"></span></button>
+            <button class="admin-nav" data-tab="a-scores" onclick="setAdminTab('a-scores')"><svg class="ni" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 20V10M12 20V4M19 20v-7"/></svg><span>성적 관리</span></button>
+            <button class="admin-nav" data-tab="a-stats" onclick="setAdminTab('a-stats')"><svg class="ni" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><path d="M12 12V3.5M12 12l6 6"/></svg><span>문항 통계</span></button>
           </div>
         </div>
 
-        <button class="admin-nav theme-btn" onclick="toggleTheme()">다크 모드</button>
-        <button class="admin-nav nav-logout" onclick="logout()">로그아웃</button>
+        <div class="nav-sect" id="sect-more">
+          <button type="button" class="nav-group" onclick="toggleNavSect('sect-more')"><svg class="ni gi" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 3.5v2.2M12 18.3v2.2M3.5 12h2.2M18.3 12h2.2M6 6l1.6 1.6M16.4 16.4 18 18M18 6l-1.6 1.6M7.6 16.4 6 18"/></svg><span class="gl">더보기</span><span class="ng-arrow">▾</span></button>
+          <div class="nav-sub">
+            <button class="admin-nav" data-tab="a-preview" onclick="setAdminTab('a-preview')"><svg class="ni" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z"/><circle cx="12" cy="12" r="2.8"/></svg><span>학생 화면 보기</span></button>
+            <button class="admin-nav" data-tab="a-firebase" onclick="setAdminTab('a-firebase')"><svg class="ni" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><path d="M12 11v5.5M12 7.8v.1"/></svg><span>운영 안내</span></button>
+            <button class="admin-nav theme-btn" onclick="toggleTheme()"><svg class="ni" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></svg><span>다크 모드</span></button>
+            <button class="admin-nav nav-logout" onclick="logout()"><svg class="ni" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10 4.5H6.5A1.5 1.5 0 0 0 5 6v12a1.5 1.5 0 0 0 1.5 1.5H10"/><path d="M15 8l4 4-4 4M19 12H9.5"/></svg><span>로그아웃</span></button>
+          </div>
+        </div>
       </nav>
     </div>
     <div class="main">
@@ -2068,7 +2073,7 @@ function jsq(s){
 /* 다크 모드 */
 function applyTheme(t){
   document.documentElement.setAttribute('data-theme', t==='dark' ? 'dark' : 'light');
-  document.querySelectorAll('.theme-btn').forEach(b=>{ b.textContent = t==='dark' ? '라이트 모드' : '다크 모드'; });
+  document.querySelectorAll('.theme-btn').forEach(b=>{ const l = t==='dark' ? '라이트 모드' : '다크 모드'; const sp = b.querySelector('span'); if(sp) sp.textContent = l; else b.textContent = l; });
 }
 /* 클립보드 복사: Clipboard API가 막힌 환경(권한·http·iframe)에서는 textarea + execCommand로 대체 */
 function copyText(text){
@@ -10169,7 +10174,7 @@ function renderFirebaseGuide(){
     <li><b>채점 확인</b> — 과제별로 접혀 있고 제목 줄에 제출 인원·채점 대기 건수가 보입니다. 아직 시작 전인 과제는 <b>시작 전</b>으로 표시되며 미제출로 세지 않습니다.</li>
     <li><b>파일 제출 채점</b> — 학생이 사진·PDF만 내면 "채점중"으로 남습니다. <b>성적 관리</b>에서 점수를 입력해야 채점 완료가 되고, 그때 학생에게 정답·해설이 공개됩니다.</li>
     <li><b>현장 제출</b> — 종이로 받은 과제는 채점 확인 탭에서 직접 기록합니다. 문항별 O/X를 찍으면 점수·완료 여부가 반영되고 틀린 문항은 오답노트에 등록됩니다.</li>
-    <li><b>모바일 메뉴</b> — 하단에 대분류 4개(수업·출제·문제·채점·확인)와 로그아웃이 있습니다. 대분류를 누르면 위로 세부 메뉴가 뜨고, 고르거나 바깥을 누르면 닫힙니다.</li>
+    <li><b>모바일 메뉴</b> — 하단에 아이콘 대분류 5개(수업·출제·문제·채점·확인·더보기)가 있습니다. 누르면 위로 세부 메뉴가 뜨고, 고르거나 바깥을 누르면 닫힙니다. 학생 화면 보기·운영 안내·다크 모드·로그아웃은 '더보기'에 있습니다. PC에서는 대분류가 접히지 않는 구획 제목으로 항상 펼쳐져 있습니다.</li>
     <li><b>문제 JSON 가져오기</b> — 문제 → 문제은행 맨 위 카드. <b>Claude용 안내문 복사</b>를 Claude에게 붙여넣고 문제를 만들어 달라고 하면 규격에 맞는 JSON이 나옵니다. 그 파일을 올리면 <b>등록할 세트 선택(기존 세트·새 세트·JSON에 적힌 세트) → 검사(오류·중복 확인) → 등록</b> 순서로 진행됩니다. 오류가 있는 문제는 등록되지 않고 이유가 표시됩니다. 이미지는 JSON으로 넣을 수 없으니 필요하면 등록 후 문제 수정에서 붙이세요. 보기 본문의 HTML은 굵게·밑줄 등 기본 태그만 남기고 나머지는 제거됩니다.</li>
     <li><b>주차 묶음 인쇄</b> — 수업 · 주차 탭의 '이 주차의 과제·시험·영상' 카드에서 <b>이 주차 묶음 인쇄</b>. 고른 과제·시험을 <b>표지 → 과제1 문제지 → 과제1 OMR → 과제2 문제지 → …</b> 순서로 한 번에 뽑습니다. 표지에는 수업 이름, 주차, 과제 이름과 코드가 들어갑니다. 정답·해설은 포함하지 않으니 따로 배부하세요. 인쇄 창의 <b>배경 그래픽</b>을 켜면 표지의 초록 색면이 선명하게 나옵니다.</li>
     <li><b>종이 OMR</b> — 과제 관리·시험 관리의 <b>OMR 인쇄</b>(학생은 풀이 화면에서도 가능)로 답안지를 뽑습니다. 학생이 종이에 마킹한 뒤 풀이 화면의 <b>마킹한 OMR 사진으로 답 채우기</b>에 사진을 올리면 AI(Gemini)가 마킹을 읽어 답안을 채우고, 학생이 확인한 뒤 제출하면 온라인 OMR과 똑같이 자동 채점됩니다. 확신이 낮은 문항은 ★와 주황색으로 표시됩니다. AI가 틀리게 읽을 수 있으니 학생이 꼭 확인해야 하고, 어두운 사진·접힌 용지는 정확도가 떨어집니다. 사진 인식은 Gemini 호출 1회를 씁니다. 답안지 오른쪽 위에는 과제마다 다른 <b>숫자 4자리 과제 코드</b>가 0~9 칸에 칠해진 채 인쇄되며(과제 목록의 '코드' 배지와 같은 값), 사진을 올리면 AI가 이 코드를 읽어 지금 푸는 과제와 다르면 경고하고 답을 채우지 않습니다. 코드가 없는 기존 과제는 관리자가 접속할 때 자동으로 부여됩니다.</li>
