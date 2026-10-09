@@ -543,3 +543,22 @@ body.on-login{
 .class-detail-head{display:flex; align-items:baseline; gap:10px; margin:6px 2px 10px;}
 .class-detail-head h3{margin:0; font-size:19px; letter-spacing:-.02em;}
 .class-detail-head .cd-sub{font-size:13px; color:var(--muted); font-weight:600;}
+
+/* 과제·시험: 모바일 카드형 */
+@media (max-width:760px){
+  .task-tbl,.task-tbl tbody{display:block;width:100%}
+  .task-tbl .th-row{display:none}
+  .task-tbl .week-row{display:block;border:0;background:none}
+  .task-tbl .week-row td{display:block;padding:10px 4px 2px;font-size:12px;background:none}
+  .task-tbl .task-row{display:flex;flex-wrap:wrap;gap:6px 8px;align-items:center;padding:12px;margin:0 0 10px;border:1px solid var(--line,#dfe6e2);border-radius:14px;background:var(--card,#fff)}
+  .task-tbl .task-row td{display:block;border:0;padding:0;min-width:0}
+  .task-tbl .c-title{flex:0 0 100%;font-weight:700;font-size:15px;line-height:1.5;order:1}
+  .task-tbl .c-period{order:2;flex:1 1 auto;font-size:12.5px;opacity:.75}
+  .task-tbl .c-period::before{content:"기간 ";opacity:.7}
+  .task-tbl .c-pdf{order:3;font-size:12.5px}
+  .task-tbl .c-done{order:4}
+  .task-tbl .c-status{order:5;flex:1 1 auto}
+  .task-tbl .c-act{order:6;flex:0 0 100%}
+  .task-tbl .c-act .btn{width:100%;padding:11px;font-size:14px}
+  .task-tbl td.empty-hint{display:block;flex:0 0 100%;text-align:center;padding:24px}
+}
