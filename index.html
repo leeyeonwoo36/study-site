@@ -7877,9 +7877,9 @@ function omrRowShift(im, H, cells){
 }
 const omrShifted = (im, H, cells)=>{ const o = omrRowShift(im,H,cells); return cells.map(c=>({ x:c.x+o.dx, y:c.y+o.dy, r:c.r })); };
 /* 숫자 칸(4줄 × 0~9) 읽기. base=null이면 인쇄된 과제 코드(아주 진함), 아니면 학생이 직접 칠한 칸(연필처럼 옅어도 줄 안에서 가장 진하면 인정) */
-function omrReadGrid(im, H, grid, base){
+function omrReadGrid(im, H, grid, base, hint){
   let digits = '', unsure = false, contrast = 0, minC = 1, bad = false;
-  grid.forEach(row0=>{
+  grid.forEach((row0,ri)=>{
     const row = omrShifted(im, H, row0);
     const sc = row.map(c=>omrDisc(im,H,c.x,c.y,c.r));
     if(sc.some(v=>v==null)){ bad = true; digits += '?'; unsure = true; return; }
@@ -7891,6 +7891,12 @@ function omrReadGrid(im, H, grid, base){
       digits += String(order[0][1]); return;
     }
     const med = omrMedian(sc);
+    /* 학생 본인 번호를 알면(hint) 그 칸이 줄에서 두드러지는지만 확인한다 — 다른 칸이 확실히 더 진하면 그쪽을 읽는다 */
+    const hd = hint && /\d/.test(hint[ri]||'') ? +hint[ri] : -1;
+    if(hd>=0){
+      const rank = order.findIndex(o=>o[1]===hd), liftH = sc[hd]-med;
+      if(liftH >= 0.07 && rank <= 1 && !(order[0][1]!==hd && order[0][0]-sc[hd] >= 0.12)){ digits += String(hd); if(rank!==0 || liftH<0.12) unsure = true; return; }
+    }
     const lift = order[0][0]-med;                           // 이 줄의 다른 칸들보다 얼마나 더 진한가
     if(lift < 0.12 || gap < 0.06){ digits += '?'; unsure = true; return; }
     if(order[1][0]-med >= 0.1 && gap < 0.12) unsure = true;
@@ -7921,7 +7927,7 @@ async function omrReadClassic(file, opt){
   const H = best.H;
   const code = best.g.digits;
   const codeBase = (()=>{ const v = []; base.code.forEach((row,ri)=>{ const sc = row.map(c=>omrDisc(im,H,c.x,c.y,c.r)); const mx = Math.max(...sc); sc.forEach(s=>{ if(s!==mx) v.push(s); }); }); return omrMedian(v); })();
-  const ph = omrReadGrid(im, H, base.phone, codeBase);
+  const ph = omrReadGrid(im, H, base.phone, codeBase, opt && opt.phoneHint);
   // 쪽 번호: 새 답안지에만 있는 점. 없으면 옛 용지이므로 정확한 위치를 보장할 수 없어 AI에 맡긴다
   const dsc = base.dots.map(d=>omrDisc(im,H,d.x,d.y,d.r));
   if(dsc.some(v=>v==null)) return { ok:false, reason:'용지 아래쪽이 사진에 모두 담기지 않았습니다' };
@@ -8021,7 +8027,8 @@ async function scanOmrPhoto(input){
 
   omrScanBusy = true; st.style.color = 'var(--ink-soft)'; st.textContent = '사진을 읽는 중입니다…';
   try{
-    const parsed = await omrReadHybrid(f, { resolve:()=>({ t, qs }), qsForAi:qs });
+    const myPhone0 = adminViewAll ? '' : last4(((students.find(x=>x.uid===currentStudent)||{}).phone));
+    const parsed = await omrReadHybrid(f, { resolve:()=>({ t, qs }), qsForAi:qs, phoneHint:myPhone0 });
     const read = String(parsed.code||'').replace(/\D/g,'');
     const want = taskCodeOf(t);
     if(read && read.length===4 && read!==want){
@@ -8031,11 +8038,14 @@ async function scanOmrPhoto(input){
     }
     /* 본인 확인: 사진의 전화번호 끝 4자리가 내 번호와 다르면 알린다 */
     const myPhone = last4(((students.find(x=>x.uid===currentStudent)||{}).phone));
-    const readPhone = String(parsed.phone||'').replace(/\D/g,'');
-    if(!adminViewAll && myPhone && readPhone.length===4 && readPhone!==myPhone){
-      if(!confirm(`답안지에 칠한 전화번호 끝 4자리(${readPhone})가 내 정보(${myPhone})와 다릅니다.\n다른 사람의 답안지일 수 있어요. 그래도 이 사진의 답을 채울까요?`)){ st.style.color='var(--accent)'; st.textContent='전화번호가 달라 답을 채우지 않았습니다.'; return; }
+    const rawPhone = String(parsed.phone||'');
+    const known = [...rawPhone].map((ch,i)=>/\d/.test(ch)?[i,ch]:null).filter(Boolean);
+    const phoneMismatch = !!myPhone && known.length>=2 && known.some(([i,ch])=>myPhone[i]!==ch);
+    const readPhone = (rawPhone.length===4 && known.length===4) ? rawPhone : (known.length>=2 && !phoneMismatch ? myPhone : '');
+    if(!adminViewAll && myPhone && phoneMismatch){
+      if(!confirm(`답안지에 칠한 전화번호 끝 4자리(${rawPhone.replace(/[^0-9?]/g,'')})가 내 정보(${myPhone})와 다릅니다.\n다른 사람의 답안지일 수 있어요. 그래도 이 사진의 답을 채울까요?`)){ st.style.color='var(--accent)'; st.textContent='전화번호가 달라 답을 채우지 않았습니다.'; return; }
     }
-    const phoneNote = (!myPhone || adminViewAll) ? '' : (readPhone===myPhone ? ' (전화번호 일치 ✓)' : (readPhone.length===4 ? '' : ' (전화번호는 확인하지 못했어요)'));
+    const phoneNote = (!myPhone || adminViewAll) ? '' : (phoneMismatch ? '' : (readPhone===myPhone ? (known.length===4 ? ' (전화번호 일치 ✓)' : ' (전화번호 일부만 확인됨 ✓)') : ' (전화번호는 확인하지 못했어요)'));
     const codeNote = ((read.length===4 && read===want) ? ' (과제 코드 일치 ✓)' : (parsed.code_unsure || read.length!==4 ? ' (과제 코드는 확인하지 못했어요)' : '')) + phoneNote;
     const list = Array.isArray(parsed.answers) ? parsed.answers : [];
     const map = {}; let filled = 0, unsure = 0;
