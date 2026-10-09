@@ -7716,7 +7716,7 @@ function omrMeasure(t, qs){
 /* 사진 → 조명 보정된 밝기 배열(0=검정, 1=종이 흰색) */
 async function omrPrepare(file){
   const img = await new Promise((res,rej)=>{ const u = URL.createObjectURL(file); const im = new Image(); im.onload=()=>{ URL.revokeObjectURL(u); res(im); }; im.onerror=()=>rej(new Error('이미지를 열 수 없습니다.')); im.src=u; });
-  const sc = Math.min(1, 1700/Math.max(img.naturalWidth, img.naturalHeight));
+  const sc = Math.min(1, 2200/Math.max(img.naturalWidth, img.naturalHeight));
   const w = Math.max(8, Math.round(img.naturalWidth*sc)), h = Math.max(8, Math.round(img.naturalHeight*sc));
   const cv = document.createElement('canvas'); cv.width = w; cv.height = h;
   const ctx = cv.getContext('2d', { willReadFrequently:true }); ctx.drawImage(img, 0, 0, w, h);
@@ -7826,18 +7826,59 @@ function omrDisc(im, H, cx, cy, r){
   return n ? 1 - sum/n : null;
 }
 const omrMedian = a=>{ const s = a.filter(v=>v!=null).sort((x,y)=>x-y); return s.length ? s[Math.floor(s.length/2)] : 0; };
-/* 숫자 칸(4줄 × 0~9) 읽기 */
+/* 종이가 휘거나 모서리 표식 위치가 조금 어긋나도 맞도록, 한 줄의 원들을 인쇄된 테두리선에 맞춰 ±1.2mm 안에서 다시 정렬한다.
+   (원 테두리는 어두운 선, 그 바깥은 종이색이라는 대비가 가장 큰 위치를 찾는다. 대비를 못 찾으면 그대로 둔다) */
+function omrBilin(im, u, v){
+  const x0 = Math.floor(u), y0 = Math.floor(v);
+  if(x0<0||y0<0||x0+1>=im.w||y0+1>=im.h) return null;
+  const fx = u-x0, fy = v-y0, n = im.norm, w = im.w, i = y0*w+x0;
+  return (n[i]*(1-fx)+n[i+1]*fx)*(1-fy) + (n[i+w]*(1-fx)+n[i+w+1]*fx)*fy;
+}
+function omrRingScore(im, H, cx, cy, r){
+  let sIn = 0, sOut = 0, n = 0;
+  const rin = r*0.94, rout = r + 0.65;
+  for(let k=0;k<12;k++){
+    const a = k*Math.PI/6, ca = Math.cos(a), sa = Math.sin(a);
+    const [u1,v1] = omrMap(H, cx+ca*rin, cy+sa*rin), [u2,v2] = omrMap(H, cx+ca*rout, cy+sa*rout);
+    const p = omrBilin(im,u1,v1), q = omrBilin(im,u2,v2);
+    if(p==null||q==null) return null;
+    sIn += p; sOut += q; n++;
+  }
+  return n ? (sOut - sIn)/n : null;
+}
+function omrRowShift(im, H, cells){
+  let zero = 0, best = { s:-9, dx:0, dy:0 };
+  for(let dy=-1.2; dy<=1.21; dy+=0.3) for(let dx=-1.2; dx<=1.21; dx+=0.3){
+    let sum = 0, ok = true;
+    for(const c of cells){ const v = omrRingScore(im,H,c.x+dx,c.y+dy,c.r); if(v==null){ ok = false; break; } sum += v; }
+    if(!ok) continue;
+    sum /= cells.length;
+    if(Math.abs(dx)<1e-6 && Math.abs(dy)<1e-6) zero = sum;
+    if(sum > best.s) best = { s:sum, dx, dy };
+  }
+  if(best.s < 0.1 || best.s < zero + 0.02) return { dx:0, dy:0 };
+  return { dx:best.dx, dy:best.dy };
+}
+const omrShifted = (im, H, cells)=>{ const o = omrRowShift(im,H,cells); return cells.map(c=>({ x:c.x+o.dx, y:c.y+o.dy, r:c.r })); };
+/* 숫자 칸(4줄 × 0~9) 읽기. base=null이면 인쇄된 과제 코드(아주 진함), 아니면 학생이 직접 칠한 칸(연필처럼 옅어도 줄 안에서 가장 진하면 인정) */
 function omrReadGrid(im, H, grid, base){
   let digits = '', unsure = false, contrast = 0, minC = 1, bad = false;
-  grid.forEach(row=>{
+  grid.forEach(row0=>{
+    const row = omrShifted(im, H, row0);
     const sc = row.map(c=>omrDisc(im,H,c.x,c.y,c.r));
     if(sc.some(v=>v==null)){ bad = true; digits += '?'; unsure = true; return; }
     const order = sc.map((v,i)=>[v,i]).sort((a,b)=>b[0]-a[0]);
     const gap = order[0][0]-order[1][0];
     contrast += gap; if(gap<minC) minC = gap;
-    const ok = base==null ? gap >= 0.3 : (order[0][0]-base >= 0.25);
-    if(!ok){ digits += '?'; unsure = true; return; }
-    if(order[1][0]-(base==null?0:base) >= 0.15 && gap < 0.15) unsure = true;
+    if(base==null){
+      if(gap < 0.3){ digits += '?'; unsure = true; return; }
+      digits += String(order[0][1]); return;
+    }
+    const med = omrMedian(sc);
+    const lift = order[0][0]-med;                           // 이 줄의 다른 칸들보다 얼마나 더 진한가
+    if(lift < 0.12 || gap < 0.06){ digits += '?'; unsure = true; return; }
+    if(order[1][0]-med >= 0.1 && gap < 0.12) unsure = true;
+    if(lift < 0.2) unsure = true;
     digits += String(order[0][1]);
   });
   return { digits, unsure, contrast, minGap:minC, bad };
@@ -7880,7 +7921,11 @@ async function omrReadClassic(file, opt){
   if(!pg) return { ok:false, reason:'쪽 번호가 이 과제와 맞지 않습니다' };
   const byQ = {};
   let bad = false;
-  pg.bubbles.forEach(b=>{ const s = omrDisc(im,H,b.x,b.y,b.r); if(s==null){ bad = true; return; } (byQ[b.q] = byQ[b.q] || [])[b.k-1] = s; });
+  const rowsQ = {}; pg.bubbles.forEach(b=>{ (rowsQ[b.q] = rowsQ[b.q] || []).push(b); });
+  Object.values(rowsQ).forEach(list=>{
+    const o = omrRowShift(im, H, list);
+    list.forEach(b=>{ const s = omrDisc(im,H,b.x+o.dx,b.y+o.dy,b.r); if(s==null){ bad = true; return; } (byQ[b.q] = byQ[b.q] || [])[b.k-1] = s; });
+  });
   if(bad) return { ok:false, reason:'답안 칸 일부가 사진 밖으로 나갔습니다' };
   const allS = [].concat(...Object.values(byQ));
   const bm = omrMedian(allS);
