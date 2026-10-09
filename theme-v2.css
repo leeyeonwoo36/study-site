@@ -539,3 +539,7 @@ body.on-login{
   #shell-admin #sect-more .nav-sub .theme-btn, #shell-admin #sect-more .nav-sub .nav-logout{white-space:nowrap; gap:6px; font-size:12.5px; padding-left:8px; padding-right:4px;}
   #shell-admin #sect-more .nav-sub .theme-btn .ni, #shell-admin #sect-more .nav-sub .nav-logout .ni{width:16px; height:16px;}
 }
+
+.class-detail-head{display:flex; align-items:baseline; gap:10px; margin:6px 2px 10px;}
+.class-detail-head h3{margin:0; font-size:19px; letter-spacing:-.02em;}
+.class-detail-head .cd-sub{font-size:13px; color:var(--muted); font-weight:600;}

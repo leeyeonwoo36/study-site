@@ -799,18 +799,9 @@ body.quiet-preview .sidebar{ padding-top:22px; }
           <div id="class-list"></div>
         </div>
         <div id="class-detail" style="display:none;">
+          <div class="class-detail-head"><h3 id="class-detail-title">수업</h3><span class="cd-sub" id="class-detail-sub"></span></div>
           <div class="card">
-            <h3 id="class-detail-title">수업</h3>
-            <span class="section-label">① 학생 배정 <span style="font-weight:500; color:var(--muted);">(한 학생은 한 수업에만 소속됩니다)</span></span>
-            <div style="display:flex; gap:6px; margin:8px 0;">
-              <button class="btn small ghost" onclick="setAllClassStudents(true)">전체 선택</button>
-              <button class="btn small ghost" onclick="setAllClassStudents(false)">전체 해제</button>
-            </div>
-            <div id="class-students" class="class-students"></div>
-            <button class="btn" style="width:100%; margin-top:12px;" onclick="saveClassStudents()">배정 저장</button>
-          </div>
-          <div class="card">
-            <h3>② 주차 · 회차</h3>
+            <h3>① 주차 · 회차</h3>
             <div id="week-tabs" class="week-tabs"></div>
             <div class="form-grid">
               <div><label>날짜 (요일은 자동)</label><input type="date" id="sch-date"></div>
@@ -826,7 +817,7 @@ body.quiet-preview .sidebar{ padding-top:22px; }
           </div>
           <div class="card">
             <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; flex-wrap:wrap;">
-              <h3 id="week-content-title" style="margin:0;">③ 이 주차의 과제 · 시험 · 영상</h3>
+              <h3 id="week-content-title" style="margin:0;">② 이 주차의 과제 · 시험 · 영상</h3>
               <button class="btn small" onclick="openBundlePrint()">이 주차 묶음 인쇄 (표지 · 문제지 · OMR)</button>
             </div>
             <div id="week-content"></div>
@@ -1572,6 +1563,27 @@ body.quiet-preview .sidebar{ padding-top:22px; }
     </div>
   </div>
 </div>
+<!-- 수업 수정 (이름 · 학생 목록) -->
+<div class="modal-bg" id="class-edit-modal">
+  <div class="modal" style="max-width:640px;">
+    <button class="modal-close" onclick="closeModal('class-edit-modal')">✕</button>
+    <h3>수업 수정</h3>
+    <label>수업 이름</label>
+    <input type="text" id="ce-name" style="margin-bottom:14px;" onkeydown="if(event.key==='Enter')saveClassEdit()">
+    <span class="section-label">학생 목록 <span style="font-weight:500; color:var(--muted);">(한 학생은 한 수업에만 소속됩니다)</span></span>
+    <div style="display:flex; gap:6px; margin:8px 0; align-items:center;">
+      <button class="btn small ghost" onclick="setAllClassStudents(true)">전체 선택</button>
+      <button class="btn small ghost" onclick="setAllClassStudents(false)">전체 해제</button>
+      <span id="ce-count" style="margin-left:auto; font-size:12.5px; color:var(--muted);"></span>
+    </div>
+    <div id="class-students" class="class-students" style="max-height:44vh; overflow:auto;"></div>
+    <div style="display:flex; gap:8px; margin-top:14px;">
+      <button class="btn ghost" style="flex:1;" onclick="closeModal('class-edit-modal')">취소</button>
+      <button class="btn" style="flex:2;" onclick="saveClassEdit()">저장</button>
+    </div>
+  </div>
+</div>
+
 <!-- 비밀번호 찾기 -->
 <div class="modal-bg" id="findpw-modal">
   <div class="modal">
@@ -3643,17 +3655,26 @@ function selectClass(cid){
   selClassId = cid; selWeek = 1; classDraft = null;
   renderClassAdmin(); renderSchedules();
 }
-function renameClass(cid){
+function openClassEdit(cid){
   const c = classOf(cid); if(!c) return;
-  const name = (prompt('새 수업 이름', c.name) || '').trim();
-  if(!name || name===c.name) return;
-  if(classes.some(x=>x.name===name)){ alert('같은 이름의 수업이 이미 있습니다.'); return; }
-  const { db, doc, updateDoc } = window.fb;
-  updateDoc(doc(db,'classes',cid), { name }).catch(fbErr('이름 변경'));
-  students.filter(st=>st.classId===cid).forEach(st=>{
-    updateDoc(doc(db,'students',st.uid), { className:name }).catch(()=>{});
-  });
+  classDraft = { cid:c.cid, set:new Set(students.filter(st=>st.approved && st.classId===c.cid).map(st=>st.uid)) };
+  $('ce-name').value = c.name;
+  renderClassEdit();
+  openModal('class-edit-modal');
 }
+function renderClassEdit(){
+  if(!classDraft) return;
+  const c = classOf(classDraft.cid); if(!c) return;
+  const approved = students.filter(st=>st.approved).slice().sort((a,b)=>String(a.name).localeCompare(String(b.name),'ko'));
+  $('class-students').innerHTML = approved.map(st=>{
+    const on = classDraft.set.has(st.uid);
+    const other = st.classId && st.classId!==c.cid ? `다른 수업: ${esc(classNameOf(st.classId)||st.className||'')}` : esc(st.grade||'');
+    return `<label class="${on?'on':''}" data-uid="${st.uid}"><input type="checkbox" ${on?'checked':''} onchange="toggleClassStudent('${st.uid}',this.checked)">
+      <span>${esc(st.name)}<small>${other}</small></span></label>`;
+  }).join('') || '<p class="empty-hint">승인된 학생이 없습니다.</p>';
+  updateClassEditCount();
+}
+function updateClassEditCount(){ const e = $('ce-count'); if(e && classDraft) e.textContent = classDraft.set.size+'명 선택'; }
 function classItemCount(cid){
   return schedules.filter(x=>x.classId===cid).length
     + tasks.hw.filter(x=>x.classId===cid).length
@@ -3675,25 +3696,30 @@ function toggleClassStudent(uid, on){
   if(on) classDraft.set.add(uid); else classDraft.set.delete(uid);
   const lab = document.querySelector('#class-students label[data-uid="'+uid+'"]');
   if(lab) lab.classList.toggle('on', !!on);
+  updateClassEditCount();
 }
 function setAllClassStudents(on){
   if(!classDraft) return;
   students.filter(st=>st.approved).forEach(st=>{ if(on) classDraft.set.add(st.uid); else classDraft.set.delete(st.uid); });
-  renderClassAdmin();
+  renderClassEdit();
 }
-function saveClassStudents(){
-  const c = classOf(selClassId); if(!c || !classDraft) return;
+function saveClassEdit(){
+  const c = classOf(selClassId && classDraft ? classDraft.cid : null); if(!c || !classDraft) return;
   const { db, doc, updateDoc } = window.fb;
+  const name = $('ce-name').value.trim();
+  if(!name){ alert('수업 이름을 입력하세요.'); return; }
+  if(name!==c.name && classes.some(x=>x.name===name)){ alert('같은 이름의 수업이 이미 있습니다.'); return; }
   const moves = students.filter(st=>st.approved && classDraft.set.has(st.uid) && st.classId && st.classId!==c.cid);
-  if(moves.length && !confirm(`다른 수업에 속한 학생 ${moves.length}명(${moves.map(m=>m.name).join(', ')})을 "${c.name}"으로 옮길까요?`)) return;
+  if(moves.length && !confirm(`다른 수업에 속한 학생 ${moves.length}명(${moves.map(m=>m.name).join(', ')})을 "${name}"으로 옮길까요?`)) return;
   const jobs = [];
+  if(name!==c.name) jobs.push(updateDoc(doc(db,'classes',c.cid), { name }));
   students.filter(st=>st.approved).forEach(st=>{
-    const want = classDraft.set.has(st.uid);
-    if(want && st.classId!==c.cid) jobs.push(updateDoc(doc(db,'students',st.uid), { classId:c.cid, className:c.name }));
-    else if(!want && st.classId===c.cid) jobs.push(updateDoc(doc(db,'students',st.uid), { classId:null, className:'' }));
+    const want = classDraft.set.has(st.uid), isIn = st.classId===c.cid;
+    if(want && (!isIn || (name!==c.name))) jobs.push(updateDoc(doc(db,'students',st.uid), { classId:c.cid, className:name }));
+    else if(!want && isIn) jobs.push(updateDoc(doc(db,'students',st.uid), { classId:null, className:'' }));
   });
-  if(!jobs.length){ alert('변경된 배정이 없습니다.'); return; }
-  Promise.all(jobs).then(()=>{ classDraft = null; alert('학생 배정을 저장했습니다.'); }).catch(fbErr('배정 저장'));
+  if(!jobs.length){ closeModal('class-edit-modal'); classDraft = null; return; }
+  Promise.all(jobs).then(()=>{ classDraft = null; closeModal('class-edit-modal'); }).catch(fbErr('수업 수정'));
 }
 function selectWeek(n){ selWeek = n; renderClassAdmin(); renderSchedules(); }
 function addWeek(){
@@ -3826,7 +3852,7 @@ function renderClassAdmin(){
       <div><div class="cr-name">${esc(c.name)}</div>
         <div class="cr-meta">학생 ${cnt}명 · ${Math.max(1,c.weekCount||1)}주차 · 일정·과제·시험·영상 ${classItemCount(c.cid)}개</div></div>
       <div style="display:flex; gap:6px;">
-        <button class="btn small secondary" onclick="event.stopPropagation();renameClass('${c.cid}')">이름 수정</button>
+        <button class="btn small secondary" onclick="event.stopPropagation();openClassEdit('${c.cid}')">수정</button>
         <button class="btn small danger" onclick="event.stopPropagation();deleteClass('${c.cid}')">삭제</button>
       </div></div>`;
   }).join('') || '<p class="empty-hint">개설된 수업이 없습니다. 위에서 수업을 먼저 개설하세요.</p>';
@@ -3836,19 +3862,11 @@ function renderClassAdmin(){
   detail.style.display = 'block';
   $('class-detail-title').textContent = c.name;
 
-  // ① 학생 배정 체크리스트 (저장 전 체크 상태는 유지)
-  if(!classDraft || classDraft.cid!==c.cid){
-    classDraft = { cid:c.cid, set:new Set(students.filter(st=>st.approved && st.classId===c.cid).map(st=>st.uid)) };
-  }
-  const approved = students.filter(st=>st.approved).slice().sort((a,b)=>String(a.name).localeCompare(String(b.name),'ko'));
-  $('class-students').innerHTML = approved.map(st=>{
-    const on = classDraft.set.has(st.uid);
-    const other = st.classId && st.classId!==c.cid ? `다른 수업: ${esc(classNameOf(st.classId)||st.className||'')}` : esc(st.grade||'');
-    return `<label class="${on?'on':''}" data-uid="${st.uid}"><input type="checkbox" ${on?'checked':''} onchange="toggleClassStudent('${st.uid}',this.checked)">
-      <span>${esc(st.name)}<small>${other}</small></span></label>`;
-  }).join('') || '<p class="empty-hint">승인된 학생이 없습니다.</p>';
+  const cnt = students.filter(st=>st.approved && st.classId===c.cid).length;
+  $('class-detail-sub').textContent = '학생 '+cnt+'명';
+  if(classDraft && $('class-edit-modal') && $('class-edit-modal').classList.contains('show')) renderClassEdit();
 
-  // ② 주차 탭
+  // 주차 탭
   const n = Math.max(1, c.weekCount||1);
   if(selWeek>n) selWeek = n;
   let tabs = '';
@@ -10137,7 +10155,7 @@ function renderFirebaseGuide(){
   el.innerHTML = `
   <h3>수업 · 주차 구조 — 이렇게 운영합니다</h3>
   <ul ${ul}>
-    <li><b>① 수업 개설 → ② 학생 배정 → ③ 주차·회차 등록 → ④ 과제·시험·영상 부여</b> 순서입니다. 메뉴는 <b>수업 → 수업 · 주차</b>.</li>
+    <li><b>① 수업 개설 → ② 학생 배정 → ③ 주차·회차 등록 → ④ 과제·시험·영상 부여</b> 순서입니다. 메뉴는 <b>수업 → 수업 · 주차</b>. 학생 배정은 수업 목록의 <b>수정</b> 버튼(이름·학생 목록을 한 창에서 수정)에서 합니다.</li>
     <li>한 학생은 <b>한 수업에만</b> 소속됩니다. 다른 수업에 배정하면 원래 수업에서 빠집니다. 수업 이름과 학생 명단은 언제든 고칠 수 있습니다.</li>
     <li>주차마다 <b>여러 회차</b>(요일·시간·교실)를 둘 수 있고, <b>주차 추가 / 마지막 주차 삭제</b>로 늘리고 줄입니다. 과제·시험·영상은 주차 화면의 <b>추가</b> 버튼으로 해당 수업·주차에 바로 붙습니다.</li>
     <li>학생은 <b>자기 수업의 항목만</b> 봅니다. 일정·과제·시험·영상이 하나라도 남아 있는 수업은 삭제할 수 없습니다. 먼저 항목을 지운 뒤 삭제하면 소속 학생은 '수업 미배정'이 됩니다.</li>
