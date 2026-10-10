@@ -5236,8 +5236,8 @@ function removeQuestion(qid){
 }
 /* ===== AI 참고 자료 (여러 개) ===== */
 let aiRefFiles = [];
-const AI_REF_MAX = 5;            // 한 번에 보낼 수 있는 자료 수
-const AI_REF_MAX_MB = 15;        // 전체 용량 상한 (Gemini 요청 크기 보호)
+const AI_REF_MAX = 10;           // 한 번에 보낼 수 있는 자료 수
+const AI_REF_MAX_MB = 100;       // 전체 용량 상한 (3MB 넘는 파일은 Gemini 파일 저장소에 올려서 보낸다)
 
 function addAiRefFiles(input){
   const added = [...input.files];
@@ -6024,6 +6024,38 @@ async function callGemini({ apiKey, parts, schema, onModelChange, timeoutMs = 12
   }
   throw new Error('모든 모델이 응답하지 않았습니다.\n' + errors.join('\n'));
 }
+/* 큰 파일은 요청 본문에 싣지 않고 Gemini 파일 저장소에 먼저 올린 뒤 주소로 넘긴다(본문 20MB 제한 회피, 파일당 최대 약 2GB) */
+const GEMINI_INLINE_MAX = 3*1024*1024;
+async function geminiUploadFile(apiKey, file, onStatus){
+  const base = 'https://generativelanguage.googleapis.com';
+  const mime = file.type || 'application/octet-stream';
+  if(onStatus) onStatus(`${file.name} 올리는 중…`);
+  const start = await fetch(`${base}/upload/v1beta/files?key=${apiKey}`, {
+    method:'POST',
+    headers:{ 'X-Goog-Upload-Protocol':'resumable', 'X-Goog-Upload-Command':'start', 'X-Goog-Upload-Header-Content-Length':String(file.size), 'X-Goog-Upload-Header-Content-Type':mime, 'Content-Type':'application/json' },
+    body: JSON.stringify({ file:{ display_name:file.name.slice(0,100) } })
+  });
+  if(!start.ok) throw new Error(`파일 업로드 시작 실패 (${start.status})`);
+  const upUrl = start.headers.get('x-goog-upload-url');
+  if(!upUrl) throw new Error('파일 업로드 주소를 받지 못했습니다');
+  const up = await fetch(upUrl, { method:'POST', headers:{ 'X-Goog-Upload-Offset':'0', 'X-Goog-Upload-Command':'upload, finalize' }, body:file });
+  if(!up.ok) throw new Error(`파일 업로드 실패 (${up.status})`);
+  let info = (await up.json()).file;
+  for(let i=0; i<60 && info && info.state==='PROCESSING'; i++){        // PDF 처리가 끝날 때까지 기다린다
+    await new Promise(r=>setTimeout(r,1500));
+    const g = await fetch(`${base}/v1beta/${info.name}?key=${apiKey}`);
+    if(!g.ok) throw new Error(`파일 상태 확인 실패 (${g.status})`);
+    info = await g.json();
+  }
+  if(!info || info.state==='FAILED') throw new Error('Gemini가 파일을 처리하지 못했습니다');
+  if(info.state==='PROCESSING') throw new Error('파일 처리가 너무 오래 걸립니다');
+  return { file_data:{ mime_type: info.mimeType || mime, file_uri: info.uri } };
+}
+/* 작은 파일은 그대로(inline), 큰 파일은 업로드해서 Gemini에 넘길 part를 만든다 */
+async function geminiFilePart(apiKey, file, onStatus){
+  if(file.size <= GEMINI_INLINE_MAX) return { inline_data:{ mime_type: file.type || 'application/octet-stream', data: await fileToBase64(file) } };
+  return geminiUploadFile(apiKey, file, onStatus);
+}
 function fileToBase64(file){
   return new Promise((res, rej)=>{
     const r = new FileReader();
@@ -6628,14 +6660,16 @@ async function extractQuestionsFromPdf(){
 - 반드시 지정된 JSON 스키마 형식으로만 응답하라.`;
 
   try {
-    const examBase64 = await fileToBase64(examFile);
-    const answerBase64 = await fileToBase64(answerFile);
+    const st = m => { btn.textContent = m; };
+    const examPart = await geminiFilePart(apiKey, examFile, st);
+    const answerPart = await geminiFilePart(apiKey, answerFile, st);
+    btn.textContent = '추출 중...';
     const parts = [
       { text: sysPrompt },
       { text: '[첫 번째 파일: 문제지]' },
-      { inline_data: { mime_type: examFile.type || 'application/pdf', data: examBase64 } },
+      examPart,
       { text: '[두 번째 파일: 정답지]' },
-      { inline_data: { mime_type: answerFile.type || 'application/pdf', data: answerBase64 } }
+      answerPart
     ];
 
     const { parsed, model } = await callGemini({
@@ -6760,10 +6794,11 @@ ${refCount ? `- 첨부된 참고 자료 ${refCount}개의 내용을 최대한 �
   try {
     const parts = [{ text: sysPrompt }];
     for(const f of aiRefFiles){
-      const base64 = await fileToBase64(f);
+      const part = await geminiFilePart(apiKey, f, m=>{ btn.textContent = m; });
       parts.push({ text: `[참고 자료: ${f.name}]` });
-      parts.push({ inline_data: { mime_type: f.type || 'application/octet-stream', data: base64 } });
+      parts.push(part);
     }
+    btn.textContent = refCount ? `자료 ${refCount}개 분석 및 생성 중...` : '생성 중...';
     // ✅ [수정 완료] URL 변수명(apiKey) 수정, fetch 함수 복구, gemini-3.6-flash 적용
     const { parsed, model } = await callGemini({
       apiKey, parts, schema,
@@ -11174,7 +11209,7 @@ function renderFirebaseGuide(){
 
   <h3 ${h3}>문제 · 문제은행</h3>
   <ul ${ul}>
-    <li>문제 등록 방법: 직접 입력, <b>PDF 문제 추출</b>(문제지·정답지를 올리면 원본 문번 순서로 정렬, 저장 전 모든 칸 수정 가능), <b>AI 문제 생성</b>(참고 자료 최대 5개), <b>문제 JSON 가져오기</b>(문제은행 맨 위 카드의 <b>Claude용 안내문 복사</b> → Claude에게 붙여넣기). 보기 표·복수 정답·이미지 붙여넣기(Ctrl+V)를 지원합니다. <b>그림 정밀 자르기</b>는 AI를 한 번 더 부르니 한도를 아끼려면 평소엔 꺼 두세요.</li>
+    <li>문제 등록 방법: 직접 입력, <b>PDF 문제 추출</b>(문제지·정답지를 올리면 원본 문번 순서로 정렬, 저장 전 모든 칸 수정 가능), <b>AI 문제 생성</b>(참고 자료 최대 10개·합계 100MB, 3MB가 넘는 PDF는 Gemini 파일 저장소에 올려서 처리하므로 큰 PDF도 가능), <b>문제 JSON 가져오기</b>(문제은행 맨 위 카드의 <b>Claude용 안내문 복사</b> → Claude에게 붙여넣기). 보기 표·복수 정답·이미지 붙여넣기(Ctrl+V)를 지원합니다. <b>그림 정밀 자르기</b>는 AI를 한 번 더 부르니 한도를 아끼려면 평소엔 꺼 두세요.</li>
     <li><b>모든 문제에는 고유 번호(#1, #2…)</b>가 붙습니다(기존 문제는 관리자가 접속하면 등록 순으로 자동 부여, 삭제해도 번호는 안 바뀜). 문제은행 검색창에 <code>#번호</code>를 넣거나 <b>문제 번호순</b> 정렬로 찾습니다.</li>
     <li><b>AI 변형 문제</b>(문제 메뉴의 관리 탭)에서 학생별 변형 문제를 모아 보고, 변형 문제에 표시된 <b>원본 번호</b>와 <b>원본 보기</b>로 어느 문제의 변형인지 확인합니다. 문제은행 추가·삭제·인쇄도 여기서 합니다.</li>
     <li><b>인쇄</b>: 문제은행에서 선택 → 인쇄하기 → 문제 / 빠른 정답 / 해설 선택. 오답노트 인쇄는 학생 상세에서 <b>복습 필요만</b> 또는 <b>전체</b>를 뽑습니다. <b>주차 묶음 인쇄</b>(수업 · 주차 탭)는 표지·문제지·정답·<b>해설지(선택)</b>를 한 번에 뽑습니다.</li>
