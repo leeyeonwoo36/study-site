@@ -2204,6 +2204,11 @@ function toggleTheme(){
 try{ applyTheme(localStorage.getItem('theme')==='dark' ? 'dark' : 'light'); }catch(e){}
 function openModal(id){ $(id).classList.add('show'); }
 function closeModal(id){ $(id).classList.remove('show'); }
+/* 열려 있는 모든 창을 닫는다(관리자 화면으로 돌아갈 때, 로그아웃할 때). 카메라가 켜져 있으면 끈다 */
+function closeAllModals(){
+  try{ if(typeof cam!=='undefined' && cam) closeCamGuide(); }catch(e){}
+  document.querySelectorAll('.modal-bg.show').forEach(el=>el.classList.remove('show'));
+}
 function isAdminUid(u){ return window.ADMIN_UIDS.includes(u); }
 
 /* ---------- 화면 전환 ---------- */
@@ -2914,6 +2919,7 @@ function handleSignedOut(){
 
 function logout(){
   if(previewingStudent){ exitStudentPreview(); return; }
+  closeAllModals();
   stopSubscriptions();
   currentStudent = null;
   currentUserIsAdmin = false;
@@ -7156,6 +7162,7 @@ function startStudentPreview(){
 }
 
 function exitStudentPreview(){
+  closeAllModals();
   loadPreviewWrongNote(null);
   previewingStudent = false;
   adminViewAll = false;
