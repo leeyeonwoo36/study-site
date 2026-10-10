@@ -7862,9 +7862,10 @@ function omrRingScore(im, H, cx, cy, r){
   }
   return n ? (sOut - sIn)/n : null;
 }
-function omrRowShift(im, H, cells){
+function omrRowShift(im, H, cells, range, step){
+  range = range || 1.2; step = step || 0.3;
   let zero = 0, best = { s:-9, dx:0, dy:0 };
-  for(let dy=-1.2; dy<=1.21; dy+=0.3) for(let dx=-1.2; dx<=1.21; dx+=0.3){
+  for(let dy=-range; dy<=range+1e-6; dy+=step) for(let dx=-range; dx<=range+1e-6; dx+=step){
     let sum = 0, ok = true;
     for(const c of cells){ const v = omrRingScore(im,H,c.x+dx,c.y+dy,c.r); if(v==null){ ok = false; break; } sum += v; }
     if(!ok) continue;
@@ -7872,17 +7873,43 @@ function omrRowShift(im, H, cells){
     if(Math.abs(dx)<1e-6 && Math.abs(dy)<1e-6) zero = sum;
     if(sum > best.s) best = { s:sum, dx, dy };
   }
-  if(best.s < 0.1 || best.s < zero + 0.02) return { dx:0, dy:0 };
-  return { dx:best.dx, dy:best.dy };
+  if(best.s < 0.1 || best.s < zero + 0.02) return { dx:0, dy:0, found:false };
+  return { dx:best.dx, dy:best.dy, found:true };
 }
 const omrShifted = (im, H, cells)=>{ const o = omrRowShift(im,H,cells); return cells.map(c=>({ x:c.x+o.dx, y:c.y+o.dy, r:c.r })); };
+/* 한 줄(0~9)의 열 개 칸 점수. 칸마다 정해진 자리만 보면 종이가 휘었을 때 양 끝(0·9) 칸의 자국을 놓치므로,
+   줄 전체를 0.35mm씩 훑어 가며(위아래 ±1.2mm) 진한 곳의 위치를 구하고, 각 위치를 가장 가까운 숫자 칸에 배정한다.
+   → 칸이 ±3mm쯤 어긋나도 0은 0으로, 9는 9로 읽힌다. */
+function omrColScores(im, H, row){
+  const xs = row.map(c=>c.x), pitch = (xs[xs.length-1]-xs[0])/(xs.length-1), r = row[0].r*0.55/0.72;
+  const y0 = row.reduce((a,c)=>a+c.y,0)/row.length;
+  const prof = []; let nullCount = 0, total = 0;
+  for(let x = xs[0]-pitch*0.6; x <= xs[xs.length-1]+pitch*0.6+1e-6; x += 0.35){
+    let m = null;
+    for(const dy of [-1.2,-0.6,0,0.6,1.2]){ const v = omrDisc(im,H,x,y0+dy,r); if(v!=null && (m==null || v>m)) m = v; }
+    total++; if(m==null){ nullCount++; continue; }
+    let k = 0, bd = 1e9; xs.forEach((cx,i)=>{ const d = Math.abs(cx-x); if(d<bd){ bd = d; k = i; } });
+    prof.push({ x, m, k });
+  }
+  if(nullCount > total*0.3 || !prof.length) return null;
+  const top = prof.reduce((a,p)=>p.m>a.m?p:a, prof[0]);
+  const out = row.map(()=>0);
+  prof.forEach(p=>{
+    if(p.k===top.k){ if(p===top) out[p.k] = p.m; else if(Math.abs(p.x-top.x) < pitch*0.75) return; }
+    if(Math.abs(p.x-top.x) < pitch*0.75 && p.k!==top.k) return;   // 가장 진한 자국 바로 옆의 번짐은 다른 칸 점수에서 뺀다
+    if(p.k!==top.k || p!==top) out[p.k] = Math.max(out[p.k], p.k===top.k ? 0 : p.m);
+  });
+  /* 같은 칸에 다른 위치의 진한 자국이 따로 있으면(두 군데 칠함) 그것도 반영 */
+  prof.forEach(p=>{ if(p.k===top.k && Math.abs(p.x-top.x) >= pitch*0.75) out[p.k] = Math.max(out[p.k], p.m); });
+  return out;
+}
 /* 숫자 칸(4줄 × 0~9) 읽기. base=null이면 인쇄된 과제 코드(아주 진함), 아니면 학생이 직접 칠한 칸(연필처럼 옅어도 줄 안에서 가장 진하면 인정) */
 function omrReadGrid(im, H, grid, base, hint){
   let digits = '', unsure = false, contrast = 0, minC = 1, bad = false;
   grid.forEach((row0,ri)=>{
     const row = omrShifted(im, H, row0);
-    const sc = row.map(c=>omrDisc(im,H,c.x,c.y,c.r));
-    if(sc.some(v=>v==null)){ bad = true; digits += '?'; unsure = true; return; }
+    const sc = omrColScores(im, H, row);
+    if(!sc){ bad = true; digits += '?'; unsure = true; return; }
     const order = sc.map((v,i)=>[v,i]).sort((a,b)=>b[0]-a[0]);
     const gap = order[0][0]-order[1][0];
     contrast += gap; if(gap<minC) minC = gap;
@@ -7891,6 +7918,7 @@ function omrReadGrid(im, H, grid, base, hint){
       digits += String(order[0][1]); return;
     }
     const med = omrMedian(sc);
+    if(window.__omrDebug && base!=null){ (window.__omrDebug.grid = window.__omrDebug.grid || []).push({ri, sc:sc.map(v=>+v.toFixed(2)), sh:row.map((c,i)=>[+(c.x-row0[i].x).toFixed(1),+(c.y-row0[i].y).toFixed(1)])}); }
     /* 학생 본인 번호를 알면(hint) 그 칸이 줄에서 두드러지는지만 확인한다 — 다른 칸이 확실히 더 진하면 그쪽을 읽는다 */
     const hd = hint && /\d/.test(hint[ri]||'') ? +hint[ri] : -1;
     if(hd>=0){
