@@ -761,6 +761,7 @@ body.quiet-preview .sidebar{ padding-top:22px; }
             <button class="admin-nav" data-tab="a-questions" onclick="setAdminTab('a-questions')"><svg class="ni" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4.5" y="4.5" width="15" height="15" rx="3"/><path d="M12 8.5v7M8.5 12h7"/></svg><span>문제 등록</span></button>
             <button class="admin-nav" data-tab="a-bank" onclick="setAdminTab('a-bank')"><svg class="ni" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="6.5" rx="7" ry="3"/><path d="M5 6.5v5c0 1.7 3.1 3 7 3s7-1.3 7-3v-5M5 11.5v5c0 1.7 3.1 3 7 3s7-1.3 7-3v-5"/></svg><span>문제은행</span></button>
             <button class="admin-nav" data-tab="a-ai" onclick="setAdminTab('a-ai')"><svg class="ni" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5l1.6 4.4 4.4 1.6-4.4 1.6L12 15.5l-1.6-4.4L6 9.5l4.4-1.6z"/><path d="M18 15.5l.7 1.8 1.8.7-1.8.7-.7 1.8-.7-1.8-1.8-.7 1.8-.7z"/></svg><span>AI 문제 생성</span></button>
+            <button class="admin-nav" data-tab="a-variants" onclick="setAdminTab('a-variants')"><svg class="ni" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h11M4 12h7M4 17h11"/><path d="M17.5 14.5l2 2 3-3.5"/></svg><span>AI 변형 문제</span></button>
           </div>
         </div>
 
@@ -1314,7 +1315,29 @@ body.quiet-preview .sidebar{ padding-top:22px; }
   </div>
 </div>
             <!-- 채점 확인 -->
-      <div class="tabpanel" id="tab-a-grading">
+      <div class="tabpanel" id="tab-a-variants">
+  <div class="page-head"><div><h1>AI 변형 문제 관리</h1><p>학생이 오답노트에서 받아 채점까지 마친 AI 변형 문제를 모아 봅니다. 마음에 드는 문제는 문제은행에 넣거나 인쇄할 수 있어요.</p></div></div>
+  <div class="card">
+    <div class="form-grid three">
+      <div><label>학생</label><select id="av-student" onchange="renderAdminVariants()"></select></div>
+      <div><label>처음 결과</label><select id="av-first" onchange="renderAdminVariants()"><option value="">전체</option><option value="wrong">처음에 오답</option><option value="right">처음에 정답</option></select></div>
+      <div><label>검색 (문제·원본)</label><input type="text" id="av-q" oninput="renderAdminVariants()" placeholder="키워드"></div>
+    </div>
+    <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-top:10px;">
+      <button class="btn small ghost" onclick="avSelectAll(true)">모두 선택</button>
+      <button class="btn small ghost" onclick="avSelectAll(false)">선택 해제</button>
+      <span style="flex:1;"></span>
+      <select id="av-set" style="width:auto; min-width:140px;"></select>
+      <button class="btn small" onclick="avAddToBank()">선택한 문제를 문제은행에 추가</button>
+      <button class="btn small secondary" onclick="avPrint()">선택 인쇄</button>
+      <button class="btn small ghost" onclick="loadAdminVariants(true)">새로고침</button>
+    </div>
+    <div id="av-sum" class="note" style="margin-top:8px;"></div>
+  </div>
+  <div id="av-list"></div>
+</div>
+
+<div class="tabpanel" id="tab-a-grading">
         <div class="page-head"><div><h1>채점 · 제출 확인</h1><p>학생이 제출한 온라인 OMR 답안은 자동으로 채점됩니다.</p></div></div>
         <div class="card">
           <div class="form-grid three">
@@ -1329,7 +1352,8 @@ body.quiet-preview .sidebar{ padding-top:22px; }
             <h3 style="margin:0; border:none; padding:0;">제출 현황</h3>
             <button class="btn small ghost" onclick="toggleAllGradeGroups(true)">모두 펼치기</button>
             <button class="btn small ghost" onclick="toggleAllGradeGroups(false)">모두 접기</button>
-            <button class="btn small" style="margin-left:auto;" onclick="openBulkOmr()">OMR 사진 일괄 채점</button>
+            <button class="btn small secondary" style="margin-left:auto;" onclick="openUnsub()">미제출자 한눈에</button>
+            <button class="btn small" onclick="openBulkOmr()">OMR 사진 일괄 채점</button>
           </div>
           <div id="grading-table"></div>
         </div>
@@ -1480,6 +1504,7 @@ body.quiet-preview .sidebar{ padding-top:22px; }
 
   <div class="card">
     <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+      <button class="btn" id="wq-start-btn" onclick="startWrongQuiz()">복습 퀴즈 시작</button>
       <button class="btn secondary" onclick="toggleVariantList()">변형 문제 보기</button>
       <button class="btn secondary" onclick="openStarred()">별표·메모 문제 보기</button>
       <span style="flex:1;"></span>
@@ -1730,14 +1755,51 @@ body.quiet-preview .sidebar{ padding-top:22px; }
     <h3>OMR 사진 일괄 채점</h3>
     <p class="note">종이로 받은 OMR 사진을 여러 장 한꺼번에 올리세요. <b>과제 코드</b>로 과제를, <b>전화번호 끝 4자리</b>로 학생을 찾아 채점합니다. 과제가 서로 달라도 한 번에 올릴 수 있습니다. 반영하기 전에 아래에서 확인·수정할 수 있습니다.</p>
     <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-bottom:12px;">
-      <label class="btn secondary" style="margin:0; cursor:pointer;">📷 카메라로 찍기
-        <input type="file" accept="image/*" capture="environment" style="display:none;" onchange="onBulkFiles(this)"></label>
+      <button type="button" class="btn secondary" onclick="openCamGuide({ multi:true, fallback:'bulk-cam-input', onShot:f=>onBulkFiles({ files:[f], value:'' }) })">📷 카메라로 찍기</button>
+      <input type="file" id="bulk-cam-input" accept="image/*" capture="environment" style="display:none;" onchange="onBulkFiles(this)">
       <label class="btn secondary" style="margin:0; cursor:pointer;">사진 고르기 (여러 장)
         <input type="file" id="bulk-files" accept="image/*" multiple style="display:none;" onchange="onBulkFiles(this)"></label>
       <span id="bulk-sum" class="note" style="margin:0;"></span>
     </div>
+    <div id="bulk-summary"></div>
     <div id="bulk-list"></div>
     <button class="btn" id="bulk-commit" style="width:100%; margin-top:12px;" onclick="commitBulkOmr()" disabled>반영하기</button>
+  </div>
+</div>
+
+<!-- OMR 촬영 가이드 -->
+<div class="modal-bg" id="cam-modal">
+  <div class="modal cam-modal">
+    <button class="modal-close" onclick="closeCamGuide()">✕</button>
+    <h3>OMR 답안지 촬영</h3>
+    <div class="cam-stage"><video id="cam-video" playsinline muted autoplay></video><canvas id="cam-overlay"></canvas><div class="cam-flash" id="cam-flash"></div></div>
+    <div id="cam-hint" class="cam-hint">카메라를 켜는 중…</div>
+    <div class="cam-ctrl">
+      <label class="dup-opt" style="margin:0;"><input type="checkbox" id="cam-auto" checked> 자동 촬영</label>
+      <span style="flex:1;"></span>
+      <button class="btn" onclick="camShot()">📷 촬영</button>
+      <button class="btn secondary" id="cam-done" onclick="closeCamGuide()">닫기</button>
+    </div>
+    <p class="note" id="cam-count" style="margin-top:6px;"></p>
+  </div>
+</div>
+
+<!-- 미제출자 한눈에 보기 -->
+<div class="modal-bg" id="unsub-modal">
+  <div class="modal wide">
+    <button class="modal-close" onclick="closeModal('unsub-modal')">✕</button>
+    <h3>미제출자 한눈에 보기</h3>
+    <div class="form-grid three">
+      <div><label>수업</label><select id="unsub-class" onchange="renderUnsub()"></select></div>
+      <div><label>구분</label><select id="unsub-kind" onchange="renderUnsub()"><option value="">과제 + 시험</option><option value="hw">과제만</option><option value="exam">시험만</option></select></div>
+      <div><label>보기</label><select id="unsub-view" onchange="renderUnsub()"><option value="task">과제·시험별</option><option value="student">학생별</option></select></div>
+    </div>
+    <label class="dup-opt"><input type="checkbox" id="unsub-due" checked onchange="renderUnsub()"> 마감이 지난 항목만 (끄면 마감 전 항목도 포함)</label>
+    <div id="unsub-body" style="margin-top:10px;"></div>
+    <div style="display:flex; gap:8px; margin-top:12px;">
+      <button class="btn" style="flex:1;" onclick="copyUnsub()">안내문 복사</button>
+    </div>
+    <p class="note" id="unsub-msg" style="margin-top:6px;"></p>
   </div>
 </div>
 
@@ -1800,7 +1862,7 @@ body.quiet-preview .sidebar{ padding-top:22px; }
          <b>종이 OMR로 푸셨나요?</b>
          <div style="display:flex; gap:6px; flex-wrap:wrap; margin-top:8px;">
            <button type="button" class="btn small secondary" onclick="printOmrSheet(currentSolve.kind, currentSolve.tid)">OMR 답안지 인쇄</button>
-           <button type="button" class="btn small" onclick="$('omr-scan-cam').click()">📷 카메라로 바로 찍기</button>
+           <button type="button" class="btn small" onclick="openCamGuide({ fallback:'omr-scan-cam', onShot:f=>scanOmrFile(f) })">📷 카메라로 바로 찍기</button>
            <button type="button" class="btn small secondary" onclick="$('omr-scan-file').click()">🖼 앨범에서 고르기</button>
            <input type="file" id="omr-scan-cam" accept="image/*" capture="environment" style="display:none;" onchange="scanOmrPhoto(this)">
            <input type="file" id="omr-scan-file" accept="image/*" style="display:none;" onchange="scanOmrPhoto(this)">
@@ -1851,6 +1913,19 @@ body.quiet-preview .sidebar{ padding-top:22px; }
     </div>
   </div>
 </div>
+<!-- 오답노트 복습 퀴즈 -->
+<div class="modal-bg" id="wrong-quiz-modal">
+  <div class="modal wide">
+    <button class="modal-close" onclick="closeModal('wrong-quiz-modal')">✕</button>
+    <h3 id="wq-title">복습 퀴즈</h3>
+    <div id="wq-progress" class="solve-progress" style="margin-bottom:10px;"></div>
+    <div id="wq-body"></div>
+    <div id="wq-result" style="margin-top:10px;"></div>
+    <div id="wq-actions" style="display:flex; gap:8px; margin-top:12px;"></div>
+  </div>
+</div>
+<!-- 오답노트 복습 퀴즈 끝 -->
+
 <!-- 학생 상세 -->
 <div class="modal-bg" id="student-detail-modal">
   <div class="modal wide">
@@ -2182,6 +2257,7 @@ function setAdminTab(id){
   if(id==='a-bank') renderBank();
   if(id==='a-ai') renderAiSetOptions();
   if(id==='a-grading') renderGradingTable();
+  if(id==='a-variants') loadAdminVariants();
   if(id==='a-stats') renderStats();
   if(id==='a-bank') fillQImportSets();
   syncNavSects();
@@ -7722,8 +7798,13 @@ async function omrPrepare(file){
   const sc = Math.min(1, 2200/Math.max(img.naturalWidth, img.naturalHeight));
   const w = Math.max(8, Math.round(img.naturalWidth*sc)), h = Math.max(8, Math.round(img.naturalHeight*sc));
   const cv = document.createElement('canvas'); cv.width = w; cv.height = h;
-  const ctx = cv.getContext('2d', { willReadFrequently:true }); ctx.drawImage(img, 0, 0, w, h);
-  const d = ctx.getImageData(0,0,w,h).data;
+  cv.getContext('2d', { willReadFrequently:true }).drawImage(img, 0, 0, w, h);
+  return omrNormFromCanvas(cv);
+}
+/* 캔버스(사진 또는 카메라 한 프레임) → 조명 보정된 밝기 배열 */
+function omrNormFromCanvas(cv){
+  const w = cv.width, h = cv.height;
+  const d = cv.getContext('2d', { willReadFrequently:true }).getImageData(0,0,w,h).data;
   const gray = new Float32Array(w*h);
   for(let i=0,j=0;i<gray.length;i++,j+=4) gray[i] = 0.299*d[j] + 0.587*d[j+1] + 0.114*d[j+2];
   const W1 = w+1, S = new Float64Array(W1*(h+1));
@@ -7745,7 +7826,7 @@ async function omrPrepare(file){
   return { w, h, norm, gray, paper: samp[Math.floor(samp.length*0.7)] || 200 };
 }
 /* 검은 정사각형 후보를 찾고, 그중 바깥 네 점(볼록 껍질에서 넓이가 최대인 사각형)을 모서리 표식으로 쓴다 */
-function omrFindQuad(im){
+function omrFindQuad(im, info){
   const { w, h, norm, gray, paper } = im, N = w*h;
   const dark = new Uint8Array(N);
   for(let i=0;i<N;i++) dark[i] = norm[i] < 0.66 ? 1 : 0;
@@ -7787,6 +7868,7 @@ function omrFindQuad(im){
     cands.push({ x:cx, y:cy, a:cnt });
   }
   if(window.__omrDebug) window.__omrDebug.cands = cands.map(c=>({x:Math.round(c.x),y:Math.round(c.y),a:c.a}));
+  if(info) info.cands = cands.length;
   if(cands.length < 4) return null;
   // 볼록 껍질
   const pts = cands.slice().sort((p,q)=>p.x-q.x || p.y-q.y);
@@ -8042,9 +8124,113 @@ async function omrReadHybrid(file, opt){
   parsed.via = 'ai'; parsed.fallbackWhy = why;
   return parsed;
 }
+/* =========================================================
+   OMR 촬영 가이드: 카메라를 직접 열어 네 모서리 표식이 보이는지 실시간으로 알려주고,
+   조건이 맞으면 자동으로(또는 촬영 버튼으로) 찍는다. 카메라를 못 열면 기본 카메라 앱으로 넘어간다.
+   ========================================================= */
+let cam = null;
+function camFallback(opts){
+  const el = opts && opts.fallback ? $(opts.fallback) : null;
+  if(el) el.click(); else alert('카메라를 열 수 없습니다. 사진 앱으로 찍어서 올려 주세요.');
+}
+async function openCamGuide(opts){
+  opts = opts || {};
+  if(cam) closeCamGuide();
+  if(!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia)){ camFallback(opts); return; }
+  cam = { opts, shots:0, stable:0, last:null, busy:false, need:false, stream:null, timer:null, sc:null };
+  $('cam-hint').textContent = '카메라를 켜는 중…'; $('cam-hint').className = 'cam-hint';
+  $('cam-count').textContent = ''; $('cam-done').textContent = opts.multi ? '완료' : '닫기';
+  openModal('cam-modal');
+  try{
+    cam.stream = await navigator.mediaDevices.getUserMedia({ video:{ facingMode:{ ideal:'environment' }, width:{ ideal:1920 }, height:{ ideal:1080 } }, audio:false });
+  }catch(e){
+    closeCamGuide(); camFallback(opts); return;
+  }
+  if(!cam) { return; }
+  const v = $('cam-video'); v.srcObject = cam.stream;
+  try{ await v.play(); }catch(e){}
+  cam.timer = setInterval(camTick, 260);
+}
+function closeCamGuide(){
+  if(cam){
+    clearInterval(cam.timer);
+    if(cam.stream) cam.stream.getTracks().forEach(t=>t.stop());
+  }
+  const v = $('cam-video'); if(v) v.srcObject = null;
+  cam = null; closeModal('cam-modal');
+}
+const camPolyArea = q=>{ let a=0; for(let i=0;i<q.length;i++){ const p=q[i], n=q[(i+1)%q.length]; a += p.x*n.y-n.x*p.y; } return Math.abs(a)/2; };
+function camTick(){
+  if(!cam || cam.busy) return;
+  if(!$('cam-modal').classList.contains('show')){ closeCamGuide(); return; }    // 바깥을 눌러 닫혔을 때도 카메라를 끈다
+  const v = $('cam-video'); if(!v.videoWidth) return;
+  const k = Math.min(1, 640/Math.max(v.videoWidth, v.videoHeight));
+  const w = Math.round(v.videoWidth*k), h = Math.round(v.videoHeight*k);
+  const cv = cam.sc || (cam.sc = document.createElement('canvas')); cv.width = w; cv.height = h;
+  cv.getContext('2d', { willReadFrequently:true }).drawImage(v, 0, 0, w, h);
+  const im = omrNormFromCanvas(cv), info = {};
+  let quad = null;
+  try{ quad = omrFindQuad(im, info); }catch(e){}
+  const ov = $('cam-overlay'); ov.width = w; ov.height = h;
+  const g = ov.getContext('2d'); g.clearRect(0,0,w,h);
+  let msg = '', ok = false;
+  if(!quad){
+    msg = info.cands ? `검은 네모가 ${Math.min(info.cands,3)}개만 보여요. 네 모서리가 모두 화면에 들어오게 맞춰 주세요` : '답안지를 화면에 놓고 네 모서리의 검은 네모가 모두 보이게 해 주세요';
+    cam.stable = 0; cam.last = null;
+  } else {
+    const order = quad.slice();
+    const frac = camPolyArea(order)/(w*h);
+    const edge = Math.min(...order.map(p=>Math.min(p.x, p.y, w-p.x, h-p.y)))/Math.min(w,h);
+    const d = (a,b)=>Math.hypot(a.x-b.x, a.y-b.y);
+    const sideA = d(order[0],order[1])/Math.max(1,d(order[3],order[2])), sideB = d(order[1],order[2])/Math.max(1,d(order[0],order[3]));
+    const tilt = Math.max(sideA,1/sideA,sideB,1/sideB);
+    let mean = 0, n = 0; for(let i=0;i<im.gray.length;i+=53){ mean += im.gray[i]; n++; } mean /= Math.max(1,n);
+    if(frac < 0.22) msg = '조금 더 가까이 가 주세요';
+    else if(edge < 0.012) msg = '답안지가 화면 끝에 닿았어요. 조금 멀리서 찍어 주세요';
+    else if(tilt > 1.3) msg = '휴대폰을 답안지와 나란하게 들어 주세요 (너무 기울었어요)';
+    else if(mean < 70) msg = '너무 어두워요. 밝은 곳에서 찍어 주세요';
+    else ok = true;
+    if(ok){
+      const c = order.reduce((a,p)=>({x:a.x+p.x/4,y:a.y+p.y/4}),{x:0,y:0});
+      const moved = cam.last ? Math.hypot(c.x-cam.last.x, c.y-cam.last.y)/w : 1;
+      cam.last = c;
+      if(moved > 0.012){ cam.stable = 0; cam.need = false; msg = '좋아요! 잠깐 멈추면 찍어요'; }
+      else { cam.stable++; msg = cam.need ? '다음 답안지를 올려 주세요' : (cam.stable>=4 && $('cam-auto').checked ? '촬영!' : '좋아요! 그대로 멈춰 주세요'); }
+    } else { cam.stable = 0; cam.last = null; }
+    g.lineWidth = Math.max(3, w/120); g.strokeStyle = ok ? '#2fbf71' : '#f0a020'; g.fillStyle = ok ? 'rgba(47,191,113,.12)' : 'rgba(240,160,32,.1)';
+    g.beginPath(); order.forEach((p,i)=>i?g.lineTo(p.x,p.y):g.moveTo(p.x,p.y)); g.closePath(); g.fill(); g.stroke();
+  }
+  const hint = $('cam-hint'); hint.textContent = msg; hint.className = 'cam-hint' + (ok ? ' ok' : '');
+  if(ok && cam.stable>=4 && !cam.need && $('cam-auto').checked) camShot();
+}
+async function camShot(){
+  if(!cam || cam.busy) return;
+  const v = $('cam-video'); if(!v.videoWidth){ return; }
+  cam.busy = true;
+  const cv = document.createElement('canvas'); cv.width = v.videoWidth; cv.height = v.videoHeight;
+  cv.getContext('2d').drawImage(v, 0, 0);
+  const blob = await new Promise(res=>cv.toBlob(res, 'image/jpeg', 0.92));
+  const fl = $('cam-flash'); fl.classList.add('on'); setTimeout(()=>fl.classList.remove('on'), 160);
+  if(!blob){ cam.busy = false; return; }
+  cam.shots++;
+  const file = new File([blob], `omr-cam-${Date.now()}-${cam.shots}.jpg`, { type:'image/jpeg' });
+  const opts = cam.opts;
+  if(opts.multi){
+    $('cam-count').textContent = `${cam.shots}장 촬영했어요. 다음 답안지를 올려 주세요. 다 찍었으면 '완료'를 누르세요.`;
+    cam.need = true; cam.stable = 0; cam.last = null; cam.busy = false;
+    try{ opts.onShot(file); }catch(e){ console.error(e); }
+  } else {
+    closeCamGuide();
+    try{ opts.onShot(file); }catch(e){ console.error(e); }
+  }
+}
+
 let omrScanBusy = false;
 async function scanOmrPhoto(input){
   const f = input.files && input.files[0]; input.value = '';
+  return scanOmrFile(f);
+}
+async function scanOmrFile(f){
   if(!f || !currentSolve) return;
   const st = $('omr-scan-status');
   if(omrScanBusy) return;
@@ -8325,21 +8511,31 @@ function leftText(ms){
 function renderUrgentBanner(){
   const box = $('stu-urgent'); if(!box) return;
   if(!currentStudent || adminViewAll){ box.innerHTML = ''; return; }
-  const now = Date.now();
-  const items = [...tasks.hw.filter(isAssignedToMe).map(t=>({t,kind:'hw'})), ...tasks.exam.filter(isAssignedToMe).map(t=>({t,kind:'exam'}))]
+  const now = Date.now(), DAY = 24*3600*1000;
+  const all = [...tasks.hw.filter(isAssignedToMe).map(t=>({t,kind:'hw'})), ...tasks.exam.filter(isAssignedToMe).map(t=>({t,kind:'exam'}))]
     .filter(x=>!submissions[x.t.tid+'|'+currentStudent])
     .filter(x=>!x.t.startAt || new Date(x.t.startAt).getTime() <= now)
     .map(x=>({...x, ms: x.t.due ? new Date(x.t.due).getTime()-now : NaN}))
-    .filter(x=>!isNaN(x.ms) && x.ms > 0 && x.ms <= 24*3600*1000)
-    .sort((a,b)=>a.ms-b.ms);
+    .filter(x=>!isNaN(x.ms));
+  const late = all.filter(x=>x.ms <= 0 && x.ms > -7*DAY).sort((a,b)=>b.ms-a.ms);         // 마감이 지난 지 7일 안
+  const soon = all.filter(x=>x.ms > 0 && x.ms <= 3*DAY).sort((a,b)=>a.ms-b.ms);          // 3일 안에 마감
+  const items = soon.concat(late);
   if(!items.length){ box.innerHTML = ''; return; }
+  const leftLabel = x=>{
+    if(x.ms <= 0) return '마감 지남';
+    if(x.ms < DAY) return leftText(x.ms)+' 남음';
+    const d = dday(x.t.due);
+    return d===1 ? '내일 마감' : `D-${d}`;
+  };
+  const head = [soon.length ? `3일 안에 마감 ${soon.length}건` : '', late.length ? `마감 지남 ${late.length}건 (지각 제출 가능)` : ''].filter(Boolean).join(' · ');
+  const hotCls = x=> x.ms>0 && x.ms<DAY ? (x.ms<3*3600*1000 ? ' hot' : ' soon') : (x.ms<=0 ? ' late' : '');
   box.innerHTML = `<div class="urgent">
-    <div class="ug-h"><span class="ug-ic">!</span><b>마감 임박</b> <span>24시간 안에 마감되는 미제출 ${items.length}건</span></div>
-    ${items.slice(0,3).map(x=>`<div class="ug-row${x.ms<3*3600*1000?' hot':''}">
+    <div class="ug-h"><span class="ug-ic">!</span><b>마감 임박</b> <span>${head}</span></div>
+    ${items.slice(0,4).map(x=>`<div class="ug-row${hotCls(x)}">
       <span class="ug-t">${x.kind==='hw'?'과제':'시험'} · ${esc(x.t.title)}</span>
-      <span class="ug-left">${leftText(x.ms)} 남음</span>
-      <button class="btn small" onclick="openStudentSolve('${x.kind}','${x.t.tid}')">풀기</button></div>`).join('')}
-    ${items.length>3 ? `<div class="ug-more">그 외 ${items.length-3}건</div>` : ''}
+      <span class="ug-left">${leftLabel(x)}</span>
+      <button class="btn small" onclick="openStudentSolve('${x.kind}','${x.t.tid}')">${x.ms<=0?'지각 제출':'풀기'}</button></div>`).join('')}
+    ${items.length>4 ? `<div class="ug-more">그 외 ${items.length-4}건 · 과제/시험 탭에서 확인하세요</div>` : ''}
   </div>`;
 }
 setInterval(()=>{ try{ renderUrgentBanner(); }catch(e){} }, 60000);
@@ -8548,6 +8744,7 @@ function toggleWrongNoteDetail(qid){
   renderWrongNote();
 }
 function renderWrongNote(){
+  renderWqStartBtn();
   const box = $('wrong-note-list'); if(!box) return;
 
   // 삭제된 문제는 제외
@@ -9638,7 +9835,7 @@ async function commitOfflineRecord(kind, tid, uid, qs, marks, answers, opts){
 /* =========================================================
    OMR 사진 일괄 채점 — 과제 코드로 과제, 전화번호 끝 4자리로 학생을 찾는다
    ========================================================= */
-let bulk = { rows:[], seq:0, running:0, committing:false };
+let bulk = { rows:[], seq:0, running:0, committing:false, filter:'' };
 function openBulkOmr(){
   bulk.rows.forEach(r=>{ if(r.thumb) URL.revokeObjectURL(r.thumb); });
   bulk = { rows:[], seq:0, running:0, committing:false };
@@ -9764,6 +9961,192 @@ function bulkState(row, seen){
   if(sub) return {k:'ready', msg:'이미 현장 기록이 있어 덮어씁니다.', warn:true};
   return {k:'ready', msg: row.unsure ? `확신이 낮은 문항 ${row.unsure}개 — 펼쳐서 확인하세요.` : '', warn:!!row.unsure};
 }
+
+/* =========================================================
+   미제출자 한눈에 보기
+   ========================================================= */
+let unsubText = '';
+function openUnsub(){
+  const sel = $('unsub-class');
+  sel.innerHTML = '<option value="">전체 수업</option>' + classes.map(c=>`<option value="${c.cid}">${esc(c.name)}</option>`).join('');
+  $('unsub-msg').textContent = '';
+  renderUnsub(); openModal('unsub-modal');
+}
+function unsubCollect(){
+  const cid = $('unsub-class').value, kind = $('unsub-kind').value, onlyDue = $('unsub-due').checked, now = Date.now();
+  const list = [];
+  ['hw','exam'].forEach(k=>{
+    if(kind && kind!==k) return;
+    tasks[k].forEach(t=>{
+      if(cid && t.classId!==cid) return;
+      const due = t.due && !isNaN(new Date(t.due)) ? new Date(t.due).getTime() : null;
+      if(t.startAt && new Date(t.startAt).getTime() > now) return;           // 아직 시작 전인 항목은 제외
+      if(onlyDue && !(due!==null && due < now)) return;
+      const targets = taskTargetStudents(t);
+      const miss = targets.filter(st=>!submissions[t.tid+'|'+st.uid]);
+      list.push({ kind:k, t, due, total:targets.length, miss });
+    });
+  });
+  list.sort((a,b)=>(a.due??Infinity)-(b.due??Infinity));
+  return list;
+}
+function renderUnsub(){
+  const list = unsubCollect(), view = $('unsub-view').value, box = $('unsub-body');
+  const dueTxt = x => x.t.due ? fmtDue(x.t.due) : '미정';
+  const lines = [];
+  if(view==='student'){
+    const by = new Map();
+    list.forEach(x=>x.miss.forEach(st=>{ if(!by.has(st.uid)) by.set(st.uid, { st, items:[] }); by.get(st.uid).items.push(x); }));
+    const rows = [...by.values()].sort((a,b)=>b.items.length-a.items.length || String(a.st.name).localeCompare(String(b.st.name),'ko'));
+    box.innerHTML = rows.length ? rows.map(r=>`<div class="bank-item"><div class="bi-body">
+        <b>${esc(r.st.name)}</b> <span class="badge warn">미제출 ${r.items.length}건</span>
+        <div style="margin-top:6px; font-size:13px; color:var(--ink-soft);">${r.items.map(x=>`${x.kind==='hw'?'과제':'시험'} · ${esc(x.t.title)}`).join('<br>')}</div></div></div>`).join('')
+      : '<p class="empty-hint">조건에 맞는 미제출자가 없습니다.</p>';
+    rows.forEach(r=>lines.push(`${r.st.name}: ${r.items.map(x=>x.t.title).join(', ')}`));
+    unsubText = rows.length ? '아직 제출하지 않은 과제·시험 안내\n\n' + lines.join('\n') : '';
+  } else {
+    box.innerHTML = list.length ? list.map(x=>`<div class="bank-item"><div class="bi-body">
+        <span class="qset-tag ans">${x.kind==='hw'?'과제':'시험'}</span> <b>${esc(x.t.title)}</b>
+        <span class="note" style="margin:0 0 0 6px;">${esc(classWeekText(x.t))} · 마감 ${esc(dueTxt(x))}</span>
+        <div style="margin-top:6px;"><span class="badge ${x.miss.length?'warn':'good'}">제출 ${x.total-x.miss.length}/${x.total}</span></div>
+        <div style="margin-top:6px; font-size:13.5px; line-height:1.9;">${x.miss.length ? x.miss.map(st=>`<span class="badge muted" style="margin:0 4px 4px 0;">${esc(st.name)}</span>`).join('') : '<span style="color:var(--good);">모두 제출했어요</span>'}</div>
+      </div></div>`).join('') : '<p class="empty-hint">조건에 맞는 과제·시험이 없습니다.</p>';
+    list.filter(x=>x.miss.length).forEach(x=>lines.push(`[${x.kind==='hw'?'과제':'시험'}] ${x.t.title} (마감 ${dueTxt(x)})\n미제출 ${x.miss.length}명: ${x.miss.map(st=>st.name).join(', ')}`));
+    unsubText = lines.length ? '아직 제출하지 않은 과제·시험 안내\n\n' + lines.join('\n\n') : '';
+  }
+}
+function copyUnsub(){
+  if(!unsubText){ $('unsub-msg').textContent = '복사할 미제출 내용이 없습니다.'; return; }
+  copyText(unsubText).then(ok=>{ $('unsub-msg').textContent = ok ? '복사했습니다. 단체 메시지에 붙여넣으세요.' : '복사에 실패했습니다. 화면의 내용을 직접 선택해 복사하세요.'; });
+}
+
+/* =========================================================
+   관리자: AI 변형 문제 관리 (variants/{uid} 전체를 읽어 학생별로 모아 보기)
+   ========================================================= */
+let adminVariants = null;   // [{uid, ...item}]
+let avLoading = false;
+async function loadAdminVariants(force){
+  if(avLoading) return;
+  if(adminVariants && !force){ renderAdminVariants(); return; }
+  avLoading = true; $('av-sum').textContent = '불러오는 중…';
+  try{
+    const { db, collection, getDocs } = window.fb;
+    const snap = await getDocs(collection(db,'variants'));
+    const out = [];
+    snap.docs.forEach(d=>{ ((d.data()||{}).items||[]).forEach(it=>out.push(Object.assign({ uid:d.id }, it))); });
+    adminVariants = out;
+  }catch(e){
+    adminVariants = [];
+    $('av-sum').textContent = '불러오지 못했습니다: ' + e.message + ' (variants 읽기 규칙을 확인하세요)';
+    avLoading = false; renderAdminVariants(true); return;
+  }
+  avLoading = false; renderAdminVariants();
+}
+const avStudentName = uid => (students.find(x=>x.uid===uid)||{}).name || '(알 수 없음)';
+function avFiltered(){
+  const uid = $('av-student').value, first = $('av-first').value, kw = ($('av-q').value||'').trim().toLowerCase();
+  return (adminVariants||[]).filter(v=>
+    (!uid || v.uid===uid) &&
+    (!first || (first==='right' ? v.firstCorrect : !v.firstCorrect)) &&
+    (!kw || (String(v.body||'')+' '+String(v.srcBody||'')).toLowerCase().includes(kw))
+  ).sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
+}
+function renderAdminVariants(keepMsg){
+  const sSel = $('av-student'), prev = sSel.value;
+  const uids = [...new Set((adminVariants||[]).map(v=>v.uid))];
+  sSel.innerHTML = '<option value="">전체 학생</option>' + uids.map(u=>`<option value="${u}">${esc(avStudentName(u))} (${adminVariants.filter(v=>v.uid===u).length})</option>`).join('');
+  if(prev && uids.includes(prev)) sSel.value = prev;
+  const setSel = $('av-set');
+  if(!setSel.options.length || setSel.dataset.n!==String(questionSets.length)){
+    setSel.innerHTML = questionSets.map(n=>`<option value="${esc(n)}">${esc(n)}</option>`).join('') + '<option value="">미분류</option>'; setSel.dataset.n = String(questionSets.length);
+  }
+  const list = avFiltered();
+  if(!keepMsg) $('av-sum').textContent = adminVariants ? `전체 ${adminVariants.length}개 중 ${list.length}개 표시 · 학생 ${uids.length}명` : '';
+  $('av-list').innerHTML = list.length ? list.map(v=>{
+    const inBank = questions.some(q=>q.body===v.body);
+    const ch = v.type==='mc' ? `<div style="margin-top:4px; font-size:13px; color:var(--ink-soft);">${(v.choices||[]).map((c,i)=>`<div>${circleLabel(i+1)} ${esc(c)}</div>`).join('')}</div>` : '';
+    return `<div class="card variant-item" style="margin-bottom:10px;">
+      <div style="display:flex; gap:10px; align-items:flex-start;">
+        <input type="checkbox" class="av-ck" value="${esc(v.uid)}|${esc(v.vid)}" style="margin-top:4px;">
+        <div style="flex:1; min-width:0;">
+          <div class="variant-meta"><b>${esc(avStudentName(v.uid))}</b> · ${fmtNoticeDate(v.createdAt)} · 원본: ${esc(v.srcBody||'(삭제된 문제)')}
+            ${v.firstCorrect?'<span class="badge good">처음에 정답</span>':'<span class="badge warn">처음에 오답</span>'}
+            ${inBank?'<span class="badge muted">문제은행에 있음</span>':''}</div>
+          <b>${esc(v.body)}</b>
+          ${(v.passages||[]).length ? `<div style="margin-top:6px;">${renderPassageBoxHtml(getPassages(v))}</div>` : ''}
+          ${ch}
+          <div style="margin-top:6px; font-size:13px;"><span class="exam-answer">정답 ${esc(answerLabel(v))}</span>${v.explain?` · <span style="color:var(--ink-soft);">${esc(v.explain)}</span>`:''}</div>
+          <div style="margin-top:8px; display:flex; gap:6px; flex-wrap:wrap;">
+            <button class="btn small secondary" onclick="avAddToBank(['${esc(v.uid)}|${esc(v.vid)}'])">문제은행에 추가</button>
+            <button class="btn small ghost" onclick="avDelete('${esc(v.uid)}','${esc(v.vid)}')">삭제</button>
+          </div>
+        </div>
+      </div></div>`;
+  }).join('') : `<div class="card"><p class="empty-hint">${adminVariants ? '조건에 맞는 변형 문제가 없습니다.' : ''}</p></div>`;
+}
+function avSelectAll(on){ document.querySelectorAll('#av-list .av-ck').forEach(c=>c.checked = on); }
+function avPicked(ids){
+  const keys = ids || [...document.querySelectorAll('#av-list .av-ck:checked')].map(c=>c.value);
+  return keys.map(k=>{ const [uid,vid] = k.split('|'); return (adminVariants||[]).find(v=>v.uid===uid && v.vid===vid); }).filter(Boolean);
+}
+async function avAddToBank(ids){
+  const picked = avPicked(ids);
+  if(!picked.length){ alert('문제은행에 넣을 변형 문제를 선택하세요.'); return; }
+  const setName = $('av-set').value;
+  const fresh = picked.filter(v=>!questions.some(q=>q.body===v.body));
+  const skipped = picked.length - fresh.length;
+  if(!fresh.length){ alert('선택한 문제가 모두 이미 문제은행에 있습니다.'); return; }
+  if(!confirm(`${fresh.length}개를 '${setName||'미분류'}' 세트에 추가합니다.` + (skipped ? `\n(이미 있는 ${skipped}개는 건너뜁니다)` : ''))) return;
+  let order = questions.filter(x=>x.set===setName).reduce((m,x)=>Math.max(m, x.order ?? -1), -1) + 1;
+  let ok = 0; const fails = [];
+  for(const v of fresh){
+    try{
+      await qSave(null, { set:setName, type:v.type, body:v.body, passages:v.passages||[], choices:v.type==='mc' ? (v.choices||[]) : [], answer:v.answer||'', order:order++, explain:v.explain||'', createdAt:Date.now() });
+      ok++;
+    }catch(e){ fails.push(e.message); }
+  }
+  alert(`${ok}개를 문제은행에 추가했습니다.` + (fails.length ? `\n실패 ${fails.length}건: ${fails[0]}` : ''));
+  renderAdminVariants();
+}
+async function avDelete(uid, vid){
+  if(!confirm('이 변형 문제를 삭제할까요? 학생의 "내가 받은 변형 문제"에서도 사라집니다.')) return;
+  try{
+    const { db, doc, setDoc } = window.fb;
+    const left = (adminVariants||[]).filter(v=>v.uid===uid && v.vid!==vid).map(v=>{ const c = Object.assign({}, v); delete c.uid; return c; });
+    await setDoc(doc(db,'variants',uid), { items:left }, {merge:true});
+    adminVariants = adminVariants.filter(v=>!(v.uid===uid && v.vid===vid));
+    renderAdminVariants();
+  }catch(e){ alert('삭제 실패: '+e.message); }
+}
+function avPrint(){
+  const picked = avPicked();
+  if(!picked.length){ alert('인쇄할 변형 문제를 선택하세요.'); return; }
+  const qs = picked.map(v=>Object.assign({}, v, { qid:'v_'+v.vid }));
+  const title = 'AI 변형 문제';
+  const html = `<!DOCTYPE html><html lang="ko"><head><meta charset="UTF-8"><title>${title}</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
+<style>
+${PRINT_PAD_CSS}
+  body{font-family:'Pretendard Variable','Pretendard','Noto Sans KR',-apple-system,sans-serif; color:#111; line-height:1.6; letter-spacing:-.01em; margin:0; -webkit-font-smoothing:antialiased;}
+  .no-print{text-align:center; padding:12px;} .no-print button{padding:10px 20px; font-size:14px; cursor:pointer;}
+  @media print{ .no-print{display:none;} }
+${PRINT_PROBLEM_CSS}
+${PRINT_KEY_CSS}
+</style></head><body>
+<div class="no-print"><button onclick="window.print()">인쇄 / PDF로 저장</button></div>
+${padWrap(`<section class="probsec"><div class="sheet-title">${title}</div><div class="sheet-meta">총 ${qs.length}문항</div><div class="two-col">${qs.map((q,i)=>buildPrintQuestionHtml(q,i+1)).join('')}</div></section>`, '')}
+${padWrap(buildQuickAnswerHtml(qs, title) + buildAnswerExplainHtml(qs, title), 'brk')}
+</body></html>`;
+  openPrintWindow(html, '명덕외고-국제정치');
+}
+
+function bulkSetFilter(k){ bulk.filter = bulk.filter===k ? '' : k; renderBulk(); }
+function bulkJump(id){
+  const r = bulkRow(id); if(!r) return;
+  if(bulk.filter && r._cat!==bulk.filter){ bulk.filter = ''; }
+  r.open = true; renderBulk();
+  const el = document.getElementById('bk_'+id); if(el){ el.scrollIntoView({behavior:'smooth', block:'center'}); el.classList.add('bk-flash'); setTimeout(()=>el.classList.remove('bk-flash'),1600); }
+}
 function renderBulk(){
   const box = $('bulk-list'); if(!box) return;
   const seen = new Set();
@@ -9771,8 +10154,11 @@ function renderBulk(){
     const v = x.kind+'|'+x.t.tid;
     return `<option value="${v}" ${sel===v?'selected':''}>[${x.kind==='hw'?'과제':'시험'}] ${esc(x.t.title)} · ${esc(classWeekText(x.t))}</option>`; }).join('');
   let ready = 0, need = 0, block = 0, wait = 0;
-  box.innerHTML = bulk.rows.map(r=>{
-    const st = bulkState(r, seen);
+  const cat = { ok:[], check:[], fail:[] };      // 요약용: 정상 / 확인 필요 / 불가
+  bulk.rows.forEach(r=>{ const st = bulkState(r, seen); r._st = st; r._cat = (st.k==='ready' && !st.warn) ? 'ok' : (st.k==='ready' || st.k==='need') ? 'check' : st.k==='block' ? 'fail' : 'wait'; if(r._cat in cat) cat[r._cat].push(r); });
+  const shownRows = bulk.filter ? bulk.rows.filter(r=>r._cat===bulk.filter) : bulk.rows;
+  box.innerHTML = shownRows.map(r=>{
+    const st = r._st;
     if(st.k==='ready' && r.include) ready++; else if(st.k==='need') need++; else if(st.k==='block') block++; else if(st.k==='wait') wait++;
     const bt = bulkTaskOf(r);
     let studentSel = '';
@@ -9789,7 +10175,7 @@ function renderBulk(){
       const v = r.answers[q.qid]; const label = v===undefined ? '–' : (q.type==='mc' ? circleLabel(v) : esc(v));
       const un = (r.list||[]).find(a=>a.n===i+1 && a.unsure);
       return `<button class="bk-q ${r.marks[q.qid]?'ok':'no'}${un?' un':''}${r.edited[q.qid]?' ed':''}" title="눌러서 정오 바꾸기 · 정답 ${esc(answerLabel(q))}" onclick="bulkToggleMark('${r.id}','${q.qid}')"><b>${i+1}</b>${label}</button>`; }).join('')}</div>` : '';
-    return `<div class="bk-row ${st.k}">
+    return `<div class="bk-row ${st.k}" id="bk_${r.id}">
       <img src="${r.thumb}" alt="" class="bk-thumb">
       <div class="bk-main">
         <div class="bk-top"><span class="bk-name">${esc(r.name)}</span>
@@ -9804,6 +10190,20 @@ function renderBulk(){
         ${chips}
       </div></div>`;
   }).join('') || '<p class="empty-hint">사진을 고르면 여기에 결과가 나옵니다.</p>';
+  const sumBox = $('bulk-summary');
+  if(sumBox){
+    if(!bulk.rows.length) sumBox.innerHTML = '';
+    else {
+      const chip = (k,label,n,cls)=>`<button type="button" class="bk-chip ${cls}${bulk.filter===k?' on':''}" onclick="bulkSetFilter('${k}')"><b>${n}</b>${label}</button>`;
+      const names = rows => rows.map(r=>`<a href="#" onclick="bulkJump('${r.id}');return false;">${esc(r.name)}</a>`).join(' · ');
+      sumBox.innerHTML = `<div class="bk-summary">
+        <div class="bk-chips-row">${chip('','전체',bulk.rows.length,'all')}${chip('ok','자동 인식 성공',cat.ok.length,'ok')}${chip('check','확인 필요',cat.check.length,'check')}${chip('fail','반영 불가',cat.fail.length,'fail')}</div>
+        ${cat.check.length ? `<div class="bk-sumline"><b>확인 필요</b> ${names(cat.check)}</div>` : ''}
+        ${cat.fail.length ? `<div class="bk-sumline"><b>반영 불가</b> ${names(cat.fail)}</div>` : ''}
+        ${(!cat.check.length && !cat.fail.length && cat.ok.length) ? '<div class="bk-sumline good">모두 자동으로 인식했어요. 점수만 훑어보고 반영하세요.</div>' : ''}
+      </div>`;
+    }
+  }
   $('bulk-sum').textContent = bulk.rows.length ? `${bulk.rows.length}장 · 반영 ${ready}건 · 확인 필요 ${need}건${block?` · 불가 ${block}건`:''}${wait?` · 읽는 중 ${wait}장`:''}` : '';
   const btn = $('bulk-commit');
   btn.disabled = !ready || bulk.committing || wait>0;
@@ -10196,6 +10596,88 @@ function renderWrongSolveBody(q){
         ? omrChoicesHtml(q, 'wrong_ans', '')
         : `<input type="text" id="wrong_ans_text" placeholder="정답 입력">`}
     </div>`;
+}
+
+
+/* =========================================================
+   오답노트 복습 퀴즈: '복습 필요' 문제만 한 문제씩 다시 풀고, 맞히면 마스터 처리한다
+   ========================================================= */
+let wq = null;   // {list:[{qid,item}], i, right, wrong:[qid], graded:false}
+function wqCandidates(){
+  return Object.entries(wrongItems)
+    .filter(([qid,v])=>v.status!=='mastered' && questions.some(x=>x.qid===qid))
+    .sort((a,b)=>(b[1].addedAt||0)-(a[1].addedAt||0));
+}
+function renderWqStartBtn(){
+  const b = $('wq-start-btn'); if(!b) return;
+  const n = wqCandidates().length;
+  b.textContent = n ? `복습 퀴즈 시작 (${n}문제)` : '복습 퀴즈 (복습할 문제 없음)';
+  b.disabled = !n;
+}
+function startWrongQuiz(list){
+  const cand = Array.isArray(list) ? list : wqCandidates().map(([qid,item])=>({qid,item}));
+  if(!cand.length){ alert('복습이 필요한 문제가 없습니다.'); return; }
+  const arr = cand.slice();
+  for(let i=arr.length-1;i>0;i--){ const j = Math.floor(Math.random()*(i+1)); [arr[i],arr[j]] = [arr[j],arr[i]]; }
+  wq = { list:arr, i:0, right:0, wrong:[], graded:false };
+  openModal('wrong-quiz-modal');
+  renderWrongQuiz();
+}
+async function renderWrongQuiz(){
+  if(!wq) return;
+  const done = wq.i >= wq.list.length;
+  const total = wq.list.length;
+  $('wq-title').textContent = '복습 퀴즈';
+  $('wq-progress').innerHTML = `<div class="sp-line"><span>${done?'결과':'문제'}</span><span class="sp-count">${Math.min(wq.i+1,total)} / ${total}</span></div><div class="sp-bar"><div class="sp-fill" style="width:${Math.round((done?total:wq.i)/total*100)}%"></div></div>`;
+  $('wq-result').innerHTML = '';
+  if(done){
+    const wrongN = wq.wrong.length;
+    $('wq-body').innerHTML = `<div class="card" style="text-align:center;">
+      <div style="font-size:15px; color:var(--muted);">복습 결과</div>
+      <div style="font-size:34px; font-weight:900; margin:6px 0;">${wq.right} / ${total}</div>
+      <div>${wrongN ? `틀린 ${wrongN}문제는 계속 '복습 필요'에 남아 있어요.` : '모두 맞혔어요! 전부 마스터 처리했습니다.'}</div></div>`;
+    $('wq-actions').innerHTML = (wrongN ? `<button class="btn" style="flex:1;" onclick="retryWrongQuiz()">틀린 문제만 다시</button>` : '') + `<button class="btn secondary" style="flex:1;" onclick="closeModal('wrong-quiz-modal')">닫기</button>`;
+    return;
+  }
+  const { qid, item } = wq.list[wq.i];
+  const q = questions.find(x=>x.qid===qid);
+  if(!q){ wq.i++; return renderWrongQuiz(); }
+  if(q.answer===undefined && item && item.taskId) await loadTaskKeys(item.taskId, true);
+  wq.graded = false;
+  $('wq-body').innerHTML = `<div class="omr-q">
+      <div class="note" style="margin:0 0 6px;">${item&&item.kind==='exam'?'시험':'과제'} · ${esc((item&&item.taskTitle)||'')}</div>
+      <div class="qnum">${esc(q.body)}</div>
+      ${renderPassageBoxHtml(getPassages(q))}
+      ${q.type==='mc' ? omrChoicesHtml(q, 'wq_ans', '') : `<input type="text" id="wq_ans_text" placeholder="정답 입력">`}
+    </div>`;
+  $('wq-actions').innerHTML = `<button class="btn" style="flex:1;" onclick="gradeWrongQuiz()">채점하기</button><button class="btn ghost" onclick="skipWrongQuiz()">건너뛰기</button>`;
+}
+function gradeWrongQuiz(){
+  if(!wq || wq.graded) return;
+  const { qid } = wq.list[wq.i];
+  const q = questions.find(x=>x.qid===qid); if(!q) return;
+  const mine = q.type==='mc' ? readOmrChoices('wq_ans') : ($('wq_ans_text') ? $('wq_ans_text').value.trim() : '');
+  if(!mine){ alert('답을 골라주세요.'); return; }
+  if(q.answer===undefined){ $('wq-result').innerHTML = '<div class="exam-explain wrong">이 문제의 정답을 아직 불러오지 못했어요. 잠시 뒤 다시 시도해 주세요.</div>'; return; }
+  wq.graded = true;
+  const ok = isCorrect(q, mine);
+  if(ok){
+    wq.right++;
+    if(!previewingStudent) markWrongMastered(qid);
+    $('wq-result').innerHTML = `<div class="exam-explain">정답입니다! 마스터 처리했어요. ${q.explain?esc(q.explain):''}</div>`;
+  } else {
+    wq.wrong.push(qid);
+    $('wq-result').innerHTML = `<div class="exam-explain wrong">오답입니다. 정답: ${esc(answerLabel(q))}<br>${q.explain?esc(q.explain):''}</div>`;
+  }
+  const last = wq.i >= wq.list.length-1;
+  $('wq-actions').innerHTML = `<button class="btn" style="flex:1;" onclick="nextWrongQuiz()">${last?'결과 보기':'다음 문제'}</button>`;
+}
+function nextWrongQuiz(){ if(!wq) return; wq.i++; renderWrongQuiz(); }
+function skipWrongQuiz(){ if(!wq) return; wq.wrong.push(wq.list[wq.i].qid); wq.i++; renderWrongQuiz(); }
+function retryWrongQuiz(){
+  if(!wq) return;
+  const again = wq.list.filter(x=>wq.wrong.includes(x.qid));
+  startWrongQuiz(again);
 }
 
 async function openWrongSolve(qid, wantVariant){
@@ -10608,7 +11090,11 @@ function renderFirebaseGuide(){
     <li><b>모바일 메뉴</b> — 하단에 아이콘 대분류 5개(수업·출제·문제·채점·확인·더보기)가 있습니다. 누르면 위로 세부 메뉴가 뜨고, 고르거나 바깥을 누르면 닫힙니다. 학생 화면 보기·운영 안내·다크 모드·로그아웃은 '더보기'에 있습니다. PC에서는 대분류가 접히지 않는 구획 제목으로 항상 펼쳐져 있습니다.</li>
     <li><b>문제 JSON 가져오기</b> — 문제 → 문제은행 맨 위 카드. <b>Claude용 안내문 복사</b>를 Claude에게 붙여넣고 문제를 만들어 달라고 하면 규격에 맞는 JSON이 나옵니다. 그 파일을 올리면 <b>등록할 세트 선택(기존 세트·새 세트·JSON에 적힌 세트) → 검사(오류·중복 확인) → 등록</b> 순서로 진행됩니다. 오류가 있는 문제는 등록되지 않고 이유가 표시됩니다. 이미지는 JSON으로 넣을 수 없으니 필요하면 등록 후 문제 수정에서 붙이세요. 보기 본문의 HTML은 굵게·밑줄 등 기본 태그만 남기고 나머지는 제거됩니다.</li>
     <li><b>주차 묶음 인쇄</b> — 수업 · 주차 탭의 '이 주차의 과제·시험·영상' 카드에서 <b>이 주차 묶음 인쇄</b>. 고른 과제·시험을 <b>표지 → 과제1 문제지 → 과제1 OMR → 과제2 문제지 → …</b> 순서로 한 번에 뽑습니다. 표지에는 수업 이름, 주차, 과제 이름과 코드가 들어갑니다. <b>해설지 포함</b>을 켜면 각 과제 뒤에 빠른 정답·정답·해설이 붙습니다(기본은 꺼짐, 학생 배부용이면 끄세요). 인쇄 창의 <b>배경 그래픽</b>을 켜면 표지의 초록 색면이 선명하게 나옵니다.</li>
-    <li><b>종이 OMR</b> — 과제 관리·시험 관리의 <b>OMR 인쇄</b>(학생은 풀이 화면에서도 가능)로 답안지를 뽑습니다. 학생이 종이에 마킹한 뒤(틀리면 <b>수정테이프로 덮고 다시 칠하면 됩니다</b>) 풀이 화면의 <b>📷 카메라로 바로 찍기</b>(폰 카메라가 바로 열립니다) 또는 <b>🖼 앨범에서 고르기</b>로 사진을 올리면 답이 채워지고, 학생이 확인한 뒤 제출하면 온라인 OMR과 똑같이 자동 채점됩니다. <b>판독은 AI가 아니라 브라우저의 이미지 처리</b>입니다: 용지 네 모서리의 검은 네모를 찾아 사진을 바로잡고, 보기 원이 얼마나 어두운지로 마킹을 판정합니다. 서버·AI 호출·한도가 필요 없고 결과가 항상 같습니다. 약하게 칠한 칸은 ★와 주황색으로 표시됩니다. 네 모서리가 모두 나오고, 그림자가 적고, 용지가 접히지 않았을수록 정확합니다. 읽지 못하면(모서리가 잘림, 옛 용지 등) 자동으로 AI(Gemini)로 넘어가며, 그때만 호출 1회를 씁니다. <b>단답형 손글씨 칸은 이미지 처리로 읽을 수 없어</b> 그 문항만 AI(키가 있을 때)가 읽습니다. 답안지 오른쪽 위에는 과제마다 다른 <b>숫자 4자리 과제 코드</b>가 칠해진 채 인쇄되며(과제 목록의 '코드' 배지와 같은 값) 지금 푸는 과제와 다르면 경고합니다. 아래쪽의 <b>쪽 표시(●)</b>로 몇 쪽인지 알아 36문항을 넘는 과제는 쪽마다 사진을 올리면 이어서 채워집니다. <b>이번 업데이트 이전에 인쇄한 답안지에는 쪽 표시가 없어</b> AI로 읽습니다. 가능하면 새로 인쇄해 쓰세요. 코드가 없는 기존 과제는 관리자가 접속할 때 자동으로 부여됩니다.</li>
+    <li><b>OMR 일괄 채점 요약</b> — 사진을 올리면 맨 위에 <b>자동 인식 성공 / 확인 필요 / 반영 불가</b> 개수와 해당 학생 이름이 나옵니다. 숫자 칩을 누르면 그 종류만 걸러 보고, 이름을 누르면 그 사진으로 이동해 문항별 확인이 열립니다. 일괄 채점의 <b>📷 카메라로 찍기</b>는 연속 촬영이 되어 한 장씩 계속 찍을 수 있습니다.</li>
+    <li><b>미제출자 한눈에</b> — 채점 · 제출 확인 탭의 <b>미제출자 한눈에</b>. 수업·구분을 고르고 과제별 또는 학생별로 미제출자를 보며, <b>안내문 복사</b>로 단체 메시지에 바로 붙여넣을 수 있습니다. 기본은 마감이 지난 항목만 보여 줍니다.</li>
+    <li><b>학생 메인의 마감 임박 알림</b> — 3일 안에 마감되는 미제출 과제·시험과, 마감이 지난 지 7일 안의 미제출 항목(지각 제출 가능)이 메인 맨 위에 나옵니다. 시작 전인 항목은 보이지 않습니다.</li>
+    <li><b>복습 퀴즈</b> — 학생 오답노트의 <b>복습 퀴즈 시작</b>. '복습 필요' 문제를 섞어서 한 문제씩 풀고, 맞히면 자동으로 마스터 처리됩니다. 틀린 문제는 그대로 남고 <b>틀린 문제만 다시</b> 풀 수 있습니다.</li>
+    <li><b>종이 OMR</b> — 과제 관리·시험 관리의 <b>OMR 인쇄</b>(학생은 풀이 화면에서도 가능)로 답안지를 뽑습니다. 학생이 종이에 마킹한 뒤(틀리면 <b>수정테이프로 덮고 다시 칠하면 됩니다</b>) 풀이 화면의 <b>📷 카메라로 바로 찍기</b>(앱 안에서 카메라가 열리고, <b>네 모서리의 검은 네모가 모두 보이는지·너무 기울거나 어둡지 않은지 실시간으로 알려 주며</b> 조건이 맞으면 자동으로 찍습니다. 카메라를 열 수 없으면 폰 카메라 앱으로 넘어갑니다) 또는 <b>🖼 앨범에서 고르기</b>로 사진을 올리면 답이 채워지고, 학생이 확인한 뒤 제출하면 온라인 OMR과 똑같이 자동 채점됩니다. <b>판독은 AI가 아니라 브라우저의 이미지 처리</b>입니다: 용지 네 모서리의 검은 네모를 찾아 사진을 바로잡고, 보기 원이 얼마나 어두운지로 마킹을 판정합니다. 서버·AI 호출·한도가 필요 없고 결과가 항상 같습니다. 약하게 칠한 칸은 ★와 주황색으로 표시됩니다. 네 모서리가 모두 나오고, 그림자가 적고, 용지가 접히지 않았을수록 정확합니다. 읽지 못하면(모서리가 잘림, 옛 용지 등) 자동으로 AI(Gemini)로 넘어가며, 그때만 호출 1회를 씁니다. <b>단답형 손글씨 칸은 이미지 처리로 읽을 수 없어</b> 그 문항만 AI(키가 있을 때)가 읽습니다. 답안지 오른쪽 위에는 과제마다 다른 <b>숫자 4자리 과제 코드</b>가 칠해진 채 인쇄되며(과제 목록의 '코드' 배지와 같은 값) 지금 푸는 과제와 다르면 경고합니다. 아래쪽의 <b>쪽 표시(●)</b>로 몇 쪽인지 알아 36문항을 넘는 과제는 쪽마다 사진을 올리면 이어서 채워집니다. <b>이번 업데이트 이전에 인쇄한 답안지에는 쪽 표시가 없어</b> AI로 읽습니다. 가능하면 새로 인쇄해 쓰세요. 코드가 없는 기존 과제는 관리자가 접속할 때 자동으로 부여됩니다.</li>
     <li><b>문항 통계</b> — 채점·확인 → 문항 통계. 과제·시험을 고르면 문항별 정답률, 선지별 선택 분포, 가장 많이 고른 오답이 보입니다. 정답률 낮은 순으로 정렬하면 수업에서 다시 짚을 문제를 바로 찾을 수 있습니다. 파일(사진·PDF)로만 낸 제출은 집계에서 빠집니다.</li>
     <li><b>과제·시험 복제</b> — 과제 관리·시험 관리 목록 또는 수업·주차 화면의 <b>복제</b> 버튼. 수업과 주차(여러 개 가능)를 고르면 문항 구성이 그대로 복사되고, 시작·마감 일시는 주차 차이만큼 옮길 수 있습니다. 첨부 PDF는 복사하지 않습니다(한쪽을 지울 때 파일이 같이 지워지는 것을 막기 위해).</li>
     <li><b>로그인 · 학생 등록</b> — 로그인 아이디는 <b>전화번호</b>(또는 기존 이메일)입니다. 학생 관리의 <b>학생 직접 등록</b>에서 이름·전화번호·이메일·<b>초기 비밀번호</b>를 넣으면 계정이 바로 만들어지고 승인까지 끝납니다. 그 정보를 학생에게 알려 주면, 학생이 처음 로그인할 때 <b>새 비밀번호를 정해야</b> 화면을 쓸 수 있습니다(내 정보에서 언제든 다시 변경 가능). 목록의 '초기 비번' 표시는 아직 바꾸지 않았다는 뜻입니다.</li>
@@ -10818,7 +11304,7 @@ service cloud.firestore {
 
   <h3 ${h3}>남은 작업</h3>
   <ul ${ul}>
-    <li><b>관리자용 AI 변형 문제 관리</b> — 학생별 변형 문제 모아 보기, 문제은행에 추가, 인쇄 <i>(미구현)</i></li>
+    <li><b>관리자용 AI 변형 문제 관리</b> — 문제 메뉴의 <b>AI 변형 문제</b> 탭. 학생이 채점까지 마친 변형 문제를 학생·결과·키워드로 걸러 보고, 문제은행에 추가하거나(이미 있는 문제는 건너뜀) 문제지+해설지로 인쇄합니다.</li>
     <li><b>마감 리포트</b> — 과제 마감 후 제출/미제출 명단을 텔레그램으로 <i>(동작 확인 중)</i></li>
     <li>영상 복제, 학생별 소그룹</li>
     <li>"일부완료" 명칭 정리 — 지금은 "일부만 정답"이라는 뜻인데 "일부만 제출"로 오해할 수 있음</li>

@@ -564,3 +564,31 @@ body.on-login{
 }
 
 .solve-clear-row{display:flex;justify-content:flex-end;margin:0 0 8px}
+
+/* 일괄 채점 요약 */
+.bk-summary{margin:0 0 12px;padding:12px;border:1px solid var(--border);border-radius:14px;background:var(--card)}
+.bk-chips-row{display:flex;gap:8px;flex-wrap:wrap}
+.bk-chip{display:inline-flex;align-items:baseline;gap:6px;padding:7px 12px;border-radius:99px;border:1px solid var(--border);background:transparent;color:inherit;font:inherit;font-size:13px;cursor:pointer}
+.bk-chip b{font-size:16px}
+.bk-chip.ok b{color:var(--good,#2f7d4f)} .bk-chip.check b{color:#c98a0b} .bk-chip.fail b{color:#c2453b}
+.bk-chip.on{background:var(--brand,#2f5d50);color:#fff;border-color:transparent} .bk-chip.on b{color:#fff}
+.bk-sumline{margin-top:8px;font-size:13px;line-height:1.8}
+.bk-sumline a{color:var(--brand,#2f5d50);text-decoration:underline}
+.bk-sumline.good{color:var(--good,#2f7d4f)}
+.bk-flash{animation:bkflash 1.6s ease}
+@keyframes bkflash{0%,60%{box-shadow:0 0 0 3px rgba(224,162,27,.6)}100%{box-shadow:none}}
+
+.ug-row.soon .ug-left{color:#fff;background:#d98b3a;padding:2px 9px;border-radius:99px}
+.ug-row.late .ug-left{color:var(--muted);font-weight:700}
+
+/* OMR 촬영 가이드 */
+.cam-modal{max-width:560px}
+.cam-stage{position:relative;background:#000;border-radius:14px;overflow:hidden;line-height:0;min-height:160px}
+.cam-stage video{width:100%;height:auto;display:block;max-height:68vh;object-fit:contain;background:#000}
+.cam-stage canvas{position:absolute;left:0;top:0;width:100%;height:100%;pointer-events:none}
+.cam-flash{position:absolute;inset:0;background:#fff;opacity:0;transition:opacity .15s;pointer-events:none}
+.cam-flash.on{opacity:.85}
+.cam-hint{margin:10px 0;padding:10px 12px;border-radius:12px;background:#fff4df;color:#8a5a00;font-weight:700;font-size:14px;text-align:center}
+.cam-hint.ok{background:#e4f6ec;color:#1d7a47}
+.cam-ctrl{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+#cam-count:empty{display:none}
