@@ -254,6 +254,9 @@
   .qset-q:last-child{border-bottom:none;}
   .qset-tag{display:inline-block; padding:1px 8px; border-radius:12px; font-size:11px; font-weight:700; margin-right:4px;}
   .qset-tag.type{background:#EAF1FF; color:#3d7be8;}
+  .qset-tag.no{background:#2f4a3f; color:#fff; letter-spacing:.02em;}
+  .av-src{margin-top:8px; padding:10px 12px; border:1px dashed var(--border); border-radius:12px; background:#f7f9f8; font-size:13px;}
+  .av-src .qset-tag{margin-bottom:4px;}
   .qset-tag.ans{background:#E4F8EE; color:#19a35f;}
   .qset-tag.set{background:#F3EEFF; color:#7a5cf0;}
 
@@ -1249,8 +1252,9 @@ body.quiet-preview .sidebar{ padding-top:22px; }
             <div><label>정렬</label><select id="bank-sort" onchange="renderBank()">
               <option value="recent">최근 등록순</option>
               <option value="set">세트 · 문항 순서</option>
+              <option value="no">문제 번호순</option>
             </select></div>
-            <div><label>검색어</label><input type="text" id="bank-search" placeholder="물음·보기·선지 검색" oninput="renderBank()"></div>
+            <div><label>검색어</label><input type="text" id="bank-search" placeholder="물음·보기·선지·#번호 검색" oninput="renderBank()"></div>
           </div>
           <div id="bank-count" class="note" style="margin-bottom:10px;"></div>
   <div style="display:flex; align-items:center; gap:8px; margin-bottom:10px; flex-wrap:wrap;">
@@ -2310,9 +2314,26 @@ function afterKeysChanged(){
   _akTimer = setTimeout(()=>{ try{ renderAll(); renderWrongNote(); }catch(e){ console.error(e); } }, 120);
 }
 /* 문제 저장: 정답·해설은 answerKeys로, 나머지는 questions로. qid가 없으면 새 문제. */
+/* 문제 번호: 문제은행에 들어온 순서대로 붙는 고유 번호(삭제해도 다른 문제의 번호는 바뀌지 않는다). 변형 문제의 '몇 번 문제의 변형인지' 확인에 쓴다 */
+let qNoLast = 0;
+const qNoBadge = q => (q && q.no!=null) ? `<span class="qset-tag no">#${q.no}</span>` : '';
+function nextQNo(){ qNoLast = Math.max(qNoLast, ...questions.map(x=>+x.no||0)) + 1; return qNoLast; }
+let qNoBackfilling = false;
+async function backfillQNo(){
+  if(qNoBackfilling) return;
+  const miss = questions.filter(q=>q.no==null); if(!miss.length) return;
+  qNoBackfilling = true;
+  try{
+    const { db, doc, updateDoc } = window.fb;
+    miss.sort((a,b)=>((a.createdAt??0)-(b.createdAt??0)) || String(a.set||'').localeCompare(String(b.set||'')) || ((a.order??0)-(b.order??0)) || String(a.qid).localeCompare(String(b.qid)));
+    for(const q of miss){ const n = nextQNo(); q.no = n; await updateDoc(doc(db,'questions',q.qid), { no:n }); }
+  }catch(e){ console.error('문제 번호 부여 실패:', e); }
+  finally{ qNoBackfilling = false; }
+}
 async function qSave(qid, data){
   const { db, doc, collection, setDoc, updateDoc, deleteField } = window.fb;
   const pub = Object.assign({}, data), keys = {};
+  if(!qid && pub.no==null) pub.no = nextQNo();
   ['answer','explain'].forEach(k=>{ if(k in pub){ keys[k] = pub[k]; delete pub[k]; } });
   const ref = qid ? doc(db,'questions',qid) : doc(collection(db,'questions'));
   let split = true;
@@ -2758,6 +2779,7 @@ if(!isAdmin && currentStudent){
     rebuildScores();
     renderQuestions(); renderQSetList(); renderBank();
     renderDraft('hw'); renderDraft('exam');
+    if(isAdmin) backfillQNo();
     renderWrongNote();
   });
     sub('tasks', snap => {
@@ -5304,6 +5326,7 @@ function filterQuestions(setVal, typeVal, kw){
     if(setVal && setVal!=='__none__' && q.set!==setVal) return false;
     if(typeVal && q.type!==typeVal) return false;
         if(k){
+      if(/^#?\d+$/.test(k) && q.no!=null && String(q.no)===k.replace('#','')) return true;
       const passageText = getPassages(q).map(p=>p.text||'').join(' ');
       const hay = (q.body+' '+passageText+' '+(q.choices||[]).join(' ')+' '+(q.explain||'')).toLowerCase();
       if(!hay.includes(k)) return false;
@@ -5315,7 +5338,8 @@ function filterQuestions(setVal, typeVal, kw){
 function sortBankList(arr){
   const mode = $('bank-sort') ? $('bank-sort').value : 'recent';
   const list = arr.slice();
-  if(mode==='recent'){
+  if(mode==='no'){ list.sort((a,b)=>(a.no??1e9)-(b.no??1e9)); }
+  else if(mode==='recent'){
     list.sort((a,b)=>{
       const ta = a.createdAt ?? -1, tb = b.createdAt ?? -1;
       if(ta !== tb) return tb - ta;                    // 최근 것이 위로
@@ -5411,7 +5435,7 @@ function renderBank(){
         ${pdfSelectedQids.includes(q.qid)?'checked':''} style="margin-top:3px; width:16px; height:16px; flex-shrink:0;">
       <div class="bi-body">
         <div style="margin-bottom:4px;">
-          <span class="qset-tag type">${q.type==='mc'?'객관식':'단답형'}</span>
+          ${qNoBadge(q)}<span class="qset-tag type">${q.type==='mc'?'객관식':'단답형'}</span>
           <span class="qset-tag set">${q.set? esc(q.set):'미분류'}</span>
           ${getPassages(q).length?'<span class="qset-tag ans">보기 포함</span>':''}
         </div>
@@ -5822,7 +5846,7 @@ function renderPicker(){
       <input type="checkbox" value="${q.qid}" ${picked?'checked':''}
         onchange="pickerToggle('${q.qid}', this.checked, this)">
       <div class="bi-body">
-        <span class="qset-tag type">${q.type==='mc'?'객관식':'단답형'}</span>
+        ${qNoBadge(q)}<span class="qset-tag type">${q.type==='mc'?'객관식':'단답형'}</span>
         <span class="qset-tag set">${q.set? esc(q.set):'미분류'}</span>
         ${ps.length?'<span class="qset-tag ans">보기</span>':''}
         <span class="btn small ghost" style="float:right; padding:2px 8px;" onclick="event.preventDefault(); togglePickerDetail('${q.qid}')">${isOpen?'접기 ▲':'상세보기 ▼'}</span>
@@ -10093,20 +10117,54 @@ function renderAdminVariants(keepMsg){
       <div style="display:flex; gap:10px; align-items:flex-start;">
         <input type="checkbox" class="av-ck" value="${esc(v.uid)}|${esc(v.vid)}" style="margin-top:4px;">
         <div style="flex:1; min-width:0;">
-          <div class="variant-meta"><b>${esc(avStudentName(v.uid))}</b> · ${fmtNoticeDate(v.createdAt)} · 원본: ${esc(v.srcBody||'(삭제된 문제)')}
+          <div class="variant-meta"><b>${esc(avStudentName(v.uid))}</b> · ${fmtNoticeDate(v.createdAt)} · 원본: ${avSrcNo(v)?`<b>${avSrcNo(v)}</b> `:''}${esc(v.srcBody||'(삭제된 문제)')}
             ${v.firstCorrect?'<span class="badge good">처음에 정답</span>':'<span class="badge warn">처음에 오답</span>'}
             ${inBank?'<span class="badge muted">문제은행에 있음</span>':''}</div>
           <b>${esc(v.body)}</b>
           ${(v.passages||[]).length ? `<div style="margin-top:6px;">${renderPassageBoxHtml(getPassages(v))}</div>` : ''}
           ${ch}
           <div style="margin-top:6px; font-size:13px;"><span class="exam-answer">정답 ${esc(answerLabel(v))}</span>${v.explain?` · <span style="color:var(--ink-soft);">${esc(v.explain)}</span>`:''}</div>
+          <div id="avs_${esc(v.uid)}_${esc(v.vid)}">${avOpenSrc.has(v.uid+'|'+v.vid)?avSrcHtml(v):''}</div>
           <div style="margin-top:8px; display:flex; gap:6px; flex-wrap:wrap;">
+            <button class="btn small secondary" onclick="avToggleSrc('${esc(v.uid)}','${esc(v.vid)}')" id="avsb_${esc(v.uid)}_${esc(v.vid)}">${avOpenSrc.has(v.uid+'|'+v.vid)?'원본 닫기 ▲':'원본 보기 ▼'}</button>
             <button class="btn small secondary" onclick="avAddToBank(['${esc(v.uid)}|${esc(v.vid)}'])">문제은행에 추가</button>
             <button class="btn small ghost" onclick="avDelete('${esc(v.uid)}','${esc(v.vid)}')">삭제</button>
           </div>
         </div>
       </div></div>`;
   }).join('') : `<div class="card"><p class="empty-hint">${adminVariants ? '조건에 맞는 변형 문제가 없습니다.' : ''}</p></div>`;
+}
+const avOpenSrc = new Set();
+/* 변형 문제가 어느 원본에서 나왔는지: 원본이 아직 있으면 현재 번호, 없으면 변형을 만들 때 적어 둔 번호 */
+function avSrcNo(v){
+  const src = v.srcQid ? questions.find(x=>x.qid===v.srcQid) : null;
+  const n = src && src.no!=null ? src.no : v.srcNo;
+  return n!=null ? `#${n}` : '';
+}
+function avSrcHtml(v){
+  const src = v.srcQid ? questions.find(x=>x.qid===v.srcQid) : null;
+  if(!src) return `<div class="av-src"><b>원본 문제</b>를 찾을 수 없습니다. (삭제되었거나 연결 정보가 없는 옛 변형 문제)${v.srcBody?`<div style="margin-top:4px; color:var(--ink-soft);">원본 물음(일부): ${esc(v.srcBody)}</div>`:''}</div>`;
+  return `<div class="av-src">
+    <div>${qNoBadge(src)}<span class="qset-tag type">${src.type==='mc'?'객관식':'단답형'}</span><span class="qset-tag set">${src.set?esc(src.set):'미분류'}</span> <b style="color:var(--ink-soft);">원본 문제</b></div>
+    <b>${esc(src.body)}</b>
+    ${getPassages(src).length ? `<div style="margin-top:6px;">${renderPassageBoxHtml(getPassages(src))}</div>` : ''}
+    ${src.type==='mc' ? `<div style="margin-top:4px; color:#4C5875;">${(src.choices||[]).map((c,i)=>'<div>'+chHtml(src,i,c)+'</div>').join('')}</div>` : ''}
+    <div style="margin-top:6px;"><b>정답:</b> ${esc(answerLabel(src))}${src.explain?` · <span style="color:var(--ink-soft);">${esc(src.explain)}</span>`:''}</div>
+    <div style="margin-top:6px;"><button class="btn small ghost" onclick="avGoBank('${esc(src.qid)}')">문제은행에서 보기</button></div>
+  </div>`;
+}
+function avToggleSrc(uid, vid){
+  const k = uid+'|'+vid, v = (adminVariants||[]).find(x=>x.uid===uid && x.vid===vid); if(!v) return;
+  const box = document.getElementById('avs_'+uid+'_'+vid), btn = document.getElementById('avsb_'+uid+'_'+vid);
+  if(avOpenSrc.has(k)){ avOpenSrc.delete(k); if(box) box.innerHTML = ''; if(btn) btn.textContent = '원본 보기 ▼'; }
+  else { avOpenSrc.add(k); if(box) box.innerHTML = avSrcHtml(v); if(btn) btn.textContent = '원본 닫기 ▲'; }
+}
+function avGoBank(qid){
+  const q = questions.find(x=>x.qid===qid); if(!q) return;
+  setAdminTab('a-bank');
+  const se = $('bank-set-filter'), ty = $('bank-type-filter'); if(se) se.value = ''; if(ty) ty.value = '';
+  const kw = $('bank-search'); if(kw) kw.value = q.no!=null ? '#'+q.no : '';
+  renderBank();
 }
 function avSelectAll(on){ document.querySelectorAll('#av-list .av-ck').forEach(c=>c.checked = on); }
 function avPicked(ids){
@@ -10821,6 +10879,7 @@ async function saveVariantQuestion(srcQid, vq, gotCorrect){
     vid: 'v' + Date.now().toString(36) + Math.random().toString(36).slice(2,6),
     srcQid,
     srcBody: src ? String(src.body||'').slice(0,80) : '',
+    srcNo: src && src.no!=null ? src.no : null,
     type: vq.type,
     body: vq.body || '',
     passages: vq.passages || [],
@@ -10861,7 +10920,7 @@ function renderVariantList(){
     ${list.map(v=>`
       <div class="variant-item">
         <div class="variant-meta">
-          ${fmtNoticeDate(v.createdAt)} · 원본: ${esc(v.srcBody||'(삭제된 문제)')}
+          ${fmtNoticeDate(v.createdAt)} · 원본: ${avSrcNo(v)?`<b>${avSrcNo(v)}</b> `:''}${esc(v.srcBody||'(삭제된 문제)')}
           ${v.firstCorrect?'<span class="badge good" style="margin-left:6px;">처음에 정답</span>'
                           :'<span class="badge warn" style="margin-left:6px;">처음에 오답</span>'}
         </div>
