@@ -1755,8 +1755,7 @@ body.quiet-preview .sidebar{ padding-top:22px; }
     <h3>OMR 사진 일괄 채점</h3>
     <p class="note">종이로 받은 OMR 사진을 여러 장 한꺼번에 올리세요. <b>과제 코드</b>로 과제를, <b>전화번호 끝 4자리</b>로 학생을 찾아 채점합니다. 과제가 서로 달라도 한 번에 올릴 수 있습니다. 반영하기 전에 아래에서 확인·수정할 수 있습니다.</p>
     <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-bottom:12px;">
-      <button type="button" class="btn secondary" onclick="openCamGuide({ multi:true, fallback:'bulk-cam-input', onShot:f=>onBulkFiles({ files:[f], value:'' }) })">📷 카메라로 찍기</button>
-      <input type="file" id="bulk-cam-input" accept="image/*" capture="environment" style="display:none;" onchange="onBulkFiles(this)">
+      <button type="button" class="btn secondary" onclick="openCamGuide({ multi:true, onShot:f=>onBulkFiles({ files:[f], value:'' }) })">📷 카메라로 자동 인식</button>
       <label class="btn secondary" style="margin:0; cursor:pointer;">사진 고르기 (여러 장)
         <input type="file" id="bulk-files" accept="image/*" multiple style="display:none;" onchange="onBulkFiles(this)"></label>
       <span id="bulk-sum" class="note" style="margin:0;"></span>
@@ -1771,13 +1770,12 @@ body.quiet-preview .sidebar{ padding-top:22px; }
 <div class="modal-bg" id="cam-modal">
   <div class="modal cam-modal">
     <button class="modal-close" onclick="closeCamGuide()">✕</button>
-    <h3>OMR 답안지 촬영</h3>
-    <div class="cam-stage"><video id="cam-video" playsinline muted autoplay></video><canvas id="cam-overlay"></canvas><div class="cam-flash" id="cam-flash"></div></div>
+    <h3>OMR 답안지 자동 인식</h3>
+    <div class="cam-stage" id="cam-stage"><video id="cam-video" playsinline muted autoplay></video><canvas id="cam-overlay"></canvas><div class="cam-flash" id="cam-flash"></div></div>
     <div id="cam-hint" class="cam-hint">카메라를 켜는 중…</div>
     <div class="cam-ctrl">
-      <label class="dup-opt" style="margin:0;"><input type="checkbox" id="cam-auto" checked> 자동 촬영</label>
+      <span class="note" style="margin:0;">답안지가 인식되면 초록색 테두리로 바뀌고 자동으로 입력됩니다.</span>
       <span style="flex:1;"></span>
-      <button class="btn" onclick="camShot()">📷 촬영</button>
       <button class="btn secondary" id="cam-done" onclick="closeCamGuide()">닫기</button>
     </div>
     <p class="note" id="cam-count" style="margin-top:6px;"></p>
@@ -1862,9 +1860,8 @@ body.quiet-preview .sidebar{ padding-top:22px; }
          <b>종이 OMR로 푸셨나요?</b>
          <div style="display:flex; gap:6px; flex-wrap:wrap; margin-top:8px;">
            <button type="button" class="btn small secondary" onclick="printOmrSheet(currentSolve.kind, currentSolve.tid)">OMR 답안지 인쇄</button>
-           <button type="button" class="btn small" onclick="openCamGuide({ fallback:'omr-scan-cam', onShot:f=>scanOmrFile(f) })">📷 카메라로 바로 찍기</button>
+           <button type="button" class="btn small" onclick="openCamGuide({ single:true, onShot:f=>scanOmrFile(f) })">📷 카메라로 자동 인식</button>
            <button type="button" class="btn small secondary" onclick="$('omr-scan-file').click()">🖼 앨범에서 고르기</button>
-           <input type="file" id="omr-scan-cam" accept="image/*" capture="environment" style="display:none;" onchange="scanOmrPhoto(this)">
            <input type="file" id="omr-scan-file" accept="image/*" style="display:none;" onchange="scanOmrPhoto(this)">
          </div>
          <div id="omr-scan-status" style="font-size:12.5px; margin-top:8px;"></div>
@@ -7453,7 +7450,6 @@ const OMR_CSS = `
   /* 모서리 표식: 배경색 대신 테두리로 그려서 '배경 그래픽' 설정과 상관없이 인쇄된다 */
   .m{position:absolute; display:block; width:0; height:0; border:3.5mm solid #000;}
   .tl{left:7mm; top:7mm;} .tr{right:7mm; top:7mm;} .bl{left:7mm; bottom:7mm;} .br{right:7mm; bottom:7mm;}
-  .m.s{border-width:2.5mm;}
 
   header{display:flex; gap:6mm; align-items:stretch; height:27mm; overflow:hidden; margin-bottom:4.5mm; padding:4.2mm 5mm 4.4mm; border:1px solid #cddad4; border-top:3mm solid #2F5D50; border-radius:0 0 12px 12px; background:#f1f6f3;}
   .hl{flex:1; min-width:0; display:flex; flex-direction:column; justify-content:center;}
@@ -7531,7 +7527,7 @@ function omrPagesHtml(t, qs, who, clsName, phone4){
   const pages = [];
   for(let i=0;i<cols.length;i+=2){
     pages.push(`<section class="page">
-      <i class="m tl"></i><i class="m tr"></i><i class="m bl"></i><i class="m br"></i>${OMR_ANCHORS.map((a,k)=>`<i class="m s" data-a="${k}" style="left:${a[0]-2.5}mm; top:${a[1]-2.5}mm"></i>`).join('')}
+      <i class="m tl"></i><i class="m tr"></i><i class="m bl"></i><i class="m br"></i>
       <header>
         <div class="hl">
           <div class="kick">OMR ANSWER SHEET</div>
@@ -7764,8 +7760,6 @@ async function omrFileToB64(f){
    고전 OMR 판독 — 사진에서 네 모서리 검은 네모를 찾아 펴고, 보기 원의 어두운 정도로 마킹을 판정한다.
    브라우저 안에서만 처리하므로 AI·서버·호출 한도가 필요 없다. (읽지 못하면 AI로 넘긴다)
    ========================================================= */
-/* 보조 표식: 용지 가장자리에 놓은 작은 검은 네모(5mm). 모서리 네 개만으로는 종이가 휘었을 때 가운데가 어긋나므로, 이 표식들로 위치를 다시 맞춘다 */
-const OMR_ANCHORS = [[60,10.5],[150,10.5],[50,286.5],[160,286.5],[10.5,65.5],[10.5,148.5],[10.5,225],[199.5,65.5],[199.5,148.5],[199.5,225]];
 const OMR_PER_PAGE = 36;                       // 한 장에 36문항 (18문항 × 2단)
 const OMR_BASE_TASK = { tid:'_base', title:'', code:'0000', week:1, classId:'' };
 const omrLayoutCache = {};
@@ -7785,7 +7779,6 @@ function omrMeasure(t, qs){
       const grid = box => [0,1,2,3].map(r=>[0,1,2,3,4,5,6,7,8,9].map(d=>c(pg.querySelector(`.cb[data-box="${box}"][data-r="${r}"][data-d="${d}"]`))));
       return {
         markers: ['tl','tr','br','bl'].map(k=>c(pg.querySelector('.m.'+k))),
-        anchors: [...pg.querySelectorAll('.m.s')].map(e=>Object.assign({ a:+e.dataset.a }, c(e))),
         bubbles: [...pg.querySelectorAll('.b[data-q]')].map(e=>Object.assign({ q:+e.dataset.q, k:+e.dataset.k }, c(e))),
         code: grid('code'), phone: grid('phone'),
         dots: [...pg.querySelectorAll('.pgd')].map(e=>Object.assign({ p:+e.dataset.p }, c(e)))
@@ -7915,65 +7908,7 @@ function omrHomography(src, dst){
   const h = M.map((row,i)=>row[8]/row[i]);
   return h;                                      // [h0..h7], h8 = 1
 }
-function omrMap(H, x, y){
-  const w = H[6]*x+H[7]*y+1; let u = (H[0]*x+H[1]*y+H[2])/w, v = (H[3]*x+H[4]*y+H[5])/w;
-  if(H.res){                                      // 보조 표식으로 잰 국소 어긋남(거리 가중 평균)을 더한다
-    let sw = 0, su = 0, sv = 0;
-    for(const r of H.res){ const dx = x-r.x, dy = y-r.y, wt = 1/(dx*dx+dy*dy+16); sw += wt; su += wt*r.du; sv += wt*r.dv; }
-    u += su/sw; v += sv/sw;
-  }
-  return [u, v];
-}
-/* 사진 안의 (u,v) 근처에서 보조 표식처럼 생긴 검은 정사각형 하나를 찾는다 */
-function omrBlobNear(im, u, v, rad, expArea){
-  const x0 = Math.max(0, Math.floor(u-rad)), x1 = Math.min(im.w-1, Math.ceil(u+rad)), y0 = Math.max(0, Math.floor(v-rad)), y1 = Math.min(im.h-1, Math.ceil(v+rad));
-  const W = x1-x0+1, Hh = y1-y0+1; if(W<8 || Hh<8) return null;
-  const mark = new Uint8Array(W*Hh), stack = [];
-  let best = null, bd = 1e18;
-  for(let yy=0; yy<Hh; yy++) for(let xx=0; xx<W; xx++){
-    const i0 = yy*W+xx; if(mark[i0] || im.norm[(y0+yy)*im.w+x0+xx] >= 0.66) continue;
-    let cnt = 0, sx = 0, sy = 0, minx = W, maxx = 0, miny = Hh, maxy = 0, edge = false; const pts = [];
-    stack.length = 0; stack.push(i0); mark[i0] = 1;
-    while(stack.length){
-      const p = stack.pop(), px = p % W, py = (p-px)/W; cnt++; sx += px; sy += py; pts.push(p);
-      if(px<minx)minx=px; if(px>maxx)maxx=px; if(py<miny)miny=py; if(py>maxy)maxy=py;
-      if(px===0||py===0||px===W-1||py===Hh-1) edge = true;
-      for(const q of [px>0?p-1:-1, px<W-1?p+1:-1, py>0?p-W:-1, py<Hh-1?p+W:-1]){
-        if(q<0 || mark[q]) continue; const qx = q % W, qy = (q-qx)/W;
-        if(im.norm[(y0+qy)*im.w+x0+qx] < 0.66){ mark[q] = 1; stack.push(q); }
-      }
-    }
-    if(edge || cnt < expArea*0.35 || cnt > expArea*2.4) continue;
-    const bw = maxx-minx+1, bh = maxy-miny+1, asp = bw/bh; if(asp<0.6 || asp>1.7) continue;
-    const cx = sx/cnt, cy = sy/cnt; let md = 0;
-    for(const p of pts){ const px = p % W, py = (p-px)/W; const d = (px-cx)*(px-cx)+(py-cy)*(py-cy); if(d>md) md = d; }
-    const sq = md/cnt; if(sq < 0.34 || sq > 0.7) continue;
-    const gx = x0+cx, gy = y0+cy, hs = Math.sqrt(cnt)/2, ring = [];
-    for(let k=0;k<12;k++){ const a = k*Math.PI/6, rx = Math.round(gx+Math.cos(a)*hs*2.2), ry = Math.round(gy+Math.sin(a)*hs*2.2); if(rx<0||ry<0||rx>=im.w||ry>=im.h) continue; ring.push(im.gray[ry*im.w+rx]); }
-    ring.sort((a,b)=>a-b); if(ring.length<6 || ring[Math.floor(ring.length/2)] < im.paper*0.45) continue;
-    const dd = (gx-u)*(gx-u)+(gy-v)*(gy-v);
-    if(dd < bd){ bd = dd; best = { x:gx, y:gy }; }
-  }
-  return best;
-}
-/* 모서리 네 점으로 맞춘 H를 보조 표식 위치로 보정한다. 충분히 못 찾으면 null (예전 용지·가려진 경우) */
-function omrRefineH(im, H, corners, anchors){
-  const res = corners.map(c=>({ x:c.x, y:c.y, du:0, dv:0 }));
-  let found = 0, sum = 0;
-  anchors.forEach(a=>{
-    const [u,v] = omrMap(H, a.x, a.y), [u1,v1] = omrMap(H, a.x+1, a.y), [u2,v2] = omrMap(H, a.x, a.y+1);
-    const sc = Math.sqrt(Math.abs((u1-u)*(v2-v)-(v1-v)*(u2-u)));        // 사진 픽셀/mm
-    if(!(sc>2)) return;
-    const b = omrBlobNear(im, u, v, 7*sc, 25*sc*sc);
-    if(!b) return;
-    const du = b.x-u, dv = b.y-v;
-    if(Math.hypot(du,dv) > 7*sc) return;
-    res.push({ x:a.x, y:a.y, du, dv }); found++; sum += Math.hypot(du,dv)/sc;
-  });
-  if(found < 4) return null;
-  const Hn = H.slice(); Hn.res = res; Hn.found = found; Hn.meanShiftMm = sum/found;
-  return Hn;
-}
+function omrMap(H, x, y){ const w = H[6]*x+H[7]*y+1; return [(H[0]*x+H[1]*y+H[2])/w, (H[3]*x+H[4]*y+H[5])/w]; }
 /* 보기 원 안쪽의 어두운 정도 (0=깨끗한 종이, 1=완전히 검정) */
 function omrDisc(im, H, cx, cy, r){
   const rr = r*0.72, step = rr/3; let sum = 0, n = 0;
@@ -8096,13 +8031,8 @@ async function omrReadClassic(file, opt){
     if(!best || g.contrast > best.g.contrast) best = { H, g };
   }
   if(!best || best.g.bad || best.g.minGap < 0.3) return { ok:false, reason:'과제 코드 칸이 또렷하게 보이지 않습니다' };
-  let H = best.H, gUse = best.g;
-  const Hr = omrRefineH(im, H, tpl, base.anchors || []);
-  if(Hr){                                          // 보정한 쪽이 과제 코드 칸을 더 또렷하게 읽을 때만 쓴다
-    const g2 = omrReadGrid(im, Hr, base.code, null);
-    if(!g2.bad && g2.minGap >= gUse.minGap-0.05 && g2.contrast >= gUse.contrast-0.1){ H = Hr; gUse = g2; }
-  }
-  const code = gUse.digits;
+  const H = best.H;
+  const code = best.g.digits;
   const codeBase = (()=>{ const v = []; base.code.forEach((row,ri)=>{ const sc = row.map(c=>omrDisc(im,H,c.x,c.y,c.r)); const mx = Math.max(...sc); sc.forEach(s=>{ if(s!==mx) v.push(s); }); }); return omrMedian(v); })();
   const ph = omrReadGrid(im, H, base.phone, codeBase, opt && opt.phoneHint);
   // 쪽 번호: 새 답안지에만 있는 점. 없으면 옛 용지이므로 정확한 위치를 보장할 수 없어 AI에 맡긴다
@@ -8111,7 +8041,7 @@ async function omrReadClassic(file, opt){
   const dOrd = dsc.map((v,i)=>[v,i]).sort((a,b)=>b[0]-a[0]);
   if(dOrd[0][0]-codeBase < 0.3 || dOrd[0][0]-dOrd[1][0] < 0.2) return { ok:false, reason:'새 형식의 답안지가 아닙니다(쪽 표시 없음)' };
   const page = dOrd[0][1];
-  const res = { ok:true, via:'scan', anchors:H.found||0, code, code_unsure:/\?/.test(code), phone:ph.digits, phone_unsure:ph.unsure, page, pages:1, answers:[], needText:[] };
+  const res = { ok:true, via:'scan', code, code_unsure:/\?/.test(code), phone:ph.digits, phone_unsure:ph.unsure, page, pages:1, answers:[], needText:[] };
   const ctx = opt && opt.resolve ? opt.resolve(code) : null;
   if(!ctx || !ctx.qs){ res.needTask = true; return res; }
   const layout = omrMeasure(ctx.t, ctx.qs);
@@ -8192,26 +8122,23 @@ async function omrReadHybrid(file, opt){
   return parsed;
 }
 /* =========================================================
-   OMR 촬영 가이드: 카메라를 직접 열어 네 모서리 표식이 보이는지 실시간으로 알려주고,
-   조건이 맞으면 자동으로(또는 촬영 버튼으로) 찍는다. 카메라를 못 열면 기본 카메라 앱으로 넘어간다.
+   OMR 실시간 인식: 카메라를 직접 열어 네 모서리 표식이 보이는지 실시간으로 알려주고,
+   멈춰 있는 동안 실제로 판독해 같은 결과가 연속 2번 나오면 초록색 테두리로 바뀌며 자동 입력한다.
    ========================================================= */
 let cam = null;
-function camFallback(opts){
-  const el = opts && opts.fallback ? $(opts.fallback) : null;
-  if(el) el.click(); else alert('카메라를 열 수 없습니다. 사진 앱으로 찍어서 올려 주세요.');
-}
 async function openCamGuide(opts){
   opts = opts || {};
   if(cam) closeCamGuide();
-  if(!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia)){ camFallback(opts); return; }
-  cam = { opts, shots:0, stable:0, last:null, busy:false, need:false, stream:null, timer:null, sc:null };
+  if(!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia)){ alert('이 브라우저에서는 카메라를 열 수 없습니다. 「앨범에서 고르기」를 이용해 주세요.'); return; }
+  cam = { opts, shots:0, stable:0, last:null, busy:false, need:false, stream:null, timer:null, sc:null, prev:null, agree:0 };
   $('cam-hint').textContent = '카메라를 켜는 중…'; $('cam-hint').className = 'cam-hint';
   $('cam-count').textContent = ''; $('cam-done').textContent = opts.multi ? '완료' : '닫기';
+  $('cam-stage').classList.remove('hit');
   openModal('cam-modal');
   try{
     cam.stream = await navigator.mediaDevices.getUserMedia({ video:{ facingMode:{ ideal:'environment' }, width:{ ideal:1920 }, height:{ ideal:1080 } }, audio:false });
   }catch(e){
-    closeCamGuide(); camFallback(opts); return;
+    closeCamGuide(); alert('카메라를 열 수 없습니다. 브라우저의 카메라 권한을 허용하거나 「앨범에서 고르기」를 이용해 주세요.'); return;
   }
   if(!cam) { return; }
   const v = $('cam-video'); v.srcObject = cam.stream;
@@ -8224,10 +8151,31 @@ function closeCamGuide(){
     if(cam.stream) cam.stream.getTracks().forEach(t=>t.stop());
   }
   const v = $('cam-video'); if(v) v.srcObject = null;
+  const st = $('cam-stage'); if(st) st.classList.remove('hit');
   cam = null; closeModal('cam-modal');
 }
 const camPolyArea = q=>{ let a=0; for(let i=0;i<q.length;i++){ const p=q[i], n=q[(i+1)%q.length]; a += p.x*n.y-n.x*p.y; } return Math.abs(a)/2; };
-function camTick(){
+const camSig = r=>r.code+'|'+r.phone+'|'+r.page+'|'+r.answers.map(a=>a.n+':'+a.marked.join('')+(a.unsure?'?':'')).join(',');
+/* 현재 화면을 실제로 판독해 본다. 같은 결과가 연속 2번 나와야 '인식됨'으로 친다(한 장만 읽을 때의 오독을 줄인다) */
+async function camTryRead(){
+  const v = $('cam-video'); if(!v.videoWidth) return null;
+  const k = Math.min(1, 1800/Math.max(v.videoWidth, v.videoHeight));
+  const cv = document.createElement('canvas'); cv.width = Math.round(v.videoWidth*k); cv.height = Math.round(v.videoHeight*k);
+  cv.getContext('2d').drawImage(v, 0, 0, cv.width, cv.height);
+  const blob = await new Promise(res=>cv.toBlob(res, 'image/jpeg', 0.92)); if(!blob) return null;
+  const file = new File([blob], `omr-cam-${Date.now()}.jpg`, { type:'image/jpeg' });
+  let want = null, qs = null, hint = '';
+  if(cam.opts.single && typeof currentSolve!=='undefined' && currentSolve){
+    const t = tasks[currentSolve.kind].find(x=>x.tid===currentSolve.tid);
+    if(t){ qs = (t.qids||[]).map(id=>questions.find(x=>x.qid===id)).filter(Boolean); want = taskCodeOf(t); hint = adminViewAll ? '' : last4(((students.find(x=>x.uid===currentStudent)||{}).phone)); }
+  }
+  let r;
+  try{ r = await omrReadClassic(file, { resolve: qs ? (()=>({ t:tasks[currentSolve.kind].find(x=>x.tid===currentSolve.tid), qs })) : null, phoneHint:hint }); }catch(e){ return null; }
+  if(!r || !r.ok || r.code_unsure || r.code.length!==4) return null;
+  if(want && r.code!==want) return { wrong:r.code, want };
+  return { file, r };
+}
+async function camTick(){
   if(!cam || cam.busy) return;
   if(!$('cam-modal').classList.contains('show')){ closeCamGuide(); return; }    // 바깥을 눌러 닫혔을 때도 카메라를 끈다
   const v = $('cam-video'); if(!v.videoWidth) return;
@@ -8243,7 +8191,7 @@ function camTick(){
   let msg = '', ok = false;
   if(!quad){
     msg = info.cands ? `검은 네모가 ${Math.min(info.cands,3)}개만 보여요. 네 모서리가 모두 화면에 들어오게 맞춰 주세요` : '답안지를 화면에 놓고 네 모서리의 검은 네모가 모두 보이게 해 주세요';
-    cam.stable = 0; cam.last = null;
+    cam.stable = 0; cam.last = null; cam.need = false; cam.prev = null; cam.agree = 0;
   } else {
     const order = quad.slice();
     const frac = camPolyArea(order)/(w*h);
@@ -8261,34 +8209,42 @@ function camTick(){
       const c = order.reduce((a,p)=>({x:a.x+p.x/4,y:a.y+p.y/4}),{x:0,y:0});
       const moved = cam.last ? Math.hypot(c.x-cam.last.x, c.y-cam.last.y)/w : 1;
       cam.last = c;
-      if(moved > 0.012){ cam.stable = 0; cam.need = false; msg = '좋아요! 잠깐 멈추면 찍어요'; }
-      else { cam.stable++; msg = cam.need ? '다음 답안지를 올려 주세요' : (cam.stable>=4 && $('cam-auto').checked ? '촬영!' : '좋아요! 그대로 멈춰 주세요'); }
-    } else { cam.stable = 0; cam.last = null; }
-    g.lineWidth = Math.max(3, w/120); g.strokeStyle = ok ? '#2fbf71' : '#f0a020'; g.fillStyle = ok ? 'rgba(47,191,113,.12)' : 'rgba(240,160,32,.1)';
+      if(moved > 0.012){ cam.stable = 0; cam.prev = null; cam.agree = 0; msg = '좋아요! 잠깐 멈추면 인식해요'; }
+      else { cam.stable++; msg = cam.need ? '다음 답안지를 올려 주세요' : '인식하는 중… 그대로 멈춰 주세요'; }
+    } else { cam.stable = 0; cam.last = null; cam.prev = null; cam.agree = 0; }
+    g.lineWidth = Math.max(3, w/120); g.strokeStyle = ok ? '#f0c020' : '#f0a020'; g.fillStyle = ok ? 'rgba(240,192,32,.10)' : 'rgba(240,160,32,.1)';
     g.beginPath(); order.forEach((p,i)=>i?g.lineTo(p.x,p.y):g.moveTo(p.x,p.y)); g.closePath(); g.fill(); g.stroke();
   }
-  const hint = $('cam-hint'); hint.textContent = msg; hint.className = 'cam-hint' + (ok ? ' ok' : '');
-  if(ok && cam.stable>=4 && !cam.need && $('cam-auto').checked) camShot();
-}
-async function camShot(){
-  if(!cam || cam.busy) return;
-  const v = $('cam-video'); if(!v.videoWidth){ return; }
+  const hint = $('cam-hint'); hint.textContent = msg; hint.className = 'cam-hint';
+  if(!(ok && cam.stable>=2 && !cam.need)) return;
+  /* 멈춰 있는 동안 실제로 읽어 본다 */
   cam.busy = true;
-  const cv = document.createElement('canvas'); cv.width = v.videoWidth; cv.height = v.videoHeight;
-  cv.getContext('2d').drawImage(v, 0, 0);
-  const blob = await new Promise(res=>cv.toBlob(res, 'image/jpeg', 0.92));
+  const me = cam;
+  let res = null;
+  try{ res = await camTryRead(); }catch(e){}
+  if(cam !== me){ return; }
+  cam.busy = false;
+  if(res && res.wrong){ hint.textContent = `이 답안지의 과제 코드는 ${res.wrong}인데, 지금 푸는 과제는 ${res.want}예요. 다른 답안지일 수 있어요`; cam.prev = null; cam.agree = 0; return; }
+  if(!res){ cam.prev = null; cam.agree = 0; hint.textContent = '아직 읽지 못했어요. 답안지를 화면 가득, 평평하게 보여 주세요'; return; }
+  const sig = camSig(res.r);
+  cam.agree = (cam.prev === sig) ? cam.agree+1 : 1; cam.prev = sig;
+  if(cam.agree < 2){ hint.textContent = '거의 읽었어요! 한 번만 더 확인할게요'; return; }
+  /* 인식됨: 초록색 테두리 */
+  camHit(res.file);
+}
+function camHit(file){
+  const me = cam; if(!me) return;
+  me.shots++; me.need = true; me.prev = null; me.agree = 0; me.stable = 0; me.last = null;
+  const stg = $('cam-stage'); stg.classList.add('hit');
+  const hint = $('cam-hint'); hint.textContent = '✓ 인식됐어요!'; hint.className = 'cam-hint ok';
   const fl = $('cam-flash'); fl.classList.add('on'); setTimeout(()=>fl.classList.remove('on'), 160);
-  if(!blob){ cam.busy = false; return; }
-  cam.shots++;
-  const file = new File([blob], `omr-cam-${Date.now()}-${cam.shots}.jpg`, { type:'image/jpeg' });
-  const opts = cam.opts;
-  if(opts.multi){
-    $('cam-count').textContent = `${cam.shots}장 촬영했어요. 다음 답안지를 올려 주세요. 다 찍었으면 '완료'를 누르세요.`;
-    cam.need = true; cam.stable = 0; cam.last = null; cam.busy = false;
-    try{ opts.onShot(file); }catch(e){ console.error(e); }
+  if(me.opts.multi){
+    $('cam-count').textContent = `${me.shots}장 인식했어요. 다음 답안지를 올려 주세요. 다 끝났으면 '완료'를 누르세요.`;
+    try{ me.opts.onShot(file); }catch(e){ console.error(e); }
+    setTimeout(()=>{ if(cam===me) stg.classList.remove('hit'); }, 1400);
   } else {
-    closeCamGuide();
-    try{ opts.onShot(file); }catch(e){ console.error(e); }
+    me.busy = true;
+    setTimeout(()=>{ if(cam!==me) return; closeCamGuide(); try{ me.opts.onShot(file); }catch(e){ console.error(e); } }, 900);
   }
 }
 
@@ -11161,7 +11117,7 @@ function renderFirebaseGuide(){
     <li><b>미제출자 한눈에</b> — 채점 · 제출 확인 탭의 <b>미제출자 한눈에</b>. 수업·구분을 고르고 과제별 또는 학생별로 미제출자를 보며, <b>안내문 복사</b>로 단체 메시지에 바로 붙여넣을 수 있습니다. 기본은 마감이 지난 항목만 보여 줍니다.</li>
     <li><b>학생 메인의 마감 임박 알림</b> — 3일 안에 마감되는 미제출 과제·시험과, 마감이 지난 지 7일 안의 미제출 항목(지각 제출 가능)이 메인 맨 위에 나옵니다. 시작 전인 항목은 보이지 않습니다.</li>
     <li><b>복습 퀴즈</b> — 학생 오답노트의 <b>복습 퀴즈 시작</b>. '복습 필요' 문제를 섞어서 한 문제씩 풀고, 맞히면 자동으로 마스터 처리됩니다. 틀린 문제는 그대로 남고 <b>틀린 문제만 다시</b> 풀 수 있습니다.</li>
-    <li><b>종이 OMR</b> — 과제 관리·시험 관리의 <b>OMR 인쇄</b>(학생은 풀이 화면에서도 가능)로 답안지를 뽑습니다. 학생이 종이에 마킹한 뒤(틀리면 <b>수정테이프로 덮고 다시 칠하면 됩니다</b>) 풀이 화면의 <b>📷 카메라로 바로 찍기</b>(앱 안에서 카메라가 열리고, <b>네 모서리의 검은 네모가 모두 보이는지·너무 기울거나 어둡지 않은지 실시간으로 알려 주며</b> 조건이 맞으면 자동으로 찍습니다. 카메라를 열 수 없으면 폰 카메라 앱으로 넘어갑니다) 또는 <b>🖼 앨범에서 고르기</b>로 사진을 올리면 답이 채워지고, 학생이 확인한 뒤 제출하면 온라인 OMR과 똑같이 자동 채점됩니다. <b>판독은 AI가 아니라 브라우저의 이미지 처리</b>입니다: 용지 네 모서리의 검은 네모를 찾아 사진을 바로잡고, 보기 원이 얼마나 어두운지로 마킹을 판정합니다. 서버·AI 호출·한도가 필요 없고 결과가 항상 같습니다. 약하게 칠한 칸은 ★와 주황색으로 표시됩니다. 네 모서리가 모두 나오고, 그림자가 적고, 용지가 접히지 않았을수록 정확합니다. 읽지 못하면(모서리가 잘림, 옛 용지 등) 자동으로 AI(Gemini)로 넘어가며, 그때만 호출 1회를 씁니다. <b>단답형 손글씨 칸은 이미지 처리로 읽을 수 없어</b> 그 문항만 AI(키가 있을 때)가 읽습니다. 답안지 오른쪽 위에는 과제마다 다른 <b>숫자 4자리 과제 코드</b>가 칠해진 채 인쇄되며(과제 목록의 '코드' 배지와 같은 값) 지금 푸는 과제와 다르면 경고합니다. 아래쪽의 <b>쪽 표시(●)</b>로 몇 쪽인지 알아 36문항을 넘는 과제는 쪽마다 사진을 올리면 이어서 채워집니다. <b>이번 업데이트 이전에 인쇄한 답안지에는 쪽 표시가 없어</b> AI로 읽습니다. 가능하면 새로 인쇄해 쓰세요. 답안지 가장자리에는 모서리 외에 <b>작은 검은 네모 10개</b>(위·아래·양옆)가 추가되어, 종이가 휘거나 사진이 구겨져 찍혀도 이 표식을 기준으로 위치를 보정해 인식률이 높아집니다(이 표식이 없는 옛 용지는 네 모서리만으로 읽습니다). 코드가 없는 기존 과제는 관리자가 접속할 때 자동으로 부여됩니다.</li>
+    <li><b>종이 OMR</b> — 과제 관리·시험 관리의 <b>OMR 인쇄</b>(학생은 풀이 화면에서도 가능)로 답안지를 뽑습니다. 학생이 종이에 마킹한 뒤(틀리면 <b>수정테이프로 덮고 다시 칠하면 됩니다</b>) 풀이 화면의 <b>📷 카메라로 자동 인식</b>(앱 안에서 카메라가 열리고, <b>네 모서리의 검은 네모가 모두 보이는지·너무 기울거나 어둡지 않은지 실시간으로 알려 주며</b> 조건이 맞으면 자동으로 찍습니다. 카메라를 열 수 없으면 폰 카메라 앱으로 넘어갑니다) 또는 <b>🖼 앨범에서 고르기</b>로 사진을 올리면 답이 채워지고, 학생이 확인한 뒤 제출하면 온라인 OMR과 똑같이 자동 채점됩니다. <b>판독은 AI가 아니라 브라우저의 이미지 처리</b>입니다: 용지 네 모서리의 검은 네모를 찾아 사진을 바로잡고, 보기 원이 얼마나 어두운지로 마킹을 판정합니다. 서버·AI 호출·한도가 필요 없고 결과가 항상 같습니다. 약하게 칠한 칸은 ★와 주황색으로 표시됩니다. 네 모서리가 모두 나오고, 그림자가 적고, 용지가 접히지 않았을수록 정확합니다. 읽지 못하면(모서리가 잘림, 옛 용지 등) 자동으로 AI(Gemini)로 넘어가며, 그때만 호출 1회를 씁니다. <b>단답형 손글씨 칸은 이미지 처리로 읽을 수 없어</b> 그 문항만 AI(키가 있을 때)가 읽습니다. 답안지 오른쪽 위에는 과제마다 다른 <b>숫자 4자리 과제 코드</b>가 칠해진 채 인쇄되며(과제 목록의 '코드' 배지와 같은 값) 지금 푸는 과제와 다르면 경고합니다. 아래쪽의 <b>쪽 표시(●)</b>로 몇 쪽인지 알아 36문항을 넘는 과제는 쪽마다 사진을 올리면 이어서 채워집니다. <b>이번 업데이트 이전에 인쇄한 답안지에는 쪽 표시가 없어</b> AI로 읽습니다. 가능하면 새로 인쇄해 쓰세요. 코드가 없는 기존 과제는 관리자가 접속할 때 자동으로 부여됩니다.</li>
     <li><b>문항 통계</b> — 채점·확인 → 문항 통계. 과제·시험을 고르면 문항별 정답률, 선지별 선택 분포, 가장 많이 고른 오답이 보입니다. 정답률 낮은 순으로 정렬하면 수업에서 다시 짚을 문제를 바로 찾을 수 있습니다. 파일(사진·PDF)로만 낸 제출은 집계에서 빠집니다.</li>
     <li><b>과제·시험 복제</b> — 과제 관리·시험 관리 목록 또는 수업·주차 화면의 <b>복제</b> 버튼. 수업과 주차(여러 개 가능)를 고르면 문항 구성이 그대로 복사되고, 시작·마감 일시는 주차 차이만큼 옮길 수 있습니다. 첨부 PDF는 복사하지 않습니다(한쪽을 지울 때 파일이 같이 지워지는 것을 막기 위해).</li>
     <li><b>로그인 · 학생 등록</b> — 로그인 아이디는 <b>전화번호</b>(또는 기존 이메일)입니다. 학생 관리의 <b>학생 직접 등록</b>에서 이름·전화번호·이메일·<b>초기 비밀번호</b>를 넣으면 계정이 바로 만들어지고 승인까지 끝납니다. 그 정보를 학생에게 알려 주면, 학생이 처음 로그인할 때 <b>새 비밀번호를 정해야</b> 화면을 쓸 수 있습니다(내 정보에서 언제든 다시 변경 가능). 목록의 '초기 비번' 표시는 아직 바꾸지 않았다는 뜻입니다.</li>
