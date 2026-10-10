@@ -648,3 +648,19 @@ body.on-login{
 .av-src .passage-box,.av-src [class*="passage"]{max-width:100%;overflow-x:auto}
 .st-q > *{min-width:0;max-width:100%}
 .st-src .av-src{box-sizing:border-box;width:100%;overflow:hidden}
+
+/* 채점 확인: 모바일에서는 표 대신 학생별 카드로 */
+@media (max-width:760px){
+  .grade-group-body{padding:2px 12px 8px;}
+  .gr-tbl, .gr-tbl tbody{display:block; width:100%;}
+  .gr-tbl tr:first-child{display:none;}
+  .gr-tbl tr{display:grid; grid-template-columns:minmax(0,1fr) auto; gap:6px 10px; align-items:center; padding:10px 0; border-bottom:1px solid var(--border);}
+  .gr-tbl tr:last-child{border-bottom:0;}
+  .gr-tbl td{display:block; border:0; padding:0; min-width:0;}
+  .gr-tbl td:nth-child(1){font-weight:800;}
+  .gr-tbl td:nth-child(2){text-align:right;}
+  .gr-tbl td:nth-child(3){grid-column:1/-1;}
+  .gr-tbl td:nth-child(4){grid-column:1/-1; white-space:normal; display:flex; flex-wrap:wrap; gap:6px;}
+  .gr-tbl td:nth-child(4):empty{display:none;}
+  .gr-tbl .row-actions button{margin:0;}
+}
