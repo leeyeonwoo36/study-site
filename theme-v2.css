@@ -624,3 +624,21 @@ body.on-login{
 /* 운영 안내: 긴 코드·주소가 모바일에서 옆으로 삐져나오지 않게 */
 #firebase-guide{overflow-wrap:anywhere}
 #firebase-guide code{overflow-wrap:anywhere;word-break:break-all;white-space:normal}
+
+/* 문항 통계: 문항별 카드 */
+.st-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:12px}
+.st-q{border:1px solid var(--border);border-radius:14px;padding:14px;background:var(--card);display:flex;flex-direction:column;gap:8px;min-width:0}
+.st-q.open{grid-column:1/-1}
+.st-q-head{display:flex;align-items:flex-start;gap:10px}
+.st-no{flex:0 0 auto;min-width:28px;height:28px;padding:0 6px;border-radius:999px;background:var(--brand);color:#fff;font-weight:800;font-size:13px;display:flex;align-items:center;justify-content:center}
+.st-q-title{flex:1;min-width:0;font-weight:600;line-height:1.5;overflow-wrap:anywhere}
+.st-q-rate{flex:0 0 auto;text-align:right;line-height:1.2}
+.st-q-rate b{display:block;font-size:18px;color:var(--good)}
+.st-q-rate.low b{color:var(--accent)}
+.st-q-rate small{color:var(--muted);font-size:11.5px}
+.st-q .st-bar{width:100%;min-width:0}
+.st-q-ans{font-size:13px}
+.st-q-ans span{color:var(--muted);margin-right:4px}
+.st-src-btn{align-self:flex-start;margin-top:2px}
+.st-src:empty{display:none}
+.st-src .av-src{margin-top:0;background:var(--soft,#f7f9f8)}

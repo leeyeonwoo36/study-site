@@ -1373,9 +1373,7 @@ body.quiet-preview .sidebar{ padding-top:22px; }
           <div id="stats-summary" style="margin-top:14px;"></div>
         </div>
         <div class="card">
-          <table class="stats-table">
-            <tr><th>번호</th><th>문제</th><th>정답</th><th>정답률</th><th>선택 분포</th></tr>
-            <tbody id="stats-table"></tbody></table>
+          <div id="stats-table" class="st-list"></div>
         </div>
       </div>
 
@@ -8330,15 +8328,16 @@ function fillStatsSelect(){
 const statsOpenSrc = new Set();
 function statsToggleSrc(qid){
   const box = document.getElementById('sts_'+qid), btn = document.getElementById('stsb_'+qid); if(!box) return;
-  if(statsOpenSrc.has(qid)){ statsOpenSrc.delete(qid); box.innerHTML = ''; if(btn) btn.textContent = '원본 보기 ▼'; }
-  else { statsOpenSrc.add(qid); box.innerHTML = avSrcHtml({ srcQid:qid }); if(btn) btn.textContent = '원본 닫기 ▲'; }
+  const card = document.getElementById('stq_'+qid);
+  if(statsOpenSrc.has(qid)){ statsOpenSrc.delete(qid); box.innerHTML = ''; if(btn) btn.textContent = '원본 보기 ▼'; if(card) card.classList.remove('open'); }
+  else { statsOpenSrc.add(qid); box.innerHTML = avSrcHtml({ srcQid:qid }); if(btn) btn.textContent = '원본 닫기 ▲'; if(card) card.classList.add('open'); }
 }
 function renderStats(){
   const sel = $('stats-task'), tb = $('stats-table'), sum = $('stats-summary'); if(!sel||!tb||!sum) return;
   fillStatsSelect();
   const [kind,tid] = (sel.value||'').split('|');
   const t = kind && tasks[kind] ? tasks[kind].find(x=>x.tid===tid) : null;
-  if(!t){ sum.innerHTML=''; tb.innerHTML='<tr><td colspan="5" class="empty-hint">과제나 시험을 선택하세요.</td></tr>'; return; }
+  if(!t){ sum.innerHTML=''; tb.innerHTML='<p class="empty-hint">과제나 시험을 선택하세요.</p>'; return; }
   const byId = new Map(questions.map(q=>[q.qid,q]));
   const qs = (t.qids||[]).map(id=>byId.get(id)).filter(Boolean);
   const targets = taskTargetStudents(t);
@@ -8393,15 +8392,19 @@ function renderStats(){
     const pct = r.rate===null ? null : Math.round(r.rate*100);
     const body = String(r.q.body||'').replace(/\s+/g,' ');
     const open = statsOpenSrc.has(r.q.qid);
-    return `<tr>
-      <td><b>${r.i+1}</b></td>
-      <td style="max-width:260px;">${qNoBadge(r.q)} ${esc(body.length>46 ? body.slice(0,46)+'…' : body)}
-        <div style="margin-top:4px;"><button class="btn small ghost" id="stsb_${r.q.qid}" onclick="statsToggleSrc('${r.q.qid}')">${open?'원본 닫기 ▲':'원본 보기 ▼'}</button></div>
-        <div id="sts_${r.q.qid}">${open?avSrcHtml({ srcQid:r.q.qid }):''}</div></td>
-      <td>${esc(answerLabel(r.q))}</td>
-      <td style="min-width:110px;">${pct===null ? '-' : `<b>${pct}%</b> <span style="color:var(--muted); font-size:12px;">(${r.correct}/${r.n})</span><div class="st-bar ${pct<50?'low':''}" style="margin-top:4px;"><i style="width:${pct}%"></i></div>`}</td>
-      <td>${r.dist}</td></tr>`;
-  }).join('') || '<tr><td colspan="5" class="empty-hint">이 과제에는 문항이 없습니다.</td></tr>';
+    return `<div class="st-q${open?' open':''}" id="stq_${r.q.qid}">
+      <div class="st-q-head">
+        <span class="st-no">${r.i+1}</span>
+        <div class="st-q-title">${qNoBadge(r.q)} ${esc(body.length>70 ? body.slice(0,70)+'…' : body)}</div>
+        <div class="st-q-rate ${pct!==null && pct<50?'low':''}">${pct===null ? '<small>-</small>' : `<b>${pct}%</b><small>${r.correct}/${r.n}</small>`}</div>
+      </div>
+      ${pct===null ? '' : `<div class="st-bar ${pct<50?'low':''}"><i style="width:${pct}%"></i></div>`}
+      <div class="st-q-ans"><span>정답</span> <b>${esc(answerLabel(r.q))}</b></div>
+      ${r.dist}
+      <button class="btn small secondary st-src-btn" id="stsb_${r.q.qid}" onclick="statsToggleSrc('${r.q.qid}')">${open?'원본 닫기 ▲':'원본 보기 ▼'}</button>
+      <div id="sts_${r.q.qid}" class="st-src">${open?avSrcHtml({ srcQid:r.q.qid }):''}</div>
+    </div>`;
+  }).join('') || '<p class="empty-hint">이 과제에는 문항이 없습니다.</p>';
 }
 
 /* =========================================================
