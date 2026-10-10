@@ -1935,7 +1935,7 @@ body.quiet-preview .sidebar{ padding-top:22px; }
    <div style="margin-bottom:14px; display:flex; gap:6px; flex-wrap:wrap;">
   <button class="btn small secondary" onclick="openStudentEditFromDetail()">인적사항 수정</button>
   <button class="btn small secondary" onclick="resetPw(currentDetailUid)">비밀번호 재설정 메일 보내기</button>
-   <button class="btn small" onclick="openStudentReportSheet(currentDetailUid)">학습관리표 PDF 출력</button>
+   <button class="btn small" onclick="openStudentReportSheet(currentDetailUid)">학습현황표 PDF 출력</button>
 </div>
         <h3>출결 현황</h3>
     <div id="detail-attendance-status" style="margin-bottom:18px;"></div>
@@ -5683,19 +5683,19 @@ function buildAnswerExplainHtml(qs, title){
 }
 /* ---------- 학생 성적표 PDF (인쇄) ---------- */
 function buildTrendSvgMarkup(arr){
-  if(!arr || !arr.length) return '<p style="color:#8993AA; font-size:13px;">채점된 시험 성적이 없습니다.</p>';
+  if(!arr || !arr.length) return '<p style="color:#7a857f; font-size:13px;">채점된 시험 성적이 없습니다.</p>';
   const w=480,h=190,padL=34,padR=20,padT=20,padB=34;
   const xStep = arr.length>1 ? (w-padL-padR)/(arr.length-1) : 0;
   const x = i => arr.length>1 ? padL+i*xStep : (w/2);
   const y = s => padT + (100-Math.max(0,Math.min(100,s)))/100*(h-padT-padB);
   const pts = arr.map((p,i)=>x(i)+','+y(p.score)).join(' ');
-  const dots = arr.map((p,i)=>`<circle cx="${x(i)}" cy="${y(p.score)}" r="4" fill="#3B6FF6"></circle>
-    <text x="${x(i)}" y="${y(p.score)-10}" font-size="11" text-anchor="middle" fill="#28324A">${p.score}</text>
-    <text x="${x(i)}" y="${h-12}" font-size="10" text-anchor="middle" fill="#8993AA">${esc(p.label)}</text>`).join('');
+  const dots = arr.map((p,i)=>`<circle cx="${x(i)}" cy="${y(p.score)}" r="4" fill="#2F5D50"></circle>
+    <text x="${x(i)}" y="${y(p.score)-10}" font-size="11" text-anchor="middle" fill="#1c2420">${p.score}</text>
+    <text x="${x(i)}" y="${h-12}" font-size="10" text-anchor="middle" fill="#7a857f">${esc(p.label)}</text>`).join('');
   return `<svg viewBox="0 0 ${w} ${h}" style="width:100%; max-width:500px;">
-    <line x1="${padL}" y1="${padT}" x2="${padL}" y2="${h-padB}" stroke="#E3E7F3"></line>
-    <line x1="${padL}" y1="${h-padB}" x2="${w-padR}" y2="${h-padB}" stroke="#E3E7F3"></line>
-    <polyline points="${pts}" fill="none" stroke="#3B6FF6" stroke-width="2.5"></polyline>${dots}</svg>`;
+    <line x1="${padL}" y1="${padT}" x2="${padL}" y2="${h-padB}" stroke="#dfe5e2"></line>
+    <line x1="${padL}" y1="${h-padB}" x2="${w-padR}" y2="${h-padB}" stroke="#dfe5e2"></line>
+    <polyline points="${pts}" fill="none" stroke="#2F5D50" stroke-width="2.5"></polyline>${dots}</svg>`;
 }
 
 function buildStudentReportHtml(uid){
@@ -5715,12 +5715,12 @@ function buildStudentReportHtml(uid){
   const hwRows = tasks.hw.filter(t=>inClass(t,uid)).map(t=>{
     const rec = (scores.hw[t.tid]||{})[uid] || {score:'',status:'미완료'};
     return `<tr><td>${esc(t.title)}</td><td>${fmtPeriod(t)}</td><td>${esc(rec.status||'미완료')}</td><td>${esc(rec.score)||'-'}</td></tr>`;
-  }).join('') || '<tr><td colspan="4" style="color:#8993AA;">배정된 과제가 없습니다.</td></tr>';
+  }).join('') || '<tr><td colspan="4" class="empty">배정된 과제가 없습니다.</td></tr>';
 
   const examRows = tasks.exam.filter(t=>inClass(t,uid)).map(t=>{
     const rec = (scores.exam[t.tid]||{})[uid] || {score:''};
     return `<tr><td>${esc(t.title)}</td><td>${fmtPeriod(t)}</td><td>${esc(rec.score)||'-'}</td></tr>`;
-  }).join('') || '<tr><td colspan="3" style="color:#8993AA;">배정된 시험이 없습니다.</td></tr>';
+  }).join('') || '<tr><td colspan="3" class="empty">배정된 시험이 없습니다.</td></tr>';
 
   const trendArr = tasks.exam.map(t=>{
     const rec = (scores.exam[t.tid]||{})[uid];
@@ -5731,49 +5731,63 @@ function buildStudentReportHtml(uid){
   const today = new Date().toLocaleDateString('ko-KR');
 
   return `<!DOCTYPE html><html lang="ko"><head><meta charset="UTF-8">
-<title>${esc(s.name)} 학생 학습관리표</title>
+<title>${esc(s.name)} 학생 학습현황표</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
 <style>
 ${PRINT_PAD_CSS}
-  body{font-family:'Pretendard Variable','Pretendard','Noto Sans KR',-apple-system,sans-serif; color:#111; line-height:1.6; letter-spacing:-.01em; margin:0; -webkit-font-smoothing:antialiased;}
-  h1{font-size:22px; font-weight:900; margin:0 0 4px;}
-  h2{font-size:15px; font-weight:900; margin:22px 0 8px; padding-bottom:6px; border-bottom:2px solid #111;}
-  .meta{color:#666; font-size:12px; margin-bottom:18px; padding-bottom:14px; border-bottom:2px solid #111;}
-  .info-grid{display:grid; grid-template-columns:repeat(4,1fr); gap:10px;}
-  .info-grid div{font-size:12.5px;}
-  .info-grid b{display:block; color:#666; font-size:11px; font-weight:500; margin-bottom:2px;}
-  table{width:100%; border-collapse:collapse; font-size:12.5px; margin-bottom:6px;}
-  th,td{border:1px solid #ccc; padding:6px 8px; text-align:left;}
-  th{background:#f2f2f2;}
-  .summary-badges span{display:inline-block; margin-right:10px; padding:3px 10px; border-radius:14px; font-size:12px; font-weight:700; background:#eee;}
+  :root{--b:#2F5D50; --bs:#E8F1EE; --ink:#1c2420; --mute:#7a857f; --line:#e3e8e5;}
+  body{font-family:'Pretendard Variable','Pretendard','Noto Sans KR',-apple-system,sans-serif; color:var(--ink); line-height:1.55; letter-spacing:-.01em; margin:0; -webkit-font-smoothing:antialiased;}
+  .hd{display:flex; align-items:flex-end; justify-content:space-between; gap:12px; padding-bottom:14px; border-bottom:3px solid var(--b);}
+  .hd .k{font-size:11px; font-weight:800; letter-spacing:.12em; color:var(--b);}
+  h1{font-size:24px; font-weight:900; margin:2px 0 0;}
+  .hd .d{font-size:11.5px; color:var(--mute);}
+  .info{display:grid; grid-template-columns:repeat(3,1fr); gap:8px 16px; margin:14px 0 4px;}
+  .info div{font-size:12.5px; font-weight:700;}
+  .info b{display:block; color:var(--mute); font-size:10.5px; font-weight:600; margin-bottom:1px;}
+  h2{font-size:13.5px; font-weight:900; margin:24px 0 10px; display:flex; align-items:center; gap:8px; break-after:avoid;}
+  h2:before{content:''; width:4px; height:15px; border-radius:2px; background:var(--b);}
+  .stats{display:grid; grid-template-columns:repeat(5,1fr); gap:8px;}
+  .stat{border:1px solid var(--line); border-radius:10px; padding:10px 8px; text-align:center; background:#fff;}
+  .stat b{display:block; font-size:20px; font-weight:900; line-height:1.2;}
+  .stat span{font-size:11px; color:var(--mute); font-weight:600;}
+  .stat.rate{background:var(--bs); border-color:var(--bs);} .stat.rate b{color:var(--b);}
+  table.t{width:100%; border-collapse:collapse; font-size:12.5px;}
+  .t th{font-size:11px; font-weight:700; color:var(--mute); text-align:left; padding:6px 8px; border-bottom:1.5px solid var(--ink);}
+  .t td{padding:8px; border-bottom:1px solid var(--line); text-align:left;}
+  .t tr{break-inside:avoid;}
+  .t td:last-child,.t th:last-child{text-align:right;}
+  .empty{color:var(--mute); font-size:12.5px; padding:6px 0;}
   .no-print{text-align:center; margin-bottom:16px;}
-  .no-print button{padding:10px 20px; font-size:14px; cursor:pointer;}
+  .no-print button{padding:10px 20px; font-size:14px; cursor:pointer; border:0; border-radius:10px; background:var(--b); color:#fff; font-weight:700;}
   @media print{ .no-print{display:none;} }
 </style></head><body>
 <table class="pad"><thead><tr><td></td></tr></thead><tbody><tr><td>
 <div class="no-print"><button onclick="window.print()">인쇄 / PDF로 저장</button></div>
 
-<h1>${esc(s.name)} 학생 학습관리표</h1>
-<div class="meta">
-  <div class="info-grid">
-    <div><b>학년</b>${esc(s.grade)||'-'}</div>
-    <div><b>학교</b>${esc(s.school)||'-'}</div>
-    <div><b>전화번호</b>${esc(phoneShow(s.phone))||'-'}</div>
-    <div><b>발급일</b>${today}</div>
-  </div>
+<div class="hd">
+  <div><div class="k">STUDY REPORT</div><h1>${esc(s.name)} 학생 학습현황표</h1></div>
+  <div class="d">발급일 ${today}</div>
+</div>
+<div class="info">
+  <div><b>학년</b>${esc(s.grade)||'-'}</div>
+  <div><b>학교</b>${esc(s.school)||'-'}</div>
+  <div><b>전화번호</b>${esc(phoneShow(s.phone))||'-'}</div>
 </div>
 
 <h2>출결 현황</h2>
-<div class="summary-badges">
-  <span>출석 ${p}</span><span>지각 ${l}</span><span>결석 ${a}</span><span>미체크 ${n}</span>
-  <span>출석률 ${rate===null?'-':rate+'%'}</span>
+<div class="stats">
+  <div class="stat"><b>${p}</b><span>출석</span></div>
+  <div class="stat"><b>${l}</b><span>지각</span></div>
+  <div class="stat"><b>${a}</b><span>결석</span></div>
+  <div class="stat"><b>${n}</b><span>미체크</span></div>
+  <div class="stat rate"><b>${rate===null?'-':rate+'%'}</b><span>출석률</span></div>
 </div>
 
 <h2>과제 현황</h2>
-<table><tr><th>과제명</th><th>기간</th><th>수행여부</th><th>점수</th></tr>${hwRows}</table>
+<table class="t"><tr><th>과제명</th><th>기간</th><th>수행여부</th><th>점수</th></tr>${hwRows}</table>
 
 <h2>시험 현황</h2>
-<table><tr><th>시험명</th><th>기간</th><th>점수</th></tr>${examRows}</table>
+<table class="t"><tr><th>시험명</th><th>기간</th><th>점수</th></tr>${examRows}</table>
 
 <h2>시험 성적 추이</h2>
 ${buildTrendSvgMarkup(trendArr)}
@@ -5786,7 +5800,7 @@ function openStudentReportSheet(uid){
   const html = buildStudentReportHtml(uid);
   if(!html){ alert('학생 정보를 찾을 수 없습니다.'); return; }
   const s = students.find(x=>x.uid===uid);
-  openPrintWindow(html, `학습관리표-${s ? s.name : ''}`);
+  openPrintWindow(html, `학습현황표-${s ? s.name : ''}`);
 }
 function openAssignPicker(kind){
   assignKind = kind;

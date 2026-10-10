@@ -664,3 +664,22 @@ body.on-login{
   .gr-tbl td:nth-child(4):empty{display:none;}
   .gr-tbl .row-actions button{margin:0;}
 }
+
+/* 학생 상세(모바일): 옆으로 밀리지 않게 */
+@media (max-width:760px){
+  #student-detail-modal .modal{overflow-x:hidden;}
+  #student-detail-modal .modal *{min-width:0; max-width:100%; overflow-wrap:anywhere;}
+  #student-detail-modal table{width:100%;}
+  #student-detail-modal th, #student-detail-modal td{padding:7px 6px; word-break:break-word;}
+  #student-detail-modal .detail-info-table, #student-detail-modal .detail-info-table tbody{display:block;}
+  #student-detail-modal .detail-info-table tr{display:grid; grid-template-columns:auto minmax(0,1fr) auto minmax(0,1fr); gap:2px 8px; align-items:baseline; padding:6px 0; border-bottom:1px solid var(--border);}
+  #student-detail-modal .detail-info-table th{width:auto; padding:0;}
+  #student-detail-modal .detail-info-table td{padding:0; border:0;}
+  #student-detail-modal .detail-info-table td[colspan]{grid-column:span 3;}
+  #student-detail-modal svg, #student-detail-modal img, #student-detail-modal textarea{max-width:100%;}
+  #student-detail-modal .row-actions{white-space:normal;}
+}
+
+@media (max-width:760px){
+  #student-detail-modal th, #student-detail-modal td{white-space:normal;}
+}
