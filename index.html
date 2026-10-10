@@ -8129,7 +8129,8 @@ let cam = null;
 async function openCamGuide(opts){
   opts = opts || {};
   if(cam) closeCamGuide();
-  if(!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia)){ alert('이 브라우저에서는 카메라를 열 수 없습니다. 「앨범에서 고르기」를 이용해 주세요.'); return; }
+  if(!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia)){ const ua = navigator.userAgent||'', inApp = /KAKAOTALK|NAVER|Instagram|FBAN|FBAV|Line\/|DaumApps|; wv\)/i.test(ua);
+    alert(!window.isSecureContext ? '보안 연결(https)이 아니어서 카메라를 열 수 없습니다. 주소가 https://로 시작하는지 확인해 주세요. 지금은 「앨범에서 고르기」를 이용해 주세요.' : inApp ? '카카오톡·네이버 같은 앱 안의 브라우저에서는 카메라를 쓸 수 없습니다. 메뉴(⋮ 또는 공유 버튼)에서 「다른 브라우저로 열기」를 눌러 Chrome·Safari에서 열어 주세요. 지금은 「앨범에서 고르기」를 이용해 주세요.' : '이 브라우저에서는 카메라를 열 수 없습니다. Chrome(안드로이드)·Safari(아이폰)로 열어 주세요. 지금은 「앨범에서 고르기」를 이용해 주세요.'); return; }
   cam = { opts, shots:0, stable:0, last:null, busy:false, need:false, stream:null, timer:null, sc:null, prev:null, agree:0 };
   $('cam-hint').textContent = '카메라를 켜는 중…'; $('cam-hint').className = 'cam-hint';
   $('cam-count').textContent = ''; $('cam-done').textContent = opts.multi ? '완료' : '닫기';
