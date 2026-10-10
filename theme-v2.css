@@ -642,3 +642,9 @@ body.on-login{
 .st-src-btn{align-self:flex-start;margin-top:2px}
 .st-src:empty{display:none}
 .st-src .av-src{margin-top:0;background:var(--soft,#f7f9f8)}
+.av-src,.st-q,.st-q-title,.st-dist{min-width:0;overflow-wrap:anywhere;word-break:break-word}
+.st-q{overflow:hidden}
+.av-src img,.av-src table{max-width:100%}
+.av-src .passage-box,.av-src [class*="passage"]{max-width:100%;overflow-x:auto}
+.st-q > *{min-width:0;max-width:100%}
+.st-src .av-src{box-sizing:border-box;width:100%;overflow:hidden}
