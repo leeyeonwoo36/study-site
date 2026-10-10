@@ -595,3 +595,28 @@ body.on-login{
 .cam-stage{border:4px solid transparent;transition:border-color .2s,box-shadow .2s}
 .cam-stage.hit{border-color:#2fbf71;box-shadow:0 0 0 4px rgba(47,191,113,.35)}
 #cam-modal{z-index:2000}
+
+/* 수업·주차: 회차 입력칸 2x2 */
+.form-grid.g2{grid-template-columns:repeat(2,minmax(0,1fr))}
+/* 출석 체크: 가로 스크롤 없이 화면 안에 맞춘다 */
+.att-list{width:100%}
+.att-head,.att-row{display:grid;grid-template-columns:minmax(0,1.3fr) auto minmax(0,1fr);gap:8px 14px;align-items:center}
+.att-head{padding:8px 10px;font-size:12.5px;font-weight:700;color:var(--muted);border-bottom:1px solid var(--border)}
+.att-row{padding:9px 10px;border-bottom:1px solid var(--border);min-height:56px}
+.att-who{min-width:0;overflow-wrap:anywhere;font-weight:600}
+.att-who small{color:#8993AA;font-weight:400;font-size:12px}
+.att-why{min-width:0}
+.att-why .att-reason-btn{margin-left:0;max-width:100%}
+.att-none{color:#8993AA}
+.att-dots{gap:6px}
+.att-dot{width:40px;height:40px;font-size:11px;flex:0 0 auto;transition:none!important}
+.att-dot:hover{transform:none!important}
+@media (max-width:640px){
+  .att-head{display:none}
+  .att-row{grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"who dots" "why why"}
+  .att-who{grid-area:who}.att-dots{grid-area:dots}.att-why{grid-area:why;min-height:0}
+  .att-why:has(.att-none){display:none}
+  .att-row{min-height:0}
+}
+/* AI 문제 생성: 예시 입력칸 크기 조절 점 제거 */
+#ai-prompt{resize:none}
