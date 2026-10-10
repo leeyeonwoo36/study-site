@@ -620,3 +620,7 @@ body.on-login{
 }
 /* AI 문제 생성: 예시 입력칸 크기 조절 점 제거 */
 #ai-prompt{resize:none}
+
+/* 운영 안내: 긴 코드·주소가 모바일에서 옆으로 삐져나오지 않게 */
+#firebase-guide{overflow-wrap:anywhere}
+#firebase-guide code{overflow-wrap:anywhere;word-break:break-all;white-space:normal}
