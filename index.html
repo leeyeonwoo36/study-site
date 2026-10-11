@@ -1472,6 +1472,9 @@ body.quiet-preview .sidebar{ padding-top:22px; }
           </div>
         </div>
 
+        <div id="stu-todo"></div>
+        <div id="stu-wrong-card"></div>
+
         <div class="card sm-att">
           <h3>출석</h3>
           <div id="stu-attendance-summary"></div>
@@ -1488,6 +1491,7 @@ body.quiet-preview .sidebar{ padding-top:22px; }
         <div class="page-head"><div><h1>과제</h1><p>온라인으로 풀어서 제출합니다. 제출 후에는 수정할 수 없고 결과·해설만 볼 수 있어요.</p></div></div>
         <div class="card">
           <div class="wk-chips" id="t-hw-weeks"></div>
+          <div class="wk-chips st-chips" id="t-hw-status"></div>
           <table class="task-tbl">
             <tr class="th-row"><th>과제명</th><th>기간</th><th>원본 PDF</th><th>수행 여부</th><th>상태</th><th></th></tr>
             <tbody id="t-hw-table"></tbody></table>
@@ -1498,6 +1502,7 @@ body.quiet-preview .sidebar{ padding-top:22px; }
         <div class="page-head"><div><h1>시험</h1><p>온라인으로 풀어서 제출합니다. 제출 후에는 수정할 수 없고 결과·해설만 볼 수 있어요.</p></div></div>
         <div class="card">
           <div class="wk-chips" id="t-exam-weeks"></div>
+          <div class="wk-chips st-chips" id="t-exam-status"></div>
           <table class="task-tbl">
             <tr class="th-row"><th>시험명</th><th>기간</th><th>원본 PDF</th><th>상태</th><th></th></tr>
             <tbody id="t-exam-table"></tbody></table>
@@ -2758,6 +2763,7 @@ if(!isAdmin && currentStudent){
   unsubs.push(onSnapshot(doc(db,'wrongBank', currentStudent), snap=>{
     wrongItems = snap.exists() ? (snap.data().items||{}) : {};
     renderWrongNote();
+    try{ renderStuExtras(); }catch(e){}
   }, err=>console.error('wrongBank 구독 에러:', err.code)));
 
   unsubs.push(onSnapshot(doc(db,'variants', currentStudent), snap=>{
@@ -8916,9 +8922,35 @@ function renderUrgentBanner(){
   </div>`;
 }
 setInterval(()=>{ try{ renderUrgentBanner(); }catch(e){} }, 60000);
+/* 메인: 해야 할 일 전체 목록(마감 없는 것 포함) + 오답노트 복습 카드 */
+function renderStuExtras(){
+  const todo = $('stu-todo'), wc = $('stu-wrong-card');
+  if(!todo && !wc) return;
+  if(!currentStudent || adminViewAll){ if(todo) todo.innerHTML=''; if(wc) wc.innerHTML=''; return; }
+  const now = Date.now();
+  const pend = [...tasks.hw.filter(isAssignedToMe).map(t=>({t,kind:'hw'})), ...tasks.exam.filter(isAssignedToMe).map(t=>({t,kind:'exam'}))]
+    .filter(x=>!submissions[x.t.tid+'|'+currentStudent])
+    .filter(x=>!x.t.startAt || new Date(x.t.startAt).getTime() <= now)
+    .map(x=>({...x, ts: x.t.due && !isNaN(new Date(x.t.due)) ? new Date(x.t.due).getTime() : Infinity}))
+    .sort((a,b)=>a.ts-b.ts);
+  if(todo){
+    todo.innerHTML = pend.length ? `<div class="card st-todo"><div class="st-todo-h"><h3>해야 할 일</h3><span class="badge warn">${pend.length}건</span></div>
+      ${pend.slice(0,6).map(x=>`<div class="st-todo-row" onclick="openStudentSolve('${x.kind}','${x.t.tid}')">
+        <span class="badge muted">${x.kind==='hw'?'과제':'시험'}</span>
+        <span class="st-todo-t">${esc(x.t.title)}</span>
+        ${x.ts<now ? '<span class="badge warn">마감 지남</span>' : ddayBadge(x.t.due)}
+        <span class="st-todo-go">›</span></div>`).join('')}
+      ${pend.length>6 ? `<div class="ug-more">그 외 ${pend.length-6}건 · 과제/시험 탭에서 확인하세요</div>` : ''}</div>` : '';
+  }
+  if(wc){
+    const open = Object.entries(wrongItems||{}).filter(([qid,v])=>v.status!=='mastered' && questions.some(q=>q.qid===qid)).length;
+    wc.innerHTML = open ? `<div class="card st-wrong" onclick="setStudentTab('t-wrong')"><div><b>오답노트 복습 ${open}개</b><div style="font-size:12.5px; color:var(--muted); margin-top:2px;">틀린 문제를 다시 풀어 마스터해 보세요</div></div><span class="st-todo-go">›</span></div>` : '';
+  }
+}
 function renderStudentDashboard(s){
   if(!currentStudent) return;
   renderUrgentBanner();
+  renderStuExtras();
   const now = new Date();
 
   // 인사
@@ -9041,6 +9073,8 @@ function isAssignedToMe(t){
   return inClass(t, currentStudent);
 }
 let stuWeekFilter = { hw:'', exam:'' };
+let stuStatusFilter = { hw:'', exam:'' };
+function setStuStatus(kind, v){ stuStatusFilter[kind] = v; renderStudentTasks(kind); }
 function setStuWeek(kind, w){ stuWeekFilter[kind] = String(w); renderStudentTasks(kind); }
 function renderStudentTasks(kind){
   const tb = $(kind==='hw'?'t-hw-table':'t-exam-table'); if(!tb) return;
@@ -9054,7 +9088,18 @@ function renderStudentTasks(kind){
     chipBox.innerHTML = [['','전체']].concat(weeks.map(w=>[String(w), weekText(w)])).map(([v,l])=>
       `<button class="${stuWeekFilter[kind]===v?'on':''}" onclick="setStuWeek('${kind}','${v}')">${l}</button>`).join('');
   }
-  const shown = stuWeekFilter[kind] ? all.filter(t=>(t.week||1)===Number(stuWeekFilter[kind])) : all;
+  const isDone = t => !!submissions[t.tid+'|'+currentStudent];
+  const nTodo = all.filter(t=>!isDone(t)).length, nDone = all.length - nTodo;
+  const stBox = $(kind==='hw'?'t-hw-status':'t-exam-status');
+  if(stBox){
+    stBox.style.display = (!adminViewAll && all.length>1) ? 'flex' : 'none';
+    stBox.innerHTML = [['','전체',all.length],['todo','해야 할 것',nTodo],['done','제출 완료',nDone]].map(([v,l,n])=>
+      `<button class="${stuStatusFilter[kind]===v?'on':''}" onclick="setStuStatus('${kind}','${v}')">${l} ${n}</button>`).join('');
+  }
+  if(adminViewAll) stuStatusFilter[kind] = '';
+  let shown = stuWeekFilter[kind] ? all.filter(t=>(t.week||1)===Number(stuWeekFilter[kind])) : all;
+  if(stuStatusFilter[kind]==='todo') shown = shown.filter(t=>!isDone(t));
+  else if(stuStatusFilter[kind]==='done') shown = shown.filter(isDone);
   let lastWeek = null;
   const cols = kind==='hw' ? 6 : 5;
   tb.innerHTML = shown.map(t=>{
@@ -9094,7 +9139,7 @@ function renderStudentTasks(kind){
     return `<tr class="task-row"><td class="c-title"><span class="badge muted">${weekText(t.week)}</span> ${esc(t.title)}${dbadge}</td><td class="c-period" data-l="기간">${fmtPeriod(t)}</td><td class="c-pdf" data-l="원본">${studentPdfCell(t)}</td>${doneCell}
       <td class="c-status">${status}</td><td class="c-act">${btn}</td></tr>`;
   })();
-  }).join('') || `<tr><td colspan="${cols}" class="empty-hint">등록된 항목이 없습니다.</td></tr>`;
+  }).join('') || `<tr><td colspan="${cols}" class="empty-hint">${stuStatusFilter[kind]==='todo' ? '해야 할 항목이 없어요. 모두 제출했습니다 🎉' : stuStatusFilter[kind]==='done' ? '아직 제출한 항목이 없습니다.' : '등록된 항목이 없습니다.'}</td></tr>`;
 }
   /* 지각 제출 여부 */
 function isLateSub(sub){ return !!(sub && sub.late); }
@@ -11498,6 +11543,7 @@ function renderFirebaseGuide(){
     <li>관리자는 코드의 <code>window.ADMIN_UIDS</code>와 Firestore 규칙의 <code>isAdmin()</code>에 UID를 넣어 지정합니다. <b>추가할 때는 두 곳을 함께</b> 수정하세요.</li>
     <li>학생 삭제·거절은 Firestore 문서만 지웁니다. Authentication 계정은 Firebase 콘솔에서 따로 지우세요.</li>
     <li>전화번호 로그인은 '전화번호(해시) → 이메일' 색인(<code>phoneIndex</code>)을 관리자 화면을 열 때마다 자동으로 맞춥니다. 학생 번호를 바꾼 뒤에는 관리자가 한 번 접속해야 합니다.</li>
+    <li>학생 메인에는 <b>해야 할 일</b>(마감 순 전체 목록)과 <b>오답노트 복습</b> 카드가 보이고, 과제·시험 탭에서는 <b>전체 / 해야 할 것 / 제출 완료</b>로 걸러 볼 수 있습니다.</li>
     <li><b>학생 화면 보기</b>(미리보기)에서는 제출·기록·임시 저장·텔레그램 알림이 일어나지 않습니다. 관리자 화면으로 돌아가면 열린 창이 모두 닫힙니다.</li>
   </ul>
 

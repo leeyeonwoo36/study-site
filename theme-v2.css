@@ -697,3 +697,17 @@ table tbody tr{transition:background .12s;}
 *{scrollbar-width:thin; scrollbar-color:color-mix(in srgb, var(--muted) 45%, transparent) transparent;}
 .card{transition:box-shadow .2s;}
 @media (prefers-reduced-motion:reduce){ *{animation-duration:.01ms!important; transition-duration:.01ms!important;} }
+
+/* 학생 메인: 해야 할 일 · 오답 복습 카드, 과제 상태 칩 */
+.st-todo{padding:16px 16px 8px;}
+.st-todo-h{display:flex; align-items:center; justify-content:space-between; margin-bottom:6px;}
+.st-todo-h h3{margin:0;}
+.st-todo-row{display:flex; align-items:center; gap:8px; padding:11px 2px; border-top:1px solid var(--border); cursor:pointer; min-width:0;}
+.st-todo-row:first-of-type{border-top:0;}
+.st-todo-t{flex:1; min-width:0; font-weight:700; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+.st-todo-go{color:var(--muted); font-size:22px; line-height:1; flex:0 0 auto;}
+.st-wrong{display:flex; align-items:center; justify-content:space-between; gap:10px; cursor:pointer; padding:14px 16px; background:linear-gradient(135deg,var(--brand-soft),var(--card));}
+.st-wrong b{font-size:15px;}
+@media (hover:hover){ .st-todo-row:hover .st-todo-t{color:var(--brand);} .st-wrong:hover{box-shadow:0 6px 18px rgba(31,64,54,.12);} }
+.st-chips{margin:-4px 0 12px;}
+.st-chips button{padding:5px 12px; font-size:12.5px;}
