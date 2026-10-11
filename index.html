@@ -5764,14 +5764,10 @@ function buildStudentReportHtml(uid){
     const rec = (scores.exam[t.tid]||{})[uid] || {score:''};
     return `<tr><td>${esc(t.title)}</td><td class="per">${fmtPeriod(t)}</td><td>${esc(rec.score)||'-'}</td></tr>`;
   }).join('') || '<tr><td colspan="3" class="empty">배정된 시험이 없습니다.</td></tr>';
-  const classAvg = t => {
-    const vals = students.filter(x=>x.approved!==false && inClass(t,x.uid)).map(x=>{ const r=(scores.exam[t.tid]||{})[x.uid]; return r ? scoreToPercent(r.score) : null; }).filter(v=>v!==null);
-    return vals.length>=2 ? Math.round(vals.reduce((s,v)=>s+v,0)/vals.length) : null;
-  };
   const trendArr = tasks.exam.map(t=>{
     const rec = (scores.exam[t.tid]||{})[uid];
     const pct = rec ? scoreToPercent(rec.score) : null;
-    return pct===null ? null : {label:t.title, score:pct, avg:classAvg(t)};
+    return pct===null ? null : {label:t.title, score:pct};
   }).filter(Boolean);
   const exAvg = trendArr.length ? Math.round(trendArr.reduce((s,v)=>s+v.score,0)/trendArr.length) : null;
   const exLast = trendArr.length ? trendArr[trendArr.length-1] : null;
@@ -5868,7 +5864,6 @@ ${PRINT_PAD_CSS}
 
 <h2>시험 성적 추이</h2>
 ${buildTrendSvgMarkup(trendArr)}
-${trendArr.some(v=>v.avg!==null) ? '<div class="legend"><span><i></i>학생 점수</span><span><i class="d"></i>반 평균</span></div>' : ''}
 
 <h2>선생님 의견</h2>
 <div class="cmt" contenteditable="true"></div>
