@@ -9634,7 +9634,7 @@ function updateSolveProgress(){
    - 좌표는 문제 영역 너비를 1로 보고 저장 → 화면 크기가 바뀌어도 제자리
    - 이 기기(브라우저)에만 임시 저장되고 제출 내용에는 포함되지 않는다
    ========================================================= */
-const LASER_MS = 900;   // 레이저 자국이 사라지기까지 걸리는 시간
+const LASER_MS = 1100;   // 레이저 자국이 사라지기까지 걸리는 시간
 const INK = { laser:{}, raf:0, on:false, tool:'pen', color:'#1f2937', finger:false, wi:1, hi:0, snap:true, redo:[], data:{}, undo:[], key:null, saveTimer:null, cvs:{}, ro:null };
 const INK_COLORS = ['#1f2937','#2563eb','#dc2626','#16a34a','#9333ea'];
 const INK_WIDTHS = [1.4, 2.4, 4.2];            // 가늘게 · 보통 · 굵게
@@ -9698,7 +9698,7 @@ function inkInit(tid){
 function inkFit(qid){
   const cv = INK.cvs[qid]; if(!cv) return;
   const r = cv.parentElement.getBoundingClientRect(); if(!r.width || !r.height) return;
-  const dpr = Math.min(window.devicePixelRatio||1, 2);
+  const dpr = Math.min(Math.max(window.devicePixelRatio||1, 2), 3);   // 저해상도 화면에서도 선이 각지지 않게 2배 이상
   const w = Math.round(r.width*dpr), h = Math.round(r.height*dpr);
   if(cv.width!==w || cv.height!==h){ cv.width = w; cv.height = h; }
   inkRedraw(qid);
@@ -9712,12 +9712,12 @@ function inkDrawStroke(ctx, st, W, dpr){
   ctx.beginPath(); ctx.moveTo(pts[0]*W, pts[1]*W);
   if(pts.length===2) ctx.lineTo(pts[0]*W+0.1, pts[1]*W);
   else if(pts.length<6 || st.line){ for(let i=2;i<pts.length;i+=2) ctx.lineTo(pts[i]*W, pts[i+1]*W); }
-  else{                                    // 중간점을 이은 2차 곡선으로 손떨림을 부드럽게
-    for(let i=2;i<pts.length-2;i+=2){
-      const mx = (pts[i]+pts[i+2])/2, my = (pts[i+1]+pts[i+3])/2;
-      ctx.quadraticCurveTo(pts[i]*W, pts[i+1]*W, mx*W, my*W);
+  else{                                    // Catmull-Rom 스플라인을 3차 곡선으로 이어 꺾임 없이 부드럽게
+    const n = pts.length/2, X = i=>pts[Math.max(0,Math.min(n-1,i))*2]*W, Y = i=>pts[Math.max(0,Math.min(n-1,i))*2+1]*W;
+    for(let i=0;i<n-1;i++){
+      const x0=X(i-1),y0=Y(i-1),x1=X(i),y1=Y(i),x2=X(i+1),y2=Y(i+1),x3=X(i+2),y3=Y(i+2);
+      ctx.bezierCurveTo(x1+(x2-x0)/6, y1+(y2-y0)/6, x2-(x3-x1)/6, y2-(y3-y1)/6, x2, y2);
     }
-    ctx.lineTo(pts[pts.length-2]*W, pts[pts.length-1]*W);
   }
   ctx.stroke(); ctx.restore();
 }
@@ -9727,22 +9727,52 @@ function inkLaserDraw(qid, now){
   const trail = INK.laser[qid] || [];
   const ctx = cv.getContext('2d');
   const r = cv.parentElement.getBoundingClientRect(); const dpr = cv.width/Math.max(1,r.width), W = r.width*dpr;
-  ctx.save(); ctx.lineCap = 'round'; ctx.lineJoin = 'round';
-  for(let i=1;i<trail.length;i++){
-    const a = trail[i-1], b = trail[i];
-    if(b.brk) continue;                                  // 획이 끊긴 곳은 잇지 않는다
-    const life = 1 - (now - b.t)/LASER_MS; if(life<=0) continue;
-    ctx.globalAlpha = Math.min(1, life);
-    ctx.strokeStyle = '#ff2b2b'; ctx.shadowColor = '#ff4d4d'; ctx.shadowBlur = 10*dpr; ctx.lineWidth = (3+3*life)*dpr;
-    ctx.beginPath(); ctx.moveTo(a.x*W, a.y*W); ctx.lineTo(b.x*W, b.y*W); ctx.stroke();
-    ctx.shadowBlur = 0; ctx.strokeStyle = '#ffd6d6'; ctx.lineWidth = (1.2+1.2*life)*dpr;
-    ctx.beginPath(); ctx.moveTo(a.x*W, a.y*W); ctx.lineTo(b.x*W, b.y*W); ctx.stroke();
-  }
+  // 1) 점들을 획 단위로 나누고, 중간점 사이를 곡선으로 촘촘히 보간해 부드러운 꼬리를 만든다 (굵기는 남은 수명에 비례해 가늘어짐)
+  const runs = []; let run = null;
+  trail.forEach(p=>{ if(p.brk || !run){ run = []; runs.push(run); } run.push(p); });
+  const dense = [];
+  runs.forEach(rn=>{
+    const pts = []; rn.forEach(p=>{ const l = pts[pts.length-1]; if(!l || Math.hypot(p.x-l.x,p.y-l.y)*W > 0.7) pts.push(p); else l.t = p.t; });
+    if(pts.length<2){ if(pts.length) dense.push([{x:pts[0].x*W,y:pts[0].y*W,l:1-(now-pts[0].t)/LASER_MS}]); return; }
+    const out = []; const L = p=>Math.max(0, 1-(now-p.t)/LASER_MS);
+    let px = pts[0].x*W, py = pts[0].y*W; out.push({x:px,y:py,l:L(pts[0])});
+    for(let i=1;i<pts.length;i++){
+      const a = pts[i-1], b = pts[i], c = pts[i+1];
+      const ex = c ? (b.x+c.x)/2*W : b.x*W, ey = c ? (b.y+c.y)/2*W : b.y*W;       // 곡선 끝점 = 다음 점과의 중간점
+      const sx = i===1 ? a.x*W : (a.x+b.x)/2*W, sy = i===1 ? a.y*W : (a.y+b.y)/2*W;
+      const la = L(a), lb = L(b), lc = c ? L(c) : lb;
+      const len = Math.hypot(ex-sx,ey-sy)+Math.hypot(b.x*W-sx,b.y*W-sy), N = Math.max(1, Math.ceil(len/(2*dpr)));
+      for(let k=1;k<=N;k++){ const t=k/N, u=1-t;
+        out.push({ x:u*u*sx+2*u*t*b.x*W+t*t*ex, y:u*u*sy+2*u*t*b.y*W+t*t*ey, l:(c? (t<.5? la+(lb-la)*t*2 : lb+(lc-lb)*(t-.5)*2) : la+(lb-la)*t) });
+      }
+    }
+    dense.push(out);
+  });
+  // 2) 투명도 겹침으로 생기는 끊김/구슬 무늬를 없애기 위해, 불투명하게 이어 그린 뒤 레이어째로 합성한다
+  const lay = INK.laserLayer || (INK.laserLayer = document.createElement('canvas'));
+  if(lay.width!==cv.width || lay.height!==cv.height){ lay.width = cv.width; lay.height = cv.height; }
+  const lc = lay.getContext('2d');
+  const pass = (color, wf, minW, alpha)=>{
+    lc.clearRect(0,0,lay.width,lay.height); lc.lineCap = 'round'; lc.lineJoin = 'round'; lc.strokeStyle = color; lc.fillStyle = color;
+    dense.forEach(o=>{
+      if(o.length===1){ const q=o[0]; if(q.l>0){ lc.beginPath(); lc.arc(q.x,q.y,(minW+wf*q.l)*dpr/2,0,7); lc.fill(); } return; }
+      for(let i=1;i<o.length;i++){
+        const q=o[i]; if(q.l<=0) continue;
+        lc.lineWidth = (minW+wf*Math.pow(q.l,.85))*dpr;
+        lc.beginPath(); lc.moveTo(o[i-1].x,o[i-1].y); lc.lineTo(q.x,q.y); lc.stroke();
+      }
+    });
+    ctx.globalAlpha = alpha; ctx.drawImage(lay,0,0);
+  };
+  ctx.save();
+  pass('#ff3b3b', 11, 4, .28);     // 바깥 빛
+  pass('#ff2b2b', 5.5, 1.5, 1);    // 붉은 심
+  pass('#ffe3e3', 2.2, .6, 1);     // 하얀 중심선
   const head = INK.laserLast;
   if(INK.laserHeld===qid && head){           // 펜을 대고 있는 동안 끝에 빛나는 점
     ctx.globalAlpha = 1; ctx.shadowColor = '#ff4d4d'; ctx.shadowBlur = 14*dpr; ctx.fillStyle = '#ff2b2b';
-    ctx.beginPath(); ctx.arc(head.x*W, head.y*W, 5*dpr, 0, Math.PI*2); ctx.fill();
-    ctx.shadowBlur = 0; ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(head.x*W, head.y*W, 2*dpr, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(head.x*W, head.y*W, 4.5*dpr, 0, Math.PI*2); ctx.fill();
+    ctx.shadowBlur = 0; ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(head.x*W, head.y*W, 1.8*dpr, 0, Math.PI*2); ctx.fill();
   }
   ctx.restore();
 }
@@ -9808,7 +9838,8 @@ function inkBind(cv, qid){
       inkLaserKick(); return;
     }
     const evs = e.getCoalescedEvents ? e.getCoalescedEvents() : [e];
-    (evs.length?evs:[e]).forEach(ev=>{ const [x,y] = pos(ev); cur.p.push(x,y); });
+    const minD = 0.8/(cv.getBoundingClientRect().width||1);
+    (evs.length?evs:[e]).forEach(ev=>{ const [x,y] = pos(ev); const n = cur.p.length; if(n>=2 && Math.hypot(x-cur.p[n-2], y-cur.p[n-1])<minD) return; cur.p.push(x,y); });   // 손떨림 수준의 촘촘한 점은 버려 곡선이 울퉁불퉁해지지 않게
     if(cur.line){ const n = cur.p.length; const ex = cur.p[n-2], ey = cur.p[n-1]; cur.p.length = 2; cur.p.push(ex,ey); }   // 직선 보정 중에는 끝점만 따라간다
     inkRedraw(qid);
     clearTimeout(holdT);
