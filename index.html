@@ -475,21 +475,32 @@
 .ink-cv{position:absolute; left:0; top:0; width:100%; height:100%; z-index:3; pointer-events:none; touch-action:auto;}
 #solve-body.ink-on .ink-cv{pointer-events:auto; touch-action:pan-y; cursor:crosshair;}
 #solve-body.ink-on.ink-finger .ink-cv{touch-action:none;}
-#solve-body.ink-on.ink-eraser .ink-cv{cursor:cell;}
-.ink-bar{display:flex; flex-wrap:wrap; gap:6px; align-items:center; margin-top:9px;}
-.ink-bar button{border:1px solid var(--border); background:var(--card); color:var(--ink); border-radius:999px; padding:6px 11px; font-size:12.5px; font-weight:600; cursor:pointer; font-family:inherit;}
+#solve-body.ink-on.ink-lasso .ink-cv{cursor:crosshair;}
+#solve-body.ink-on.ink-eraser .ink-cv{cursor:none;}
+.ink-bar{display:flex; flex-wrap:wrap; gap:6px; align-items:center; margin-top:9px; padding-bottom:2px;}
+@media(max-width:760px){.ink-bar{flex-wrap:nowrap; overflow-x:auto; scrollbar-width:none;} .ink-bar .ink-tools{flex-wrap:nowrap;}}
+.ink-bar::-webkit-scrollbar{display:none;}
+.ink-bar > *{flex-shrink:0;}
+.ink-bar button{border:1px solid var(--border); background:var(--card); color:var(--ink); border-radius:999px; padding:6px 11px; font-size:12.5px; font-weight:600; cursor:pointer; font-family:inherit; white-space:nowrap;}
+.ink-bar button:disabled{opacity:.4; cursor:default;}
 .ink-bar button.on{background:var(--brand); border-color:var(--brand); color:#fff;}
 .ink-bar .ink-tools{display:none; gap:6px; align-items:center; flex-wrap:wrap;}
 #solve-body.ink-on .ink-tools{display:inline-flex;}
-.ink-bar .ink-dot{width:26px; height:26px; padding:0; border-radius:50%; border:2px solid #fff; box-shadow:0 0 0 1px var(--border);}
+.ink-bar .ink-grp{display:inline-flex; gap:2px; background:var(--paper-line); border-radius:999px; padding:3px;}
+.ink-bar .ink-tb{display:inline-flex; align-items:center; gap:4px; border:none; background:transparent; padding:6px 10px; min-height:34px; color:var(--ink-soft);}
+.ink-bar .ink-tb.on{background:var(--card); color:var(--brand); box-shadow:0 1px 3px rgba(0,0,0,.14);}
+.ink-bar .ink-ctx{display:inline-flex; gap:6px; align-items:center;}
+.ink-bar .ink-dot{width:26px; height:26px; padding:0; border-radius:50%; border:2px solid #fff; box-shadow:0 0 0 1px var(--border); display:inline-block;}
 .ink-bar .ink-dot.on{box-shadow:0 0 0 2px var(--brand);}
+.ink-bar .ink-cc{position:relative; overflow:hidden; background:conic-gradient(#f43f5e,#f59e0b,#84cc16,#06b6d4,#6366f1,#d946ef,#f43f5e); cursor:pointer;}
+.ink-bar .ink-cc input{position:absolute; inset:-6px; width:42px; height:42px; opacity:0; cursor:pointer; padding:0; border:0;}
 .ink-bar .ink-sep{width:1px; height:20px; background:var(--border); margin:0 2px;}
-.ink-bar .ink-wd{width:34px; height:28px; padding:0; display:inline-flex; align-items:center; justify-content:center;}
-.ink-bar .ink-wd i{display:block; width:18px; background:var(--ink); border-radius:3px;}
-.ink-bar .ink-wd.on{background:var(--card); border-color:var(--brand); box-shadow:0 0 0 1px var(--brand);}
-.ink-bar .ink-wd.on i{background:var(--brand);}
-.ink-bar .ink-hlc{display:none; gap:5px; align-items:center;}
+.ink-bar .ink-hlc{gap:5px;}
 .ink-bar .ink-hdot{width:22px; height:22px;}
+.ink-bar .ink-sz input{width:96px; accent-color:var(--brand); margin:0;}
+.ink-bar .ink-szv{width:28px; height:28px; display:inline-flex; align-items:center; justify-content:center;}
+.ink-bar .ink-szv i{display:block; border-radius:50%; min-width:3px; min-height:3px;}
+#ink-ecur{position:fixed; left:0; top:0; border:1.5px solid rgba(40,40,40,.75); box-shadow:0 0 0 1px rgba(255,255,255,.7); background:rgba(255,255,255,.18); border-radius:50%; pointer-events:none; z-index:400; display:none; box-sizing:border-box;}
 /* 풀이 화면: 모달이 아니라 화면 전체를 쓰는 집중 모드 */
 #solve-modal{ background:var(--paper); padding:0; align-items:stretch; justify-content:center; z-index:80; }
 #solve-modal .modal.solve-page{ width:100%; max-width:none; max-height:none; height:100%; border-radius:0; padding:0; background:transparent; overflow-y:auto; animation:none; box-shadow:none; -webkit-overflow-scrolling:touch; }
@@ -12406,9 +12417,16 @@ const INK = {
   tool: 'pen',
   color: '#1f2937',
   finger: false,
-  wi: 1,
+  w: 2.4, // 펜 굵기(px)
+  hw: 14, // 형광펜 굵기
+  ew: 14, // 지우개 반지름
   hi: 0,
   snap: true,
+  pressure: true, // 애플펜슬 등 필압
+  erMode: 'stroke', // stroke: 획 단위 · part: 닿은 부분만
+  sel: null, // 올가미로 고른 획 {qid, items}
+  lasso: null,
+  base: null,
   redo: [],
   data: {},
   undo: [],
@@ -12417,22 +12435,29 @@ const INK = {
   cvs: {},
   ro: null
 };
-const INK_COLORS = ['#1f2937', '#2563eb', '#dc2626', '#16a34a', '#9333ea'];
-const INK_WIDTHS = [1.4, 2.4, 4.2]; // 가늘게 · 보통 · 굵게
+const INK_COLORS = ['#1f2937', '#2563eb', '#dc2626', '#16a34a', '#9333ea', '#ea580c', '#0891b2', '#db2777'];
+const INK_WIDTHS = [1.4, 2.4, 4.2]; // (예전 저장값 호환용)
 const INK_HL = ['#facc15', '#fb7185', '#4ade80']; // 형광펜 색
+const INK_RANGE = { pen: [0.8, 9, 0.2], hl: [8, 32, 1], eraser: [6, 40, 1] };
 function inkPrefsLoad() {
   try {
     const o = JSON.parse(localStorage.getItem('ink-prefs') || '{}');
-    if (INK_COLORS.includes(o.color)) INK.color = o.color;
-    if (o.wi >= 0 && o.wi < 3) INK.wi = o.wi;
+    if (/^#[0-9a-f]{6}$/i.test(o.color || '')) INK.color = o.color;
+    if (o.w >= 0.8 && o.w <= 9) INK.w = o.w;
+    else if (o.wi >= 0 && o.wi < 3) INK.w = INK_WIDTHS[o.wi];
+    if (o.hw >= 8 && o.hw <= 32) INK.hw = o.hw;
+    if (o.ew >= 6 && o.ew <= 40) INK.ew = o.ew;
     if (o.hi >= 0 && o.hi < 3) INK.hi = o.hi;
-    if (typeof o.finger === 'boolean') INK.finger = o.finger;
-    if (typeof o.snap === 'boolean') INK.snap = o.snap;
+    ['finger', 'snap', 'pressure'].forEach(k => {
+      if (typeof o[k] === 'boolean') INK[k] = o[k];
+    });
+    if (o.erMode === 'part' || o.erMode === 'stroke') INK.erMode = o.erMode;
   } catch (e) {}
 }
 function inkPrefsSave() {
   try {
-    localStorage.setItem('ink-prefs', JSON.stringify({ color: INK.color, wi: INK.wi, hi: INK.hi, finger: INK.finger, snap: INK.snap }));
+    const { color, w, hw, ew, hi, finger, snap, pressure, erMode } = INK;
+    localStorage.setItem('ink-prefs', JSON.stringify({ color, w, hw, ew, hi, finger, snap, pressure, erMode }));
   } catch (e) {}
 }
 function inkKey(tid) {
@@ -12464,12 +12489,25 @@ function inkClearStored(tid) {
     localStorage.removeItem(inkKey(tid));
   } catch (e) {}
 }
+const INK_SVG = {
+  pen: '<path d="M3 21l3.6-.9L19.4 7.3a2.2 2.2 0 000-3.1l-.6-.6a2.2 2.2 0 00-3.1 0L2.9 16.4z"/><path d="M14 6.5l3.5 3.5"/>',
+  hl: '<path d="M4 20l4.2-1L18.5 8.7l-3.2-3.2L5 15.8z"/><path d="M13.5 7.3l3.2 3.2M3 22h7"/>',
+  er: '<path d="M20 20H9.5L4.3 14.8a2 2 0 010-2.8l7.7-7.7a2 2 0 012.8 0l5 5a2 2 0 010 2.8L13 20"/><path d="M8.5 8.5l7 7"/>',
+  lasso: '<ellipse cx="12" cy="9.5" rx="8.5" ry="5.8" stroke-dasharray="3.2 2.6"/><path d="M8.6 14.6c-.3 2.8 1.2 4.6 3.9 5.4"/>',
+  laser: '<circle cx="12" cy="12" r="2.6" fill="currentColor"/><path d="M12 3.5v3M12 17.5v3M3.5 12h3M17.5 12h3M6 6l2.1 2.1M15.9 15.9L18 18M18 6l-2.1 2.1M8.1 15.9L6 18"/>'
+};
+function inkIcon(k) {
+  return `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${INK_SVG[k]}</svg>`;
+}
 function inkInit(tid) {
   INK.on = false;
   INK.tool = 'pen';
   INK.color = INK_COLORS[0];
   INK.undo = [];
   INK.redo = [];
+  INK.sel = null;
+  INK.lasso = null;
+  INK.base = null;
   inkPrefsLoad();
   INK.key = inkKey(tid);
   INK.cvs = {};
@@ -12482,7 +12520,7 @@ function inkInit(tid) {
   inkLoad();
   const body = $('solve-body');
   if (!body) return;
-  body.classList.remove('ink-on', 'ink-finger', 'ink-eraser');
+  body.classList.remove('ink-on', 'ink-finger', 'ink-eraser', 'ink-lasso');
   const prog = $('solve-progress');
   if (prog) {
     const bar = document.createElement('div');
@@ -12490,19 +12528,34 @@ function inkInit(tid) {
     bar.id = 'ink-bar';
     bar.innerHTML = `<button type="button" id="ink-toggle" onclick="inkToggle()">✏️ 필기</button>
       <span class="ink-tools">
-        ${INK_COLORS.map(c => `<button type="button" class="ink-dot" data-c="${c}" style="background:${c}" onclick="inkPickColor('${c}')" title="펜 색"></button>`).join('')}
+        <span class="ink-grp">
+          <button type="button" class="ink-tb" id="ink-pen" onclick="inkSetTool('pen')" title="펜">${inkIcon('pen')}<span>펜</span></button>
+          <button type="button" class="ink-tb" id="ink-hl" onclick="inkPickTool('hl')" title="형광펜">${inkIcon('hl')}<span>형광펜</span></button>
+          <button type="button" class="ink-tb" id="ink-er" onclick="inkPickTool('eraser')" title="지우개">${inkIcon('er')}<span>지우개</span></button>
+          <button type="button" class="ink-tb" id="ink-lasso" onclick="inkPickTool('lasso')" title="올가미: 동그라미로 둘러 선택 → 옮기기·색 바꾸기·삭제">${inkIcon('lasso')}<span>올가미</span></button>
+          <button type="button" class="ink-tb" id="ink-laser" onclick="inkPickTool('laser')" title="굿노트 레이저 포인터처럼, 그린 선이 잠깐 뒤 사라져요">${inkIcon('laser')}<span>레이저</span></button>
+        </span>
         <span class="ink-sep"></span>
-        ${INK_WIDTHS.map((w, i) => `<button type="button" class="ink-wd" data-i="${i}" onclick="inkPickWidth(${i})" title="펜 굵기"><i style="height:${Math.max(2, w)}px"></i></button>`).join('')}
+        <span class="ink-ctx" data-for="pen,lasso" id="ink-colors">
+          ${INK_COLORS.map(c => `<button type="button" class="ink-dot" data-c="${c}" style="background:${c}" onclick="inkPickColor('${c}')" title="색"></button>`).join('')}
+          <label class="ink-dot ink-cc" id="ink-cc-l" title="직접 고른 색"><input type="color" id="ink-cc" value="#1f2937" oninput="inkPickColor(this.value)"></label>
+        </span>
+        <span class="ink-ctx ink-hlc" data-for="hl">${INK_HL.map((c, i) => `<button type="button" class="ink-dot ink-hdot" data-i="${i}" style="background:${c}" onclick="inkPickHl(${i})" title="형광펜 색"></button>`).join('')}</span>
+        <span class="ink-ctx ink-sz" data-for="pen,hl,eraser">
+          <input type="range" id="ink-size" aria-label="굵기" oninput="inkSetSize(this.value)">
+          <span class="ink-szv"><i id="ink-szp"></i></span>
+        </span>
+        <button type="button" class="ink-ctx" data-for="eraser" id="ink-ermode" onclick="inkToggleErMode()" title="획 전체를 지울지, 닿은 부분만 지울지 고릅니다"></button>
+        <span class="ink-ctx" data-for="lasso" id="ink-selbar">
+          <button type="button" id="ink-seldel" onclick="inkSelDelete()">선택 삭제</button>
+        </span>
         <span class="ink-sep"></span>
-        <button type="button" id="ink-hl" onclick="inkPickTool('hl')">형광펜</button>
-        <span class="ink-hlc">${INK_HL.map((c, i) => `<button type="button" class="ink-dot ink-hdot" data-i="${i}" style="background:${c}" onclick="inkPickHl(${i})" title="형광펜 색"></button>`).join('')}</span>
-        <button type="button" id="ink-er" onclick="inkPickTool('eraser')">지우개</button>
-        <button type="button" id="ink-laser" onclick="inkPickTool('laser')" title="굿노트 레이저 포인터처럼, 그린 선이 잠깐 뒤 사라져요">레이저</button>
-        <span class="ink-sep"></span>
-        <button type="button" onclick="inkUndo()" title="Ctrl+Z">↶</button>
-        <button type="button" onclick="inkRedo()" title="Ctrl+Shift+Z">↷</button>
+        <button type="button" id="ink-undo" onclick="inkUndo()" title="되돌리기 (Ctrl+Z · 두 손가락 탭)">↶</button>
+        <button type="button" id="ink-redo" onclick="inkRedo()" title="다시 실행 (Ctrl+Shift+Z · 세 손가락 탭)">↷</button>
         <button type="button" onclick="inkClearAll()">전체 지우기</button>
-        <button type="button" id="ink-snap" onclick="inkToggleSnap()" title="펜을 멈추고 잠깐 누르고 있으면 직선으로 바로잡아요">직선 보정</button>
+        <span class="ink-sep"></span>
+        <button type="button" id="ink-snap" onclick="inkToggleSnap()" title="펜을 멈추고 잠깐 누르고 있으면 직선·원·사각형·삼각형으로 바로잡아요">도형 보정</button>
+        <button type="button" id="ink-pr" onclick="inkTogglePressure()" title="애플펜슬 등 필압(세게 누르면 굵게) 사용">필압</button>
         <button type="button" id="ink-fg" onclick="inkToggleFinger()">손가락도 쓰기</button>
       </span>`;
     prog.appendChild(bar);
@@ -12513,12 +12566,16 @@ function inkInit(tid) {
     const qid = wrap.id.replace('qwrap_', '');
     const cv = document.createElement('canvas');
     cv.className = 'ink-cv';
+    try {
+      cv.getContext('2d', { desynchronized: true }); // 지원 기기에서는 화면에 바로 그려 지연을 줄인다
+    } catch (e) {}
     wrap.appendChild(cv);
     INK.cvs[qid] = cv;
     inkBind(cv, qid);
     inkFit(qid);
     if (INK.ro) INK.ro.observe(wrap);
   });
+  inkRefreshBar();
 }
 function inkFit(qid) {
   const cv = INK.cvs[qid];
@@ -12527,15 +12584,73 @@ function inkFit(qid) {
   if (!r.width || !r.height) return;
   let dpr = Math.min(Math.max(window.devicePixelRatio || 1, 2), 3); // 저해상도 화면에서도 선이 각지지 않게 2배 이상
   // 문항이 많으면 캔버스 메모리가 폭증하므로(특히 폰) 전체 픽셀 예산 안에서 배율을 낮춘다
-  const n = Math.max(1, Object.keys(INK.cvs).length), budget = 40e6;
+  const n = Math.max(1, Object.keys(INK.cvs).length),
+    budget = 40e6;
   while (dpr > 1 && n * r.width * r.height * dpr * dpr > budget) dpr -= 0.25;
   const w = Math.round(r.width * dpr),
     h = Math.round(r.height * dpr);
   if (cv.width !== w || cv.height !== h) {
     cv.width = w;
     cv.height = h;
+    if (INK.base && INK.base.qid === qid) INK.base = null;
   }
   inkRedraw(qid);
+}
+/* 필압이 있는 획은 점마다 굵기가 다르다 (q: 0~100). 없으면 일정한 굵기 */
+function inkPW(st, i) {
+  return st.q && st.q[i] != null ? st.w * (0.42 + 1.12 * (st.q[i] / 100)) : st.w;
+}
+function inkDrawVar(ctx, st, W, dpr) {
+  const pts = st.p,
+    n = pts.length / 2;
+  const X = i => pts[Math.max(0, Math.min(n - 1, i)) * 2] * W,
+    Y = i => pts[Math.max(0, Math.min(n - 1, i)) * 2 + 1] * W;
+  ctx.fillStyle = st.c;
+  if (n === 1) {
+    ctx.beginPath();
+    ctx.arc(X(0), Y(0), (inkPW(st, 0) * dpr) / 2, 0, 6.2832);
+    ctx.fill();
+    return;
+  }
+  let px = X(0),
+    py = Y(0),
+    open = false,
+    qw = 0;
+  const flush = () => {
+    if (open) ctx.stroke();
+    open = false;
+  };
+  for (let i = 0; i < n - 1; i++) {
+    const x0 = X(i - 1), y0 = Y(i - 1), x1 = X(i), y1 = Y(i), x2 = X(i + 1), y2 = Y(i + 1), x3 = X(i + 2), y3 = Y(i + 2);
+    const c1x = x1 + (x2 - x0) / 6, c1y = y1 + (y2 - y0) / 6, c2x = x2 - (x3 - x1) / 6, c2y = y2 - (y3 - y1) / 6;
+    const w1 = inkPW(st, i) * dpr, w2 = inkPW(st, i + 1) * dpr;
+    const k = st.line ? 1 : Math.max(1, Math.min(10, Math.ceil(Math.hypot(x2 - x1, y2 - y1) / (3 * dpr))));
+    for (let s = 1; s <= k; s++) {
+      const t = s / k, u = 1 - t;
+      let nx, ny;
+      if (st.line) {
+        nx = x2;
+        ny = y2;
+      } else {
+        nx = u * u * u * x1 + 3 * u * u * t * c1x + 3 * u * t * t * c2x + t * t * t * x2;
+        ny = u * u * u * y1 + 3 * u * u * t * c1y + 3 * u * t * t * c2y + t * t * t * y2;
+      }
+      const w = w1 + (w2 - w1) * ((s - 0.5) / k),
+        qv = Math.round(w * 3) / 3; // 비슷한 굵기끼리는 한 번에 그려 호출 수를 줄인다
+      if (!open || Math.abs(qv - qw) > 0.01) {
+        flush();
+        ctx.lineWidth = qv;
+        qw = qv;
+        ctx.beginPath();
+        ctx.moveTo(px, py);
+        open = true;
+      }
+      ctx.lineTo(nx, ny);
+      px = nx;
+      py = ny;
+    }
+  }
+  flush();
 }
 function inkDrawStroke(ctx, st, W, dpr) {
   const pts = st.p;
@@ -12544,8 +12659,16 @@ function inkDrawStroke(ctx, st, W, dpr) {
   ctx.lineCap = 'round';
   ctx.lineJoin = 'round';
   ctx.strokeStyle = st.c;
+  if (st.h) {
+    ctx.globalAlpha = 0.34;
+    ctx.globalCompositeOperation = 'multiply'; // 형광펜 아래 글씨가 어두워지지 않고 비쳐 보이게
+  }
   ctx.lineWidth = st.w * dpr;
-  ctx.globalAlpha = st.h ? 0.32 : 1;
+  if (st.q && !st.h && st.q.length * 2 === pts.length) {
+    inkDrawVar(ctx, st, W, dpr);
+    ctx.restore();
+    return;
+  }
   ctx.beginPath();
   ctx.moveTo(pts[0] * W, pts[1] * W);
   if (pts.length === 2) ctx.lineTo(pts[0] * W + 0.1, pts[1] * W);
@@ -12557,19 +12680,189 @@ function inkDrawStroke(ctx, st, W, dpr) {
       X = i => pts[Math.max(0, Math.min(n - 1, i)) * 2] * W,
       Y = i => pts[Math.max(0, Math.min(n - 1, i)) * 2 + 1] * W;
     for (let i = 0; i < n - 1; i++) {
-      const x0 = X(i - 1),
-        y0 = Y(i - 1),
-        x1 = X(i),
-        y1 = Y(i),
-        x2 = X(i + 1),
-        y2 = Y(i + 1),
-        x3 = X(i + 2),
-        y3 = Y(i + 2);
+      const x0 = X(i - 1), y0 = Y(i - 1), x1 = X(i), y1 = Y(i), x2 = X(i + 1), y2 = Y(i + 1), x3 = X(i + 2), y3 = Y(i + 2);
       ctx.bezierCurveTo(x1 + (x2 - x0) / 6, y1 + (y2 - y0) / 6, x2 - (x3 - x1) / 6, y2 - (y3 - y1) / 6, x2, y2);
     }
   }
   ctx.stroke();
   ctx.restore();
+}
+/* ---------- 도형 자동 보정 (펜을 멈추고 잠깐 누르고 있을 때) ---------- */
+function inkDP(P, a, b, eps, out) {
+  let dmax = 0,
+    idx = -1;
+  const ax = P[a][0], ay = P[a][1], dx = P[b][0] - ax, dy = P[b][1] - ay, L = Math.hypot(dx, dy);
+  for (let i = a + 1; i < b; i++) {
+    const d = L < 1 ? Math.hypot(P[i][0] - ax, P[i][1] - ay) : Math.abs((P[i][0] - ax) * dy - (P[i][1] - ay) * dx) / L;
+    if (d > dmax) {
+      dmax = d;
+      idx = i;
+    }
+  }
+  if (idx > 0 && dmax > eps) {
+    inkDP(P, a, idx, eps, out);
+    out.push(idx);
+    inkDP(P, idx, b, eps, out);
+  }
+}
+function inkRecognize(pts, W) {
+  const n = pts.length / 2;
+  if (n < 4) return null;
+  const P = [];
+  let len = 0, x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
+  for (let i = 0; i < n; i++) {
+    const x = pts[i * 2] * W, y = pts[i * 2 + 1] * W;
+    if (i) len += Math.hypot(x - P[i - 1][0], y - P[i - 1][1]);
+    P.push([x, y]);
+    x0 = Math.min(x0, x); y0 = Math.min(y0, y); x1 = Math.max(x1, x); y1 = Math.max(y1, y);
+  }
+  if (len < 24) return null;
+  const A = P[0], B = P[n - 1], chord = Math.hypot(B[0] - A[0], B[1] - A[1]);
+  const bw = x1 - x0, bh = y1 - y0, diag = Math.hypot(bw, bh);
+  const out = arr => arr.map(q => [q[0] / W, q[1] / W]).flat();
+  if (chord >= 0.22 * len) {
+    // 열린 획: 거의 곧으면 직선 (가로·세로·45°에 가까우면 그 각도로)
+    if (chord / len < 0.88 || chord < 24) return null;
+    let ex = B[0], ey = B[1];
+    const ang = Math.atan2(ey - A[1], ex - A[0]), step = Math.PI / 4, snapped = Math.round(ang / step) * step;
+    if (Math.abs(ang - snapped) < 0.09) {
+      ex = A[0] + Math.cos(snapped) * chord;
+      ey = A[1] + Math.sin(snapped) * chord;
+    }
+    return { p: out([A, [ex, ey]]), line: true };
+  }
+  // 닫힌 획: 타원/원 → 다각형(삼각형·사각형…) 순으로 시도
+  if (bw < 14 || bh < 14) return null;
+  const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2, a = bw / 2, b = bh / 2;
+  let err = 0;
+  P.forEach(q => {
+    err += Math.abs(Math.hypot((q[0] - cx) / a, (q[1] - cy) / b) - 1);
+  });
+  err /= n;
+  if (err < 0.1) {
+    let ra = a, rb = b;
+    if (Math.abs(a - b) / Math.max(a, b) < 0.15) ra = rb = (a + b) / 2;
+    const e = [];
+    for (let i = 0; i <= 72; i++) e.push([cx + ra * Math.cos((i / 72) * 6.2832 - 1.5708), cy + rb * Math.sin((i / 72) * 6.2832 - 1.5708)]);
+    return { p: out(e), line: false };
+  }
+  const idx = [0];
+  inkDP(P, 0, n - 1, Math.max(6, diag * 0.06), idx);
+  idx.push(n - 1);
+  let V = idx.map(i => P[i]);
+  if (Math.hypot(V[V.length - 1][0] - V[0][0], V[V.length - 1][1] - V[0][1]) < diag * 0.25) V.pop();
+  for (let changed = true; changed && V.length > 3; ) {
+    // 거의 일직선인 꼭짓점(시작점이 변 한가운데일 때 등)은 뺀다
+    changed = false;
+    for (let k = 0; k < V.length; k++) {
+      const p = V[(k + V.length - 1) % V.length], c = V[k], q = V[(k + 1) % V.length];
+      const a1 = Math.atan2(c[1] - p[1], c[0] - p[0]), a2 = Math.atan2(q[1] - c[1], q[0] - c[0]);
+      let d = Math.abs(a2 - a1);
+      if (d > Math.PI) d = 6.2832 - d;
+      if (d < 0.45) {
+        V.splice(k, 1);
+        changed = true;
+        break;
+      }
+    }
+  }
+  if (V.length < 3 || V.length > 6) return null;
+  let area = 0;
+  for (let k = 0; k < V.length; k++) {
+    const c = V[k], q = V[(k + 1) % V.length];
+    area += c[0] * q[1] - q[0] * c[1];
+  }
+  if (Math.abs(area) / 2 < 0.25 * bw * bh) return null;
+  if (V.length === 4) {
+    // 변이 거의 가로·세로면 반듯한 직사각형으로
+    const axis = V.every((c, k) => {
+      const q = V[(k + 1) % 4], ang = Math.abs(Math.atan2(q[1] - c[1], q[0] - c[0])) % (Math.PI / 2);
+      return Math.min(ang, Math.PI / 2 - ang) < 0.26;
+    });
+    if (axis) {
+      V = [[x0, y0], [x1, y0], [x1, y1], [x0, y1]];
+    }
+  }
+  return { p: out([...V, V[0]]), line: true };
+}
+/* ---------- 다시 그리기 ---------- */
+function inkBox(items, W) {
+  let x0 = 9, y0 = 1e9, x1 = -9, y1 = -1e9;
+  items.forEach(st => {
+    const pad = (st.h ? st.w / 2 : (st.w * 1.2) / 2) / W;
+    for (let i = 0; i < st.p.length; i += 2) {
+      x0 = Math.min(x0, st.p[i] - pad);
+      x1 = Math.max(x1, st.p[i] + pad);
+      y0 = Math.min(y0, st.p[i + 1] - pad);
+      y1 = Math.max(y1, st.p[i + 1] + pad);
+    }
+  });
+  return x0 > x1 ? null : [x0, y0, x1, y1];
+}
+function inkRedraw(qid) {
+  const cv = INK.cvs[qid];
+  if (!cv) return;
+  const ctx = cv.getContext('2d');
+  ctx.clearRect(0, 0, cv.width, cv.height);
+  const r = cv.parentElement.getBoundingClientRect();
+  const dpr = cv.width / Math.max(1, r.width);
+  (INK.data[qid] || []).forEach(st => inkDrawStroke(ctx, st, r.width * dpr, dpr));
+  const W = cv.width;
+  const brand = getComputedStyle(document.documentElement).getPropertyValue('--brand').trim() || '#2563eb';
+  if (INK.sel && INK.sel.qid === qid && INK.sel.items.length) {
+    const b = inkBox(INK.sel.items, r.width);
+    if (b) {
+      ctx.save();
+      ctx.fillStyle = 'rgba(37,99,235,.07)';
+      ctx.strokeStyle = brand;
+      ctx.lineWidth = 1.5 * dpr;
+      ctx.setLineDash([6 * dpr, 4 * dpr]);
+      ctx.beginPath();
+      ctx.rect(b[0] * W, b[1] * W, (b[2] - b[0]) * W, (b[3] - b[1]) * W);
+      ctx.fill();
+      ctx.stroke();
+      ctx.restore();
+    }
+  }
+  if (INK.lasso && INK.lasso.qid === qid && INK.lasso.pts.length > 1) {
+    const L = INK.lasso.pts;
+    ctx.save();
+    ctx.strokeStyle = brand;
+    ctx.fillStyle = 'rgba(37,99,235,.06)';
+    ctx.lineWidth = 1.5 * dpr;
+    ctx.setLineDash([5 * dpr, 4 * dpr]);
+    ctx.beginPath();
+    ctx.moveTo(L[0][0] * W, L[0][1] * W);
+    for (let i = 1; i < L.length; i++) ctx.lineTo(L[i][0] * W, L[i][1] * W);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    ctx.restore();
+  }
+}
+/* 쓰는 중인 획만 다시 그린다 (이미 쓴 획은 한 장으로 합쳐 둔 것을 얹는다) */
+function inkBuildBase(qid, skip) {
+  INK.base = null;
+  const cv = INK.cvs[qid],
+    list = (INK.data[qid] || []).filter(s => s !== skip);
+  if (!cv || !list.length) return;
+  const b = document.createElement('canvas');
+  b.width = cv.width;
+  b.height = cv.height;
+  const r = cv.parentElement.getBoundingClientRect(),
+    dpr = cv.width / Math.max(1, r.width),
+    ctx = b.getContext('2d');
+  list.forEach(st => inkDrawStroke(ctx, st, cv.width, dpr));
+  INK.base = { qid, cv: b };
+}
+function inkPaintLive(qid, st) {
+  const cv = INK.cvs[qid];
+  if (!cv) return;
+  const ctx = cv.getContext('2d');
+  ctx.clearRect(0, 0, cv.width, cv.height);
+  if (INK.base && INK.base.qid === qid) ctx.drawImage(INK.base.cv, 0, 0);
+  const r = cv.parentElement.getBoundingClientRect();
+  inkDrawStroke(ctx, st, cv.width, cv.width / Math.max(1, r.width));
 }
 /* 레이저 포인터 (굿노트 방식): 문항 캔버스가 아니라 화면 전체 위에 그려서 문제 사이를 가로질러도 끊기지 않는다.
    저장되지 않고, 끝(꼬리)부터 가늘어지며 사라진다. */
@@ -12718,15 +13011,6 @@ function inkLaserTick() {
 function inkLaserKick() {
   if (!INK.raf) INK.raf = requestAnimationFrame(inkLaserTick);
 }
-function inkRedraw(qid) {
-  const cv = INK.cvs[qid];
-  if (!cv) return;
-  const ctx = cv.getContext('2d');
-  ctx.clearRect(0, 0, cv.width, cv.height);
-  const r = cv.parentElement.getBoundingClientRect();
-  const dpr = cv.width / Math.max(1, r.width);
-  (INK.data[qid] || []).forEach(st => inkDrawStroke(ctx, st, r.width * dpr, dpr));
-}
 /* 입력 필터: 느리게 움직일 땐 손떨림·샘플링 잡음을 강하게 걸러 매끈하게, 빠르게 움직일 땐 거의 그대로 따라간다 */
 function lzTime(ev) {
   const t = ev && ev.timeStamp; // performance.now()와 같은 기준일 때만 사용 (아니면 현재 시각)
@@ -12751,49 +13035,248 @@ function inkLaserMove(e) {
   (evs.length ? evs : [e]).forEach(ev => inkLaserPush(ev.clientX, ev.clientY, lzTime(ev))); // 묶여 온 입력도 각자의 시각을 써서 굵기가 뭉텅이로 변하지 않게
   inkLaserKick();
 }
+const inkClone = st => ({ ...st, p: st.p.slice(), q: st.q ? st.q.slice() : undefined });
+function inkSegDist(px, py, ax, ay, bx, by) {
+  const dx = bx - ax, dy = by - ay, L = dx * dx + dy * dy;
+  let t = L ? ((px - ax) * dx + (py - ay) * dy) / L : 0;
+  t = t < 0 ? 0 : t > 1 ? 1 : t;
+  return Math.hypot(px - (ax + t * dx), py - (ay + t * dy));
+}
+function inkHits(st, x, y, rad) {
+  const p = st.p,
+    r = rad + (st.w * (st.h ? 0.5 : 0.6)) / INK.W;
+  if (p.length === 2) return Math.hypot(p[0] - x, p[1] - y) < r;
+  for (let i = 0; i < p.length - 2; i += 2) if (inkSegDist(x, y, p[i], p[i + 1], p[i + 2], p[i + 3]) < r) return true;
+  return false;
+}
+/* 닿은 부분만 지우기: 지우개 원 안의 점을 빼고 남은 조각들로 나눈다 */
+function inkSplit(st, x, y, rad) {
+  let p = st.p,
+    q = st.q;
+  if (st.line && p.length >= 4) {
+    // 직선·도형은 점이 듬성듬성하니 촘촘히 나눠 둔다
+    const np = [], nq = [];
+    for (let i = 0; i < p.length - 2; i += 2) {
+      const d = Math.hypot(p[i + 2] - p[i], p[i + 3] - p[i + 1]), k = Math.max(1, Math.ceil(d / 0.004));
+      for (let s = 0; s < k; s++) np.push(p[i] + ((p[i + 2] - p[i]) * s) / k, p[i + 1] + ((p[i + 3] - p[i + 1]) * s) / k);
+    }
+    np.push(p[p.length - 2], p[p.length - 1]);
+    p = np;
+    q = null;
+  }
+  const hw = (st.w * (st.h ? 0.5 : 0.6)) / INK.W, r = rad + hw, n = p.length / 2;
+  const bad = i => Math.hypot(p[i * 2] - x, p[i * 2 + 1] - y) < r;
+  const pieces = [];
+  let cur = null;
+  const close = () => {
+    if (cur && cur.p.length >= 4) pieces.push(cur);
+    cur = null;
+  };
+  const add = i => {
+    cur.p.push(p[i * 2], p[i * 2 + 1]);
+    if (q) cur.q.push(q[i]);
+  };
+  const mk = () => ({ c: st.c, w: st.w, h: st.h, p: [], q: q ? [] : undefined, line: st.line });
+  for (let i = 0; i < n; i++) {
+    if (bad(i)) {
+      close();
+      continue;
+    }
+    if (cur && inkSegDist(x, y, p[i * 2 - 2], p[i * 2 - 1], p[i * 2], p[i * 2 + 1]) < r) close();
+    if (!cur) cur = mk();
+    add(i);
+  }
+  close();
+  pieces.forEach(pc => {
+    if (!pc.q) delete pc.q;
+    if (!pc.line) delete pc.line;
+    if (!pc.h) delete pc.h;
+  });
+  return pieces;
+}
+function inkInPoly(poly, x, y) {
+  let c = false;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const a = poly[i], b = poly[j];
+    if (a[1] > y !== b[1] > y && x < ((b[0] - a[0]) * (y - a[1])) / (b[1] - a[1]) + a[0]) c = !c;
+  }
+  return c;
+}
+function inkEcur(e) {
+  let el = $('ink-ecur');
+  if (!e) {
+    if (el) el.style.display = 'none';
+    return;
+  }
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'ink-ecur';
+    document.body.appendChild(el);
+  }
+  const d = INK.ew * 2;
+  el.style.cssText = `display:block;width:${d}px;height:${d}px;transform:translate(${e.clientX - INK.ew}px,${e.clientY - INK.ew}px)`;
+}
 function inkBind(cv, qid) {
   let cur = null,
+    mode = '', // pen | erase | laser | lasso | drag
+    holdT = 0,
     erased = false,
-    holdT = 0;
-  const pos = e => {
-    const r = cv.getBoundingClientRect();
-    return [(e.clientX - r.left) / r.width, (e.clientY - r.top) / r.width, r];
+    sm = null,
+    anchor = null,
+    lastE = null,
+    drag = null,
+    rafQ = 0,
+    locked = false;
+  const taps = new Map();
+  let tapInfo = null,
+    tapT0 = 0;
+  const rect = () => cv.getBoundingClientRect();
+  const pos = (e, r) => {
+    r = r || rect();
+    return [(e.clientX - r.left) / r.width, (e.clientY - r.top) / r.width];
   };
-  const eraseAt = e => {
-    const [x, y, r] = pos(e);
-    const rad = 12 / r.width;
-    const list = INK.data[qid] || [];
-    const keep = [];
-    list.forEach(st => {
-      let hit = false;
-      for (let i = 0; i < st.p.length && !hit; i += 2) {
-        if (Math.hypot(st.p[i] - x, st.p[i + 1] - y) < rad + (st.h ? 0.01 : 0)) hit = true;
+  const useP = e => INK.pressure && e.pointerType === 'pen' && e.pressure > 0;
+  const paint = () => {
+    rafQ = 0;
+    if (mode === 'pen' && cur) inkPaintLive(qid, cur);
+    else inkRedraw(qid);
+  };
+  const schedule = () => {
+    if (!rafQ) rafQ = requestAnimationFrame(paint);
+  };
+  const flushPaint = () => {
+    if (rafQ) {
+      cancelAnimationFrame(rafQ);
+      rafQ = 0;
+    }
+  };
+  const discardIfTiny = () => {
+    if (mode === 'pen' && cur && cur.p.length <= 4) {
+      const arr = INK.data[qid];
+      if (arr && arr[arr.length - 1] === cur) {
+        arr.pop();
+        INK.undo.pop();
       }
-      if (!hit) keep.push(st);
+      cur = null;
+      mode = '';
+      INK.base = null;
+      clearTimeout(holdT);
+      flushPaint();
+      inkRedraw(qid);
+    }
+  };
+  /* 지우개 */
+  const eraseAt = (e, ev) => {
+    const r = rect();
+    INK.W = r.width;
+    const rad = INK.ew / r.width,
+      [x, y] = pos(ev, r);
+    const list = INK.data[qid] || [];
+    let centers = [[x, y]];
+    if (lastE) {
+      const d = Math.hypot(x - lastE[0], y - lastE[1]), k = Math.min(40, Math.ceil(d / (rad * 0.6)));
+      centers = [];
+      for (let s = 1; s <= k; s++) centers.push([lastE[0] + ((x - lastE[0]) * s) / k, lastE[1] + ((y - lastE[1]) * s) / k]);
+    }
+    lastE = [x, y];
+    let cur2 = list,
+      changed = false;
+    centers.forEach(([cx, cy]) => {
+      if (INK.erMode === 'part') {
+        const next = [];
+        cur2.forEach(st => {
+          if (!inkHits(st, cx, cy, rad)) next.push(st);
+          else {
+            changed = true;
+            inkSplit(st, cx, cy, rad).forEach(pc => next.push(pc));
+          }
+        });
+        cur2 = next;
+      } else {
+        const next = cur2.filter(st => !inkHits(st, cx, cy, rad));
+        if (next.length !== cur2.length) changed = true;
+        cur2 = next;
+      }
     });
-    if (keep.length !== list.length) {
+    if (changed) {
       if (!erased) {
         INK.undo.push({ qid, prev: list.slice() });
         INK.redo = [];
         erased = true;
       }
-      INK.data[qid] = keep;
-      inkRedraw(qid);
+      INK.data[qid] = cur2;
+      schedule();
       inkSaveSoon();
+    }
+  };
+  /* 펜: 입력 필터(느릴수록 손떨림을 강하게 거르고 빠르면 거의 그대로) + 필압 */
+  const addPt = (ev, force) => {
+    const r = rect(),
+      t = ev.timeStamp || performance.now(),
+      pr = useP(ev) && ev.type !== 'pointerup' ? ev.pressure : sm ? sm.q : 0.5; // 펜을 뗄 때의 필압 0은 쓰지 않는다
+    if (!sm) sm = { x: ev.clientX, y: ev.clientY, t, q: pr };
+    else {
+      const dt = Math.max(1, t - sm.t),
+        v = Math.hypot(ev.clientX - sm.x, ev.clientY - sm.y) / dt,
+        lo = ev.pointerType === 'pen' ? 0.55 : 0.34,
+        a = force ? 1 : lo + (0.96 - lo) * Math.min(1, v / 1.1);
+      sm.x += (ev.clientX - sm.x) * a;
+      sm.y += (ev.clientY - sm.y) * a;
+      sm.q += (pr - sm.q) * (force ? 1 : 0.4);
+      sm.t = t;
+    }
+    const x = Math.round(((sm.x - r.left) / r.width) * 1e5) / 1e5,
+      y = Math.round(((sm.y - r.top) / r.width) * 1e5) / 1e5,
+      n = cur.p.length;
+    if (n >= 2 && Math.hypot(x - cur.p[n - 2], y - cur.p[n - 1]) < (force ? 0.2 : 0.8) / r.width) return;
+    cur.p.push(x, y);
+    if (cur.q) cur.q.push(Math.max(0, Math.min(100, Math.round(sm.q * 100))));
+  };
+  /* 두 손가락 탭 = 되돌리기, 세 손가락 탭 = 다시 실행 */
+  cv.addEventListener('pointerdown', e => {
+    if (!INK.on) return;
+    if (e.pointerType === 'pen') INK.sawPen = true;
+    if (e.pointerType !== 'touch') return;
+    if (!taps.size) {
+      tapT0 = performance.now();
+      tapInfo = { n: 0, mv: false };
+    }
+    taps.set(e.pointerId, [e.clientX, e.clientY]);
+    if (tapInfo) tapInfo.n = Math.max(tapInfo.n, taps.size);
+    if (taps.size >= 2) discardIfTiny();
+  });
+  const tapEnd = (e, cancel) => {
+    if (!taps.has(e.pointerId)) return;
+    taps.delete(e.pointerId);
+    if (cancel && tapInfo) tapInfo.mv = true;
+    if (!taps.size && tapInfo) {
+      const ok = !tapInfo.mv && performance.now() - tapT0 < 380;
+      if (ok && tapInfo.n === 2) inkUndo();
+      else if (ok && tapInfo.n === 3) inkRedo();
+      tapInfo = null;
     }
   };
   cv.addEventListener('pointerdown', e => {
     if (!INK.on) return;
-    if (e.pointerType === 'touch' && (!INK.finger || INK.sawPen)) return; // 손가락은 스크롤 (애플펜슬 등 펜을 쓰는 중이면 손바닥 무시)
+    if (e.pointerType === 'touch' && (!INK.finger || INK.sawPen || taps.size > 1)) return; // 손가락은 스크롤 (펜을 쓰는 중이면 손바닥 무시)
+    if (e.pointerType === 'touch' && ((e.width || 0) > 45 || (e.height || 0) > 45)) return; // 손바닥처럼 넓게 닿으면 무시
     e.preventDefault();
-    cv.setPointerCapture(e.pointerId);
+    try {
+      cv.setPointerCapture(e.pointerId);
+    } catch (er) {}
+    lastE = null;
+    locked = false;
+    sm = null;
     if (INK.tool === 'eraser') {
       erased = false;
+      mode = 'erase';
       cur = 'erase';
-      eraseAt(e);
+      inkEcur(e);
+      eraseAt(e, e);
       return;
     }
     if (INK.tool === 'laser') {
+      mode = 'laser';
       cur = 'laser';
       INK.lzHeld = true;
       INK.lzEnd = 0;
@@ -12805,76 +13288,180 @@ function inkBind(cv, qid) {
       return;
     }
     const [x, y] = pos(e);
+    if (INK.tool === 'lasso') {
+      const s = INK.sel;
+      if (s && s.qid === qid) {
+        const b = inkBox(s.items, rect().width),
+          m = 12 / rect().width;
+        if (b && x > b[0] - m && x < b[2] + m && y > b[1] - m && y < b[3] + m) {
+          // 선택한 획 옮기기
+          mode = 'drag';
+          cur = 'drag';
+          const list = INK.data[qid] || [];
+          INK.undo.push({ qid, prev: list.map(st => (s.items.includes(st) ? inkClone(st) : st)) });
+          INK.redo = [];
+          drag = { x, y, moved: false };
+          return;
+        }
+      }
+      INK.sel = null;
+      INK.lasso = { qid, pts: [[x, y]] };
+      mode = 'lasso';
+      cur = 'lasso';
+      inkRefreshBar();
+      schedule();
+      return;
+    }
     const hl = INK.tool === 'hl';
-    cur = { c: hl ? INK_HL[INK.hi] : INK.color, w: hl ? 14 : INK_WIDTHS[INK.wi], h: hl, p: [x, y] };
-    if (e.pointerType === 'pen') INK.sawPen = true;
+    cur = { c: hl ? INK_HL[INK.hi] : INK.color, w: hl ? INK.hw : INK.w, h: hl, p: [], q: undefined };
+    if (!hl && useP(e)) cur.q = [];
+    if (!hl) delete cur.h;
+    mode = 'pen';
+    addPt(e, true);
     if (!INK.data[qid]) INK.data[qid] = [];
     INK.undo.push({ qid, prev: INK.data[qid].slice() });
     INK.redo = [];
+    inkBuildBase(qid, null);
     INK.data[qid].push(cur);
+    anchor = [e.clientX, e.clientY];
+    schedule();
   });
   cv.addEventListener('pointermove', e => {
-    if (!cur) return;
-    if (cur === 'erase') {
-      eraseAt(e);
+    if (e.pointerType === 'pen' && INK.on) INK.sawPen = true;
+    if (e.pointerType === 'touch' && tapInfo && taps.has(e.pointerId)) {
+      const s = taps.get(e.pointerId);
+      if (Math.hypot(e.clientX - s[0], e.clientY - s[1]) > 14) tapInfo.mv = true;
+    }
+    if (!cur) {
+      if (INK.on && INK.tool === 'eraser' && e.pointerType !== 'touch') inkEcur(e); // 지우개 크기 표시
       return;
     }
-    if (cur === 'laser') {
+    if (mode === 'erase') {
+      inkEcur(e);
+      (e.getCoalescedEvents ? e.getCoalescedEvents() : [e]).forEach(ev => eraseAt(e, ev));
+      return;
+    }
+    if (mode === 'laser') {
       inkLaserMove(e);
       return;
     }
+    if (mode === 'lasso') {
+      const [x, y] = pos(e),
+        L = INK.lasso.pts,
+        l = L[L.length - 1];
+      if (Math.hypot(x - l[0], y - l[1]) * rect().width > 2) L.push([x, y]);
+      schedule();
+      return;
+    }
+    if (mode === 'drag') {
+      const [x, y] = pos(e),
+        dx = x - drag.x,
+        dy = y - drag.y;
+      drag.x = x;
+      drag.y = y;
+      if (dx || dy) {
+        drag.moved = true;
+        INK.sel.items.forEach(st => {
+          for (let i = 0; i < st.p.length; i += 2) {
+            st.p[i] += dx;
+            st.p[i + 1] += dy;
+          }
+        });
+        schedule();
+      }
+      return;
+    }
+    if (locked) return;
     const evs = e.getCoalescedEvents ? e.getCoalescedEvents() : [e];
-    const minD = 0.8 / (cv.getBoundingClientRect().width || 1);
-    (evs.length ? evs : [e]).forEach(ev => {
-      const [x, y] = pos(ev);
-      const n = cur.p.length;
-      if (n >= 2 && Math.hypot(x - cur.p[n - 2], y - cur.p[n - 1]) < minD) return;
-      cur.p.push(x, y);
-    }); // 손떨림 수준의 촘촘한 점은 버려 곡선이 울퉁불퉁해지지 않게
+    (evs.length ? evs : [e]).forEach(ev => addPt(ev, false));
     if (cur.line) {
       const n = cur.p.length;
-      const ex = cur.p[n - 2],
-        ey = cur.p[n - 1];
-      cur.p.length = 2;
-      cur.p.push(ex, ey);
+      const ex = cur.p[n - 2], ey = cur.p[n - 1];
+      cur.p = [cur.p[0], cur.p[1], ex, ey];
     } // 직선 보정 중에는 끝점만 따라간다
-    inkRedraw(qid);
-    clearTimeout(holdT);
-    if (INK.snap && cur.p.length >= 8 && !cur.line) {
-      const st = cur;
-      holdT = setTimeout(() => {
-        if (cur !== st) return;
-        const n = st.p.length;
-        st.p = [st.p[0], st.p[1], st.p[n - 2], st.p[n - 1]];
-        st.line = true;
-        inkRedraw(qid);
-      }, 550);
+    schedule();
+    // 멈춰서 꾹 누르면 도형 보정 (손 떨림 정도의 움직임은 '멈춤'으로 본다)
+    if (anchor && Math.hypot(e.clientX - anchor[0], e.clientY - anchor[1]) > 4) {
+      anchor = [e.clientX, e.clientY];
+      clearTimeout(holdT);
+      if (INK.snap && cur.p.length >= 8 && !cur.line) {
+        const st = cur;
+        holdT = setTimeout(() => {
+          if (cur !== st || mode !== 'pen') return;
+          const rc = inkRecognize(st.p, rect().width);
+          if (!rc) return;
+          st.p = rc.p;
+          delete st.q;
+          if (rc.line) st.line = true;
+          else delete st.line;
+          if (rc.p.length > 4) locked = true; // 곡선·도형은 그대로 확정 (직선은 끝점을 계속 조절 가능)
+          try {
+            navigator.vibrate && navigator.vibrate(8);
+          } catch (er) {}
+          schedule();
+        }, 520);
+      }
     }
   });
   const end = e => {
     clearTimeout(holdT);
     if (!cur) return;
-    if (cur === 'laser') {
+    if (mode === 'laser') {
       INK.lzHeld = false;
       INK.lzEnd = performance.now();
       INK.lzPred = null;
       inkLaserKick();
-    } else if (cur !== 'erase') inkSaveSoon();
-    cur = null;
-  };
-  cv.addEventListener('pointerrawupdate', e => { if (cur === 'laser') inkLaserMove(e); }); // 지원 기기에서는 프레임 사이 입력까지 받아 더 촘촘하게
-  cv.addEventListener('pointerup', end);
-  cv.addEventListener('pointercancel', e => {
-    if (cur && cur !== 'erase' && cur !== 'laser') {
-      /* 스크롤로 넘어간 터치: 점 하나짜리 획은 버린다 */
-      const arr = INK.data[qid];
-      if (arr && arr[arr.length - 1] === cur && cur.p.length <= 4) {
-        arr.pop();
-        INK.undo.pop();
-        inkRedraw(qid);
+    } else if (mode === 'pen') {
+      if (!locked && !cur.line && e && e.clientX != null) addPt(e, true); // 필터 때문에 모자란 끝부분을 채운다
+      flushPaint();
+      INK.base = null;
+      inkRedraw(qid);
+      inkSaveSoon();
+    } else if (mode === 'erase') {
+      flushPaint();
+      inkEcur(e && e.pointerType === 'touch' ? null : e);
+      inkRedraw(qid);
+    } else if (mode === 'lasso') {
+      const L = INK.lasso.pts;
+      INK.lasso = null;
+      const items = [];
+      if (L.length > 3) {
+        (INK.data[qid] || []).forEach(st => {
+          let inside = 0;
+          const n = st.p.length / 2;
+          for (let i = 0; i < n; i++) if (inkInPoly(L, st.p[i * 2], st.p[i * 2 + 1])) inside++;
+          if (inside / n >= 0.5) items.push(st);
+        });
       }
+      INK.sel = items.length ? { qid, items } : null;
+      flushPaint();
+      inkRedraw(qid);
+      inkRefreshBar();
+    } else if (mode === 'drag') {
+      if (!drag.moved) INK.undo.pop();
+      else inkSaveSoon();
+      drag = null;
+      flushPaint();
+      inkRedraw(qid);
     }
+    cur = null;
+    mode = '';
+    inkRefreshBar();
+  };
+  cv.addEventListener('pointerrawupdate', e => {
+    if (mode === 'laser') inkLaserMove(e);
+  }); // 지원 기기에서는 프레임 사이 입력까지 받아 더 촘촘하게
+  cv.addEventListener('pointerup', e => {
+    tapEnd(e, false);
     end(e);
+  });
+  cv.addEventListener('pointerleave', e => {
+    if (!cur && e.pointerType !== 'touch') inkEcur(null);
+  });
+  cv.addEventListener('pointercancel', e => {
+    tapEnd(e, true);
+    if (mode === 'pen') discardIfTiny(); // 스크롤로 넘어간 터치: 점 하나짜리 획은 버린다
+    end(e && { ...{}, pointerType: e.pointerType });
   });
 }
 function inkRefreshBar() {
@@ -12883,39 +13470,121 @@ function inkRefreshBar() {
   body.classList.toggle('ink-on', INK.on);
   body.classList.toggle('ink-finger', INK.on && INK.finger);
   body.classList.toggle('ink-eraser', INK.tool === 'eraser');
+  body.classList.toggle('ink-lasso', INK.tool === 'lasso');
   const t = $('ink-toggle');
   if (t) {
     t.classList.toggle('on', INK.on);
     t.textContent = INK.on ? '✏️ 필기 끄기 (답 선택)' : '✏️ 필기';
   }
-  document.querySelectorAll('#ink-bar .ink-dot[data-c]').forEach(b => b.classList.toggle('on', INK.tool === 'pen' && b.dataset.c === INK.color));
-  document.querySelectorAll('#ink-bar .ink-wd').forEach(b => b.classList.toggle('on', +b.dataset.i === INK.wi));
-  document.querySelectorAll('#ink-bar .ink-hdot').forEach(b => b.classList.toggle('on', INK.tool === 'hl' && +b.dataset.i === INK.hi));
-  const hc = document.querySelector('#ink-bar .ink-hlc');
-  if (hc) hc.style.display = INK.tool === 'hl' ? 'inline-flex' : 'none';
-  const sn = $('ink-snap');
-  if (sn) sn.classList.toggle('on', INK.snap);
-  const hl = $('ink-hl');
-  if (hl) hl.classList.toggle('on', INK.tool === 'hl');
-  const er = $('ink-er');
-  if (er) er.classList.toggle('on', INK.tool === 'eraser');
-  const lz = $('ink-laser');
-  if (lz) lz.classList.toggle('on', INK.tool === 'laser');
-  const fg = $('ink-fg');
-  if (fg) fg.classList.toggle('on', INK.finger);
+  const hasSel = !!(INK.sel && INK.sel.items.length);
+  document.querySelectorAll('#ink-bar [data-for]').forEach(el => {
+    let show = el.dataset.for.split(',').includes(INK.tool);
+    if (el.id === 'ink-colors' && INK.tool === 'lasso') show = hasSel;
+    if (el.id === 'ink-selbar') show = INK.tool === 'lasso' && hasSel;
+    el.style.display = show ? '' : 'none';
+  });
+  document.querySelectorAll('#ink-bar .ink-dot[data-c]').forEach(b => b.classList.toggle('on', INK.tool === 'pen' && b.dataset.c.toLowerCase() === INK.color.toLowerCase()));
+  const cc = $('ink-cc'),
+    ccl = $('ink-cc-l');
+  if (cc && ccl) {
+    const custom = !INK_COLORS.includes(INK.color);
+    if (custom) cc.value = INK.color;
+    ccl.classList.toggle('on', INK.tool === 'pen' && custom);
+    ccl.style.background = custom ? INK.color : '';
+  }
+  document.querySelectorAll('#ink-bar .ink-hdot').forEach(b => b.classList.toggle('on', +b.dataset.i === INK.hi));
+  const tb = { pen: 'ink-pen', hl: 'ink-hl', eraser: 'ink-er', lasso: 'ink-lasso', laser: 'ink-laser' };
+  Object.keys(tb).forEach(k => {
+    const el = $(tb[k]);
+    if (el) el.classList.toggle('on', INK.tool === k);
+  });
+  [['ink-snap', INK.snap], ['ink-fg', INK.finger], ['ink-pr', INK.pressure]].forEach(([id, v]) => {
+    const el = $(id);
+    if (el) el.classList.toggle('on', v);
+  });
+  const em = $('ink-ermode');
+  if (em) em.textContent = INK.erMode === 'part' ? '부분 지우개' : '획 지우개';
+  const rg = $('ink-size');
+  if (rg && INK_RANGE[INK.tool]) {
+    const [mn, mx, st] = INK_RANGE[INK.tool];
+    rg.min = mn;
+    rg.max = mx;
+    rg.step = st;
+    rg.value = INK.tool === 'pen' ? INK.w : INK.tool === 'hl' ? INK.hw : INK.ew;
+    const pv = $('ink-szp');
+    if (pv) {
+      const v = +rg.value,
+        d = INK.tool === 'eraser' ? Math.min(26, v) : Math.min(26, Math.max(3, INK.tool === 'hl' ? v * 0.8 : v * 1.6));
+      pv.style.width = pv.style.height = d + 'px';
+      pv.style.background = INK.tool === 'hl' ? INK_HL[INK.hi] : INK.tool === 'eraser' ? 'transparent' : INK.color;
+      pv.style.border = INK.tool === 'eraser' ? '1.5px solid var(--ink-soft)' : 'none';
+      pv.style.opacity = INK.tool === 'hl' ? '.5' : '1';
+    }
+  }
+  const ud = $('ink-undo'),
+    rd = $('ink-redo');
+  if (ud) ud.disabled = !INK.undo.length;
+  if (rd) rd.disabled = !INK.redo.length;
 }
 function inkToggle() {
   INK.on = !INK.on;
+  if (!INK.on) inkClearSel();
+  inkEcur(null);
   inkRefreshBar();
 }
+function inkClearSel() {
+  if (!INK.sel && !INK.lasso) return;
+  const q = (INK.sel || INK.lasso).qid;
+  INK.sel = null;
+  INK.lasso = null;
+  inkRedraw(q);
+}
+function inkSetTool(t) {
+  if (t !== 'lasso') inkClearSel();
+  INK.tool = t;
+  if (t !== 'eraser') inkEcur(null);
+  inkRefreshBar();
+}
+function inkPickTool(t) {
+  inkSetTool(INK.tool === t ? 'pen' : t);
+}
 function inkPickColor(c) {
+  if (!/^#[0-9a-f]{6}$/i.test(c)) return;
+  if (INK.tool === 'lasso' && INK.sel && INK.sel.items.length) {
+    // 선택한 획의 색 바꾸기
+    const { qid, items } = INK.sel,
+      list = INK.data[qid] || [];
+    INK.undo.push({ qid, prev: list.map(st => (items.includes(st) && !st.h ? inkClone(st) : st)) });
+    INK.redo = [];
+    items.forEach(st => {
+      if (!st.h) st.c = c;
+    });
+    inkRedraw(qid);
+    inkSaveSoon();
+    inkRefreshBar();
+    return;
+  }
   INK.tool = 'pen';
   INK.color = c;
   inkPrefsSave();
   inkRefreshBar();
 }
-function inkPickTool(t) {
-  INK.tool = INK.tool === t ? 'pen' : t;
+function inkSetSize(v) {
+  v = +v;
+  if (INK.tool === 'pen') INK.w = v;
+  else if (INK.tool === 'hl') INK.hw = v;
+  else if (INK.tool === 'eraser') INK.ew = v;
+  inkPrefsSave();
+  inkRefreshBar();
+}
+function inkToggleErMode() {
+  INK.erMode = INK.erMode === 'part' ? 'stroke' : 'part';
+  inkPrefsSave();
+  inkRefreshBar();
+}
+function inkTogglePressure() {
+  INK.pressure = !INK.pressure;
+  inkPrefsSave();
   inkRefreshBar();
 }
 function inkToggleFinger() {
@@ -12928,38 +13597,63 @@ function inkToggleSnap() {
   inkPrefsSave();
   inkRefreshBar();
 }
-function inkPickWidth(i) {
-  INK.wi = i;
-  INK.tool = 'pen';
-  inkPrefsSave();
-  inkRefreshBar();
-}
 function inkPickHl(i) {
   INK.hi = i;
   INK.tool = 'hl';
   inkPrefsSave();
   inkRefreshBar();
 }
+function inkSelDelete() {
+  const s = INK.sel;
+  if (!s) return;
+  const list = INK.data[s.qid] || [];
+  INK.undo.push({ qid: s.qid, prev: list.slice() });
+  INK.redo = [];
+  INK.data[s.qid] = list.filter(st => !s.items.includes(st));
+  INK.sel = null;
+  inkRedraw(s.qid);
+  inkSaveSoon();
+  inkRefreshBar();
+}
 function inkUndo() {
+  if (!INK.on) return;
   const u = INK.undo.pop();
   if (!u) return;
+  inkClearSel();
   INK.redo.push({ qid: u.qid, prev: (INK.data[u.qid] || []).slice() });
   INK.data[u.qid] = u.prev;
+  INK.base = null;
   inkRedraw(u.qid);
   inkSaveSoon();
+  inkRefreshBar();
 }
 function inkRedo() {
+  if (!INK.on) return;
   const u = INK.redo.pop();
   if (!u) return;
+  inkClearSel();
   INK.undo.push({ qid: u.qid, prev: (INK.data[u.qid] || []).slice() });
   INK.data[u.qid] = u.prev;
+  INK.base = null;
   inkRedraw(u.qid);
   inkSaveSoon();
+  inkRefreshBar();
 }
 document.addEventListener('keydown', e => {
-  if (!INK.on || !(e.ctrlKey || e.metaKey) || e.key.toLowerCase() !== 'z') return;
+  if (!INK.on) return;
   const t = e.target;
-  if (t && /^(INPUT|TEXTAREA)$/.test(t.tagName)) return;
+  if (t && /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName) && t.type !== 'range' && t.type !== 'color') return;
+  if ((e.key === 'Delete' || e.key === 'Backspace') && INK.sel) {
+    e.preventDefault();
+    inkSelDelete();
+    return;
+  }
+  if (e.key === 'Escape' && (INK.sel || INK.lasso)) {
+    inkClearSel();
+    inkRefreshBar();
+    return;
+  }
+  if (!(e.ctrlKey || e.metaKey) || e.key.toLowerCase() !== 'z') return;
   e.preventDefault();
   e.shiftKey ? inkRedo() : inkUndo();
 });
@@ -12968,12 +13662,14 @@ function inkClearAll() {
   if (!any) return;
   if (!confirm('이 과제에 쓴 필기를 모두 지울까요?')) return;
   INK.redo = [];
+  inkClearSel();
   Object.keys(INK.data).forEach(q => {
     INK.undo.push({ qid: q, prev: (INK.data[q] || []).slice() });
     INK.data[q] = [];
     inkRedraw(q);
   });
   inkSaveSoon();
+  inkRefreshBar();
 }
 
 function openStudentSolve(kind, tid) {
@@ -15433,7 +16129,7 @@ function renderFirebaseGuide() {
     <li><b>메인</b>: 다음 수업, 가장 급한 할 일·제출 진행률, 출석 현황, 공지(안 읽은 공지는 NEW, 중요 공지는 맨 위). 마감 24시간 이내 미제출 과제·시험은 남은 시간과 '풀기' 버튼이 뜨고, 3일 이내 마감과 지난 지 7일 이내의 미제출 항목도 알려 줍니다. 시작 전 과제는 시작 시각만 보입니다.</li>
     <li><b>오프라인·불안정한 연결</b>: 제출 순간 연결이 끊기면(파일 첨부가 없을 때) 답을 기기에 보관했다가 연결되면 자동으로 제출합니다. 학생 메인에 '전송 대기' 표시가 뜹니다.</li>
     <li><b>앱처럼 설치</b>: 학생 '내 정보' → 화면 설정에서 홈 화면에 추가(아이폰은 공유 → 홈 화면에 추가)하고 글자 크기를 키울 수 있습니다. 관리자 첫 화면 아래에 마지막 백업 시점이 표시됩니다(7일 넘으면 주황색).</li>
-    <li><b>풀이 화면</b>(전체 화면 집중 모드, 상단 ← 나가기 / 제출 버튼, 나가도 체크한 답은 임시 저장): 진행률 바, ★ 나중에 볼 문제, 메모, 필기·레이저 포인터, 미응답 번호 경고, <b>체크 전체 지우기</b>. 풀던 답과 ★는 3초 뒤 서버에 저장되어 다른 기기에서 이어 풀 수 있습니다(첨부 파일 제외).</li>
+    <li><b>풀이 화면</b>(전체 화면 집중 모드, 상단 ← 나가기 / 제출 버튼, 나가도 체크한 답은 임시 저장): 진행률 바, ★ 나중에 볼 문제, 메모, 필기(필압 지원 펜·형광펜·획/부분 지우개·올가미 선택/이동/삭제·도형 자동 보정·두 손가락 탭 되돌리기)·레이저 포인터, 미응답 번호 경고, <b>체크 전체 지우기</b>. 풀던 답과 ★는 3초 뒤 서버에 저장되어 다른 기기에서 이어 풀 수 있습니다(첨부 파일 제외).</li>
     <li><b>오답노트</b>: 기본이 <b>복습 필요만</b>입니다. <b>복습 퀴즈</b>로 한 문제씩 풀면 맞힌 문제는 마스터 처리됩니다. 해설 화면의 ★·메모는 이 기기 브라우저에만 저장됩니다. 다크 모드는 왼쪽 메뉴에서 켭니다.</li>
     <li>제출 직후 점수·틀린 문항·오답노트 안내와 '해설 보기'가 나옵니다(파일 제출은 '제출 완료'만).</li>
   </ul>
