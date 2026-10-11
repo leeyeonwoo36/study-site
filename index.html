@@ -12481,7 +12481,10 @@ function inkFit(qid) {
   if (!cv) return;
   const r = cv.parentElement.getBoundingClientRect();
   if (!r.width || !r.height) return;
-  const dpr = Math.min(Math.max(window.devicePixelRatio || 1, 2), 3); // 저해상도 화면에서도 선이 각지지 않게 2배 이상
+  let dpr = Math.min(Math.max(window.devicePixelRatio || 1, 2), 3); // 저해상도 화면에서도 선이 각지지 않게 2배 이상
+  // 문항이 많으면 캔버스 메모리가 폭증하므로(특히 폰) 전체 픽셀 예산 안에서 배율을 낮춘다
+  const n = Math.max(1, Object.keys(INK.cvs).length), budget = 40e6;
+  while (dpr > 1 && n * r.width * r.height * dpr * dpr > budget) dpr -= 0.25;
   const w = Math.round(r.width * dpr),
     h = Math.round(r.height * dpr);
   if (cv.width !== w || cv.height !== h) {
