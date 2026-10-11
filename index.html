@@ -5985,7 +5985,7 @@ function renderPassageBoxHtml(passages) {
   if (!passages || !passages.length) return '';
   return passages
     .map((p, i) => {
-      const title = p.hideTitle ? '' : `<div class="ptitle">&lt;보기&gt;${passages.length > 1 ? ' ' + (i + 1) : ''}</div>`;
+      const title = p.hideTitle ? '' : `<div class="ptitle">&lt;보기&gt;${passages.length > 1 && !passages[0].hideTitle ? ' ' + (i + 1) : ''}</div>`;
       return `<div class="passage-box">${title}${p.text || ''}${renderPassageTableHtml(p.table)}${p.imageUrl ? `<img loading="lazy" decoding="async" src="${p.imageUrl}" style="max-width:100%;border-radius:6px;margin-top:6px;">` : ''}</div>`;
     })
     .join('');
@@ -5994,7 +5994,7 @@ function renderPassagePrintHtml(passages) {
   if (!passages || !passages.length) return '';
   return passages
     .map((p, i) => {
-      const title = p.hideTitle ? '' : `<b>&lt;보기&gt;${passages.length > 1 ? ' ' + (i + 1) : ''}</b><br>`;
+      const title = p.hideTitle ? '' : `<b>&lt;보기&gt;${passages.length > 1 && !passages[0].hideTitle ? ' ' + (i + 1) : ''}</b><br>`;
       return `<div class="passage">${title}${p.text ? esc(p.text) : ''}${renderPassageTableHtml(p.table)}</div>`;
     })
     .join('');
@@ -6986,7 +6986,7 @@ function buildPrintQuestionHtml(q, n) {
   const ps = getPassages(q);
   const passage = ps
     .map((p, i) => {
-      const title = p.hideTitle ? '' : `<b>&lt;보기&gt;${ps.length > 1 ? ' ' + (i + 1) : ''}</b><br>`;
+      const title = p.hideTitle ? '' : `<b>&lt;보기&gt;${ps.length > 1 && !ps[0].hideTitle ? ' ' + (i + 1) : ''}</b><br>`;
       const img = p.imageUrl
         ? `<img loading="lazy" decoding="async" src="${p.imageUrl}" style="display:block; max-width:100%; margin-top:6px;">`
         : '';
