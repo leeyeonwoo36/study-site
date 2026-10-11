@@ -12561,14 +12561,14 @@ function inkLaserDraw(now) {
   const dpr = cv.width / Math.max(1, innerWidth);
   const trail = INK.lz || [];
   const life = t => Math.max(0, Math.min(1, 1 - (now - t) / LASER_MS));
-  // 지난 프레임에 그린 영역만 지운다 (전체 화면을 매번 지우고 합성하면 태블릿에서 버벅임)
+  // 지난 프레임에 그린 영역만 지운다 (전체 화면을 매번 지우면 태블릿에서 버벅임)
   if (INK.lzBox) ctx.clearRect(INK.lzBox.x, INK.lzBox.y, INK.lzBox.w, INK.lzBox.h);
-  // 1) 점 사이를 곡선으로 보간해 부드러운 꼬리를 만든다 (3px 간격, 굵기는 남은 수명에 비례)
+  // 1) 점 사이를 곡선으로 보간한 중심선 + 각 점의 남은 수명
   let n = 0;
   const runs = LZ.runs;
   runs.length = 0;
   const emit = (x, y, l) => { if (n >= LZ.x.length) lzGrow(); LZ.x[n] = x; LZ.y[n] = y; LZ.l[n] = l; n++; };
-  const STEP = 3 * dpr;
+  const STEP = 2.5 * dpr;
   let i0 = 0;
   while (i0 < trail.length) {
     let i1 = i0 + 1;
@@ -12578,9 +12578,6 @@ function inkLaserDraw(now) {
       const p = trail[i], l = pts[pts.length - 1];
       if (!l || Math.hypot(p.x - l.x, p.y - l.y) > 1.2) pts.push(p);
     }
-    const lastRun = i1 >= trail.length;
-    const useP = INK.lzHeld && lastRun && INK.lzPred && pts.length;
-    if (useP) pts.push({ x: INK.lzPred.x, y: INK.lzPred.y, t: now }); // 아직 오지 않은 입력을 예측해 머리가 손보다 뒤처지지 않게
     runs.push(n);
     if (pts.length === 1) emit(pts[0].x * dpr, pts[0].y * dpr, life(pts[0].t));
     else if (pts.length > 1) {
@@ -12601,52 +12598,65 @@ function inkLaserDraw(now) {
     i0 = i1;
   }
   runs.push(n);
-  // 2) 이번에 그릴 영역(바운딩 박스)
+  // 수명 값을 이동평균으로 한 번 더 다듬어 굵기가 계단처럼 변하는 울퉁불퉁함을 없앤다
+  for (let r = 0; r < runs.length - 1; r++) {
+    const a = runs[r], b = runs[r + 1];
+    if (b - a < 4) continue;
+    for (let pass = 0; pass < 2; pass++) {
+      let prev = LZ.l[a];
+      for (let i = a + 1; i < b - 1; i++) { const cur = LZ.l[i]; LZ.l[i] = (prev + 2 * cur + LZ.l[i + 1]) / 4; prev = cur; }
+    }
+  }
+  // 2) 이번에 그릴 영역
   const head = trail[trail.length - 1];
   const dotA = INK.lzHeld ? 1 : Math.max(0, 1 - (now - (INK.lzEnd || 0)) / 260);
   let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
   for (let i = 0; i < n; i++) { const x = LZ.x[i], y = LZ.y[i]; if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
-  const hp = head && dotA > 0 ? (INK.lzHeld && INK.lzPred ? INK.lzPred : head) : null;
+  const hp = head && dotA > 0 ? head : null;
   if (hp) { x0 = Math.min(x0, hp.x * dpr); x1 = Math.max(x1, hp.x * dpr); y0 = Math.min(y0, hp.y * dpr); y1 = Math.max(y1, hp.y * dpr); }
   if (x0 > x1) { INK.lzBox = null; return; }
-  const pad = 22 * dpr;
+  const pad = 24 * dpr;
   const bx = Math.max(0, Math.floor(x0 - pad)), by = Math.max(0, Math.floor(y0 - pad));
   const bw = Math.min(cv.width, Math.ceil(x1 + pad)) - bx, bh = Math.min(cv.height, Math.ceil(y1 + pad)) - by;
   INK.lzBox = { x: bx, y: by, w: bw, h: bh };
-  const ease = l => 1 - Math.pow(1 - l, 1.6); // 꼬리 끝은 빨리 가늘어지고 머리 근처는 굵게
-  const stroke = (c2, wf, minW) => {
-    c2.lineCap = 'round'; c2.lineJoin = 'round';
+  // 3) 획 전체를 '하나의 채워진 리본'으로 그린다 (구간별 선을 이어 그리면 굵기 변화가 울퉁불퉁해짐 / 반투명도 겹침 없이 한 번에)
+  const ease = l => 1 - Math.pow(1 - l, 1.6);
+  const half = (l, wf, minW) => ((minW * Math.min(1, l * 4) + wf * ease(l)) * dpr) / 2;
+  const ribbon = (wf, minW) => {
+    ctx.beginPath();
     for (let r = 0; r < runs.length - 1; r++) {
       const a = runs[r], b = runs[r + 1];
-      if (b - a === 1) { if (LZ.l[a] > 0) { c2.beginPath(); c2.arc(LZ.x[a], LZ.y[a], ((minW + wf * ease(LZ.l[a])) * dpr) / 2, 0, 7); c2.fill(); } continue; }
-      for (let i = a + 1; i < b; i++) {
-        const l = LZ.l[i]; if (l <= 0) continue;
-        c2.lineWidth = (minW * Math.min(1, l * 4) + wf * ease(l)) * dpr;
-        c2.beginPath(); c2.moveTo(LZ.x[i - 1], LZ.y[i - 1]); c2.lineTo(LZ.x[i], LZ.y[i]); c2.stroke();
+      if (b - a < 2) { if (b - a === 1 && LZ.l[a] > 0) { ctx.moveTo(LZ.x[a] + half(LZ.l[a], wf, minW), LZ.y[a]); ctx.arc(LZ.x[a], LZ.y[a], half(LZ.l[a], wf, minW), 0, 7); } continue; }
+      // 살아 있는 구간만 (꼬리 쪽 l<=0 점은 건너뜀)
+      let s0 = a; while (s0 < b - 1 && LZ.l[s0] <= 0.002) s0++;
+      if (b - s0 < 2) continue;
+      const L = [], R = [];
+      for (let i = s0; i < b; i++) {
+        const pi = Math.max(s0, i - 2), ni = Math.min(b - 1, i + 2); // 접선도 이웃 점으로 부드럽게
+        let tx = LZ.x[ni] - LZ.x[pi], ty = LZ.y[ni] - LZ.y[pi]; const tl = Math.hypot(tx, ty) || 1; tx /= tl; ty /= tl;
+        const w = half(LZ.l[i], wf, minW);
+        L.push(LZ.x[i] - ty * w, LZ.y[i] + tx * w); R.push(LZ.x[i] + ty * w, LZ.y[i] - tx * w);
       }
+      const m = L.length / 2;
+      ctx.moveTo(L[0], L[1]);
+      for (let i = 1; i < m; i++) ctx.lineTo(L[i * 2], L[i * 2 + 1]);
+      const hx = LZ.x[b - 1], hy = LZ.y[b - 1], hw = half(LZ.l[b - 1], wf, minW);
+      const ang = Math.atan2(L[m * 2 - 1] - hy, L[m * 2 - 2] - hx);
+      ctx.arc(hx, hy, hw, ang, ang + Math.PI, false); // 머리 쪽은 둥글게
+      for (let i = m - 1; i >= 0; i--) ctx.lineTo(R[i * 2], R[i * 2 + 1]);
+      ctx.closePath();
     }
   };
   ctx.save();
-  // 바깥 빛만 레이어에서 불투명으로 그려 반투명하게 합성 (구슬 무늬 방지). 합성은 바운딩 박스만.
-  const lay = INK.laserLayer || (INK.laserLayer = document.createElement('canvas'));
-  if (lay.width !== cv.width || lay.height !== cv.height) { lay.width = cv.width; lay.height = cv.height; }
-  const lc2 = lay.getContext('2d');
-  lc2.clearRect(bx, by, bw, bh);
-  lc2.strokeStyle = lc2.fillStyle = '#ff3b3b';
-  stroke(lc2, 10, 3);
-  ctx.globalAlpha = 0.26;
-  ctx.drawImage(lay, bx, by, bw, bh, bx, by, bw, bh);
-  // 붉은 심·하얀 중심선은 불투명이라 레이어 없이 바로 그린다
-  ctx.globalAlpha = 1;
-  ctx.strokeStyle = ctx.fillStyle = '#ff2b2b'; stroke(ctx, 4.6, 1);
-  ctx.strokeStyle = ctx.fillStyle = '#fff0f0'; stroke(ctx, 1.8, 0.4);
-  // 3) 펜이 닿은 곳의 빛나는 점 (뗀 뒤에는 서서히 사라짐)
-  if (hp) {
+  ctx.globalAlpha = 0.24; ctx.fillStyle = '#ff3b3b'; ribbon(11, 3); ctx.fill();   // 바깥 빛
+  ctx.globalAlpha = 1; ctx.fillStyle = '#ff2b2b'; ribbon(4.6, 1); ctx.fill();    // 붉은 심
+  ctx.fillStyle = '#fff0f0'; ribbon(1.8, 0.4); ctx.fill();                       // 하얀 중심선
+  if (hp) {                                                                      // 펜이 닿은 곳의 빛나는 점 (뗀 뒤에는 서서히 사라짐)
     ctx.globalAlpha = dotA;
     ctx.shadowColor = '#ff4d4d'; ctx.shadowBlur = 12 * dpr; ctx.fillStyle = '#ff2b2b';
-    ctx.beginPath(); ctx.arc(hp.x * dpr, hp.y * dpr, 4.6 * dpr * (0.6 + 0.4 * dotA), 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(hp.x * dpr, hp.y * dpr, 4.4 * dpr * (0.6 + 0.4 * dotA), 0, Math.PI * 2); ctx.fill();
     ctx.shadowBlur = 0; ctx.fillStyle = '#fff';
-    ctx.beginPath(); ctx.arc(hp.x * dpr, hp.y * dpr, 1.9 * dpr, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(hp.x * dpr, hp.y * dpr, 1.8 * dpr, 0, Math.PI * 2); ctx.fill();
   }
   ctx.restore();
 }
@@ -12674,18 +12684,28 @@ function inkRedraw(qid) {
   const dpr = cv.width / Math.max(1, r.width);
   (INK.data[qid] || []).forEach(st => inkDrawStroke(ctx, st, r.width * dpr, dpr));
 }
+/* 입력 필터: 느리게 움직일 땐 손떨림·샘플링 잡음을 강하게 걸러 매끈하게, 빠르게 움직일 땐 거의 그대로 따라간다 */
+function lzTime(ev) {
+  const t = ev && ev.timeStamp; // performance.now()와 같은 기준일 때만 사용 (아니면 현재 시각)
+  const n = performance.now();
+  return t > 0 && t < 1e11 && Math.abs(t - n) < 5000 ? t : n;
+}
+function inkLaserPush(x, y, ts) {
+  const tr = (INK.lz = INK.lz || []);
+  const p = INK.lzS;
+  if (!p) { INK.lzS = { x, y, t: ts }; tr.push({ x, y, t: ts }); return; }
+  const dt = Math.max(1, ts - p.t), d = Math.hypot(x - p.x, y - p.y), v = d / dt; // px/ms
+  const tau = 26 / (1 + v * 1.6);
+  const a = 1 - Math.exp(-dt / tau);
+  p.x += (x - p.x) * a; p.y += (y - p.y) * a; p.t = ts;
+  const l = tr[tr.length - 1];
+  if (!l || Math.hypot(p.x - l.x, p.y - l.y) > 0.8) tr.push({ x: p.x, y: p.y, t: ts });
+}
 function inkLaserMove(e) {
   if (e.type === 'pointerrawupdate') INK.rawOk = true;
   else if (INK.rawOk) return; // 고빈도 입력을 받는 기기에서는 pointermove를 중복 처리하지 않는다
-  const tr = (INK.lz = INK.lz || []);
   const evs = e.getCoalescedEvents ? e.getCoalescedEvents() : [e];
-  const t = performance.now();
-  (evs.length ? evs : [e]).forEach(ev => {
-    const l = tr[tr.length - 1];
-    if (!l || Math.abs(ev.clientX - l.x) + Math.abs(ev.clientY - l.y) > 1) tr.push({ x: ev.clientX, y: ev.clientY, t });
-  });
-  const pr = e.getPredictedEvents ? e.getPredictedEvents() : [];
-  INK.lzPred = pr.length ? { x: pr[pr.length - 1].clientX, y: pr[pr.length - 1].clientY } : null;
+  (evs.length ? evs : [e]).forEach(ev => inkLaserPush(ev.clientX, ev.clientY, lzTime(ev))); // 묶여 온 입력도 각자의 시각을 써서 굵기가 뭉텅이로 변하지 않게
   inkLaserKick();
 }
 function inkBind(cv, qid) {
@@ -12735,7 +12755,9 @@ function inkBind(cv, qid) {
       INK.lzHeld = true;
       INK.lzEnd = 0;
       INK.lzPred = null;
-      (INK.lz = INK.lz || []).push({ x: e.clientX, y: e.clientY, t: performance.now(), brk: true });
+      INK.lzS = null;
+      (INK.lz = INK.lz || []).push({ x: e.clientX, y: e.clientY, t: lzTime(e), brk: true });
+      INK.lzS = { x: e.clientX, y: e.clientY, t: lzTime(e) };
       inkLaserKick();
       return;
     }
