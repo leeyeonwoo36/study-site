@@ -1821,6 +1821,7 @@ body.quiet-preview .sidebar{ padding-top:22px; }
     <label class="dup-opt"><input type="checkbox" id="tp-problem" checked> 문제지</label>
     <label class="dup-opt"><input type="checkbox" id="tp-omr"> OMR 답안지</label>
     <label class="dup-opt"><input type="checkbox" id="tp-explain"> 해설지 (빠른 정답 + 정답·해설)</label>
+    <label class="dup-opt"><input type="checkbox" id="tp-duplex" checked> 양면 인쇄 맞춤 (각 항목을 앞면에서 시작 · 빈 면 자동 삽입)</label>
     <p class="note" style="margin-top:8px;">여러 개를 고르면 문제지 → OMR → 해설지 순서로, 각각 새 페이지에서 시작합니다.</p>
     <button class="btn" style="width:100%; margin-top:10px;" onclick="doTaskPrint()">인쇄 창 열기</button>
   </div>
@@ -1838,6 +1839,7 @@ body.quiet-preview .sidebar{ padding-top:22px; }
     <label class="dup-opt"><input type="checkbox" id="bundle-problem" checked> 문제지 포함</label>
     <label class="dup-opt"><input type="checkbox" id="bundle-omr" checked> OMR 답안지 포함</label>
     <label class="dup-opt"><input type="checkbox" id="bundle-explain"> 해설지 포함 (빠른 정답 + 정답·해설, 과제마다 뒤에 붙음)</label>
+    <label class="dup-opt"><input type="checkbox" id="bundle-duplex" checked> 양면 인쇄 맞춤 (표지·문제지·OMR·해설지를 각각 앞면에서 시작 · 홀수 쪽에서 끝나면 빈 면 삽입)</label>
     <button class="btn" style="width:100%; margin-top:12px;" onclick="doBundlePrint()">인쇄 창 열기</button>
   </div>
 </div>
@@ -5596,12 +5598,49 @@ const PRINT_BAR_HTML = `<div class="no-print">
   <button class="ps" onclick="window.close()">닫기</button>
   <span class="ph">PDF로 저장하려면 인쇄 창의 '대상'을 'PDF로 저장'으로 선택하세요 · Ctrl+P</span>
 </div>`;
+
+/* 양면 인쇄 맞춤: 인쇄 창 안에서 실행된다. 항목(표지·문제지·OMR·해설지)마다 쪽 수를 세어,
+   앞 항목이 홀수 쪽에서 끝났으면 빈 쪽을 하나 끼워 다음 항목이 앞면(홀수 쪽)에서 시작하게 한다. */
+const DUPLEX_JS = `
+(function(){
+  function pagesOfBlock(node){
+    /* 쪽 크기(본문 높이 265mm, 폭 182mm)의 단 여러 개로 흘려 보내 쪽 수를 센다 */
+    var box = document.createElement('div');
+    box.style.cssText = 'position:absolute;left:-99999px;top:0;width:182mm;height:265mm;column-width:182mm;column-gap:0;column-fill:auto;overflow:visible;';
+    box.innerHTML = node.innerHTML;
+    document.body.appendChild(box);
+    var n = Math.max(1, Math.round(box.scrollWidth / box.clientWidth));
+    document.body.removeChild(box);
+    return n;
+  }
+  function run(){
+    if(!document.body.classList.contains('duplex')) return;
+    Array.prototype.slice.call(document.querySelectorAll('.blankpg')).forEach(function(e){ e.parentNode.removeChild(e); });
+    var kids = Array.prototype.slice.call(document.body.children).filter(function(e){
+      return e.matches && (e.matches('.cover') || e.matches('.omrdoc') || e.matches('table.pad'));
+    });
+    var used = 0;
+    kids.forEach(function(e){
+      if(used % 2 === 1){
+        var b = document.createElement('div'); b.className = 'blankpg'; e.parentNode.insertBefore(b, e); used += 1;
+      }
+      var n = 1;
+      if(e.matches('.omrdoc')) n = e.querySelectorAll('.page').length || 1;
+      else if(e.matches('table.pad')) n = pagesOfBlock(e.querySelector('tbody td'));
+      used += n;
+    });
+  }
+  (document.fonts && document.fonts.ready ? document.fonts.ready : Promise.resolve()).then(function(){ setTimeout(run, 50); });
+  window.addEventListener('beforeprint', run);
+})();
+`;
 const PRINT_PAD_CSS = `
   @page{ size:A4; margin:0; }
   table.pad{width:100%; border-collapse:collapse; border:0; margin:0;}
   table.pad>thead>tr>td, table.pad>tfoot>tr>td{height:16mm; padding:0; border:0;}
   table.pad>tbody>tr>td{padding:0 14mm; border:0; vertical-align:top;}
   table.pad.brk{break-before:page;}
+  .blankpg{break-before:page; page-break-before:always; height:1px; overflow:hidden;}
 ${PRINT_BAR_CSS}`;
 function padWrap(inner, cls){ return `<table class="pad ${cls||''}"><thead><tr><td></td></tr></thead><tbody><tr><td>${inner}</td></tr></tbody><tfoot><tr><td></td></tr></tfoot></table>`; }
 function openPrintWindow(html, pathLabel){
@@ -7757,7 +7796,7 @@ function omrPagesHtml(t, qs, who, clsName, phone4){
   const meta = (cn ? cn+' · ' : '') + weekText(t.week);
   const pages = [];
   for(let i=0;i<cols.length;i+=2){
-    pages.push(`<section class="page">
+    pages.push(`<section class="page${i===0?' fs':''}">
       <i class="m tl"></i><i class="m tr"></i><i class="m bl"></i><i class="m br"></i>
       <header>
         <div class="hl">
@@ -7902,10 +7941,11 @@ ${PRINT_PROBLEM_CSS}
 ${PRINT_KEY_CSS}
 ${COVER_CSS}
 ${scopeCss(OMR_CSS,'.omrdoc')}
-</style></head><body>
+</style></head><body class="${$('bundle-duplex') && $('bundle-duplex').checked ? 'duplex' : ''}">
 ${PRINT_BAR_HTML}
 ${wantCover ? coverHtml(c.name, selWeek, items) : ''}
 ${sections.join('')}
+<script>${DUPLEX_JS}<\/script>
 </body></html>`;
   closeModal('bundle-modal');
   openPrintWindow(html, '명덕외고-국제정치');
@@ -7965,9 +8005,10 @@ ${PRINT_PAD_CSS}
 ${PRINT_PROBLEM_CSS}
 ${PRINT_KEY_CSS}
 ${scopeCss(OMR_CSS,'.omrdoc')}
-</style></head><body>
+</style></head><body class="${$('tp-duplex') && $('tp-duplex').checked ? 'duplex' : ''}">
 ${PRINT_BAR_HTML}
 ${sections.join('')}
+<script>${DUPLEX_JS}<\/script>
 </body></html>`;
   closeModal('task-print-modal');
   openPrintWindow(html, '명덕외고-국제정치');
@@ -11557,7 +11598,7 @@ function renderFirebaseGuide(){
     <li>문제 등록 방법: 직접 입력, <b>PDF 문제 추출</b>(문제지·정답지를 올리면 원본 문번 순서로 정렬, 저장 전 모든 칸 수정 가능), 학생 관리의 학생 목록은 이름·학교·전화번호 검색, 수업별, 미제출자만 보기로 좁혀 볼 수 있습니다. 문제은행에서 체크한 문제는 <b>선택 삭제</b> 버튼으로 한 번에 지울 수 있습니다(과제·시험·오답노트에서도 함께 제외되며 되돌릴 수 없음). <b>과제·시험 원본 PDF</b>는 10MB를 넘으면 등록 시 자동으로 압축해 올립니다(압축본은 글자 선택·검색이 안 될 수 있음). <b>AI 문제 생성</b>(참고 자료 최대 10개·합계 100MB, 3MB가 넘는 PDF는 Gemini 파일 저장소에 올려서 처리하므로 큰 PDF도 가능), <b>문제 JSON 가져오기</b>(문제은행 맨 위 카드의 <b>Claude용 안내문 복사</b> → Claude에게 붙여넣기). 보기 표·복수 정답·이미지 붙여넣기(Ctrl+V)를 지원합니다. <b>그림 정밀 자르기</b>는 AI를 한 번 더 부르니 한도를 아끼려면 평소엔 꺼 두세요.</li>
     <li><b>모든 문제에는 고유 번호(#1, #2…)</b>가 붙습니다(기존 문제는 관리자가 접속하면 등록 순으로 자동 부여, 삭제해도 번호는 안 바뀜). 문제은행 검색창에 <code>#번호</code>를 넣거나 <b>문제 번호순</b> 정렬로 찾습니다.</li>
     <li><b>AI 변형 문제</b>(문제 메뉴의 관리 탭)에서 학생별 변형 문제를 모아 보고, 변형 문제에 표시된 <b>원본 번호</b>와 <b>원본 보기</b>로 어느 문제의 변형인지 확인합니다. 문제은행 추가·삭제·인쇄도 여기서 합니다.</li>
-    <li><b>인쇄</b>: 문제은행에서 선택 → 인쇄하기 → 문제 / 빠른 정답 / 해설 선택. 오답노트 인쇄는 학생 상세에서 <b>복습 필요만</b> 또는 <b>전체</b>를 뽑습니다. <b>주차 묶음 인쇄</b>(수업 · 주차 탭)는 표지·문제지·정답·<b>해설지(선택)</b>를 한 번에 뽑습니다.</li>
+    <li><b>인쇄</b>: 문제은행에서 선택 → 인쇄하기 → 문제 / 빠른 정답 / 해설 선택. 오답노트 인쇄는 학생 상세에서 <b>복습 필요만</b> 또는 <b>전체</b>를 뽑습니다. <b>주차 묶음 인쇄</b>(수업 · 주차 탭)는 표지·문제지·정답·<b>해설지(선택)</b>를 한 번에 뽑습니다. <b>양면 인쇄 맞춤</b>(기본 켜짐)을 쓰면 표지·문제지·OMR·해설지가 각각 앞면에서 시작하도록, 홀수 쪽에서 끝나는 항목 뒤에 빈 면이 자동으로 들어갑니다.</li>
   </ul>
 
   <h3 ${h3}>과제 · 시험 · 채점</h3>
