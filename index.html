@@ -15469,6 +15469,65 @@ window.__state = {
     return currentUserIsAdmin;
   }
 };
+
+/* ---------- 뒤로가기 가드: 사이트 밖으로 튕기지 않고 화면 안에서 한 단계씩 뒤로 ---------- */
+let backExitArmed = 0;
+function backToast(msg) {
+  let t = $('back-toast');
+  if (!t) {
+    t = document.createElement('div');
+    t.id = 'back-toast';
+    document.body.appendChild(t);
+  }
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(backToast._t);
+  backToast._t = setTimeout(() => t.classList.remove('show'), 2200);
+}
+function handleBackStep() {
+  // 1) 역할 선택 화면은 반드시 골라야 하므로 뒤로가기로 넘어가지 못한다
+  const gate = $('role-gate');
+  if (gate && !gate.hidden) return true;
+  // 2) 열린 창이 있으면 가장 위의 창부터 닫는다 (풀이 화면은 나가기 확인)
+  const open = [...document.querySelectorAll('.modal-bg.show')];
+  if (open.length) {
+    const z = el => parseInt(getComputedStyle(el).zIndex, 10) || 0;
+    const top = open.reduce((a, b) => (z(b) >= z(a) ? b : a));
+    if (top.id === 'solve-modal') exitSolve();
+    else if (top.id === 'cam-modal' && typeof closeCamGuide === 'function') closeCamGuide();
+    else closeModal(top.id);
+    return true;
+  }
+  // 3) 미리보기 중이면 관리자 화면으로
+  if (previewingStudent) {
+    if (document.body.classList.contains('quiet-preview')) exitQuietPreview();
+    else exitStudentPreview();
+    return true;
+  }
+  // 4) 홈이 아닌 탭이면 홈 탭으로
+  if (currentUserIsAdmin && $('shell-admin').style.display !== 'none') {
+    const act = document.querySelector('#shell-admin .tabpanel.active');
+    if (act && act.id !== 'tab-a-schedule') { setAdminTab('a-schedule'); return true; }
+  } else if (currentStudent && $('shell-student').style.display !== 'none') {
+    const act = document.querySelector('#shell-student .tabpanel.active');
+    if (act && act.id !== 'tab-t-main') { setStudentTab('t-main'); return true; }
+  }
+  return false;
+}
+(function initBackGuard() {
+  try {
+    history.replaceState({ guard: 0 }, '');
+    history.pushState({ guard: 1 }, '');
+  } catch (e) { return; }
+  window.addEventListener('popstate', () => {
+    if (handleBackStep()) { history.pushState({ guard: 1 }, ''); return; }
+    // 더 돌아갈 화면이 없을 때: 2초 안에 한 번 더 누르면 실제로 나간다
+    if (Date.now() < backExitArmed) { backExitArmed = 0; history.back(); return; }
+    backExitArmed = Date.now() + 2200;
+    history.pushState({ guard: 1 }, '');
+    backToast('뒤로가기를 한 번 더 누르면 사이트를 나갑니다');
+  });
+})();
 decoratePageHeads();
 </script>
 

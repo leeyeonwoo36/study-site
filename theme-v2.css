@@ -741,3 +741,6 @@ table tbody tr{transition:background .12s;}
 .pg-leg span{display:inline-flex; align-items:center; gap:5px;} .pg-leg .pg-dot{width:10px; height:10px; border-radius:3px;} .pg-leg .pg-dot.exam{border-radius:50%;}
 /* 풀이 화면(전체 화면) 위에 떠야 하는 창 */
 #cam-modal, #omr-confirm-modal{z-index:90;}
+
+#back-toast{position:fixed; left:50%; bottom:84px; transform:translate(-50%,12px); background:rgba(22,32,29,.92); color:#fff; padding:10px 16px; border-radius:999px; font-size:13px; font-weight:600; opacity:0; pointer-events:none; transition:opacity .2s, transform .2s; z-index:10000; max-width:90vw; text-align:center;}
+#back-toast.show{opacity:1; transform:translate(-50%,0);}
