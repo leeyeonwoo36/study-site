@@ -600,9 +600,10 @@ body.on-login{
 .form-grid.g2{grid-template-columns:repeat(2,minmax(0,1fr))}
 /* 출석 체크: 가로 스크롤 없이 화면 안에 맞춘다 */
 .att-list{width:100%}
-.att-head,.att-row{display:grid;grid-template-columns:minmax(0,1.3fr) auto minmax(0,1fr);gap:8px 14px;align-items:center}
+.att-head,.att-row{display:grid;grid-template-columns:minmax(0,1.3fr) 144px minmax(0,1fr);gap:8px 14px;align-items:center}
 .att-head{padding:8px 10px;font-size:12.5px;font-weight:700;color:var(--muted);border-bottom:1px solid var(--border)}
 .att-row{padding:9px 10px;border-bottom:1px solid var(--border);min-height:56px}
+.att-head span:nth-child(2){text-align:center}
 .att-who{min-width:0;overflow-wrap:anywhere;font-weight:600}
 .att-who small{color:#8993AA;font-weight:400;font-size:12px}
 .att-why{min-width:0}
