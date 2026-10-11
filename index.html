@@ -12538,8 +12538,8 @@ function inkLaserCanvas() {
     document.body.appendChild(c);
     try { c.getContext('2d', { desynchronized: true }); } catch (e) {} // 지연이 적은 그리기 힌트
   }
-  const dpr = Math.min(window.devicePixelRatio || 1, 2), w = Math.round(innerWidth * dpr), h = Math.round(innerHeight * dpr);
-  if (c.width !== w || c.height !== h) { c.width = w; c.height = h; }
+  const dpr = Math.min(window.devicePixelRatio || 1, 1.5), w = Math.round(innerWidth * dpr), h = Math.round(innerHeight * dpr); // 레이저는 번짐이 있어 1.5배면 충분 (픽셀 수 절반)
+  if (c.width !== w || c.height !== h) { c.width = w; c.height = h; INK.lzBox = null; }
   return c;
 }
 function inkLaserClear() {
@@ -12547,81 +12547,106 @@ function inkLaserClear() {
   INK.lzPred = null;
   INK.lzHeld = false;
   INK.lzEnd = 0;
+  INK.lzBox = null;
   const c = $('laser-overlay');
   if (c) c.getContext('2d').clearRect(0, 0, c.width, c.height);
+}
+/* 프레임마다 객체를 만들지 않도록 재사용하는 좌표 버퍼 */
+const LZ = { x: new Float32Array(2048), y: new Float32Array(2048), l: new Float32Array(2048), runs: [] };
+function lzGrow() {
+  ['x', 'y', 'l'].forEach(k => { const n = new Float32Array(LZ[k].length * 2); n.set(LZ[k]); LZ[k] = n; });
 }
 function inkLaserDraw(now) {
   const cv = inkLaserCanvas(), ctx = cv.getContext('2d');
   const dpr = cv.width / Math.max(1, innerWidth);
-  ctx.clearRect(0, 0, cv.width, cv.height);
   const trail = INK.lz || [];
-  const life = p => Math.max(0, Math.min(1, 1 - (now - p.t) / LASER_MS));
-  // 1) 점 사이를 곡선으로 촘촘히 보간해 부드러운 꼬리를 만든다 (굵기와 농도는 남은 수명에 비례)
-  const runs = [];
-  let run = null;
-  trail.forEach(p => { if (p.brk || !run) { run = []; runs.push(run); } run.push(p); });
-  const dense = [];
-  runs.forEach((rn, ri) => {
+  const life = t => Math.max(0, Math.min(1, 1 - (now - t) / LASER_MS));
+  // 지난 프레임에 그린 영역만 지운다 (전체 화면을 매번 지우고 합성하면 태블릿에서 버벅임)
+  if (INK.lzBox) ctx.clearRect(INK.lzBox.x, INK.lzBox.y, INK.lzBox.w, INK.lzBox.h);
+  // 1) 점 사이를 곡선으로 보간해 부드러운 꼬리를 만든다 (3px 간격, 굵기는 남은 수명에 비례)
+  let n = 0;
+  const runs = LZ.runs;
+  runs.length = 0;
+  const emit = (x, y, l) => { if (n >= LZ.x.length) lzGrow(); LZ.x[n] = x; LZ.y[n] = y; LZ.l[n] = l; n++; };
+  const STEP = 3 * dpr;
+  let i0 = 0;
+  while (i0 < trail.length) {
+    let i1 = i0 + 1;
+    while (i1 < trail.length && !trail[i1].brk) i1++;
     const pts = [];
-    rn.forEach(p => { const l = pts[pts.length - 1]; if (!l || Math.hypot(p.x - l.x, p.y - l.y) > 0.6) pts.push({ x: p.x, y: p.y, t: p.t }); });
-    // 아직 오지 않은 입력을 예측해 머리 쪽이 손보다 뒤처져 보이지 않게
-    if (INK.lzHeld && ri === runs.length - 1 && INK.lzPred && pts.length) pts.push({ x: INK.lzPred.x, y: INK.lzPred.y, t: now });
-    if (pts.length < 2) { if (pts.length) dense.push([{ x: pts[0].x * dpr, y: pts[0].y * dpr, l: life(pts[0]) }]); return; }
-    const out = [{ x: pts[0].x * dpr, y: pts[0].y * dpr, l: life(pts[0]) }];
-    for (let i = 1; i < pts.length; i++) {
-      const a = pts[i - 1], b = pts[i], c = pts[i + 1];
-      const sx = (i === 1 ? a.x : (a.x + b.x) / 2) * dpr, sy = (i === 1 ? a.y : (a.y + b.y) / 2) * dpr;
-      const ex = (c ? (b.x + c.x) / 2 : b.x) * dpr, ey = (c ? (b.y + c.y) / 2 : b.y) * dpr;
-      const la = life(a), lb = life(b), lc = c ? life(c) : lb;
-      const len = Math.hypot(ex - sx, ey - sy) + Math.hypot(b.x * dpr - sx, b.y * dpr - sy), N = Math.max(1, Math.ceil(len / (2 * dpr)));
-      for (let k = 1; k <= N; k++) {
-        const t = k / N, u = 1 - t;
-        out.push({
-          x: u * u * sx + 2 * u * t * b.x * dpr + t * t * ex,
-          y: u * u * sy + 2 * u * t * b.y * dpr + t * t * ey,
-          l: c ? (t < 0.5 ? la + (lb - la) * t * 2 : lb + (lc - lb) * (t - 0.5) * 2) : la + (lb - la) * t
-        });
+    for (let i = i0; i < i1; i++) {
+      const p = trail[i], l = pts[pts.length - 1];
+      if (!l || Math.hypot(p.x - l.x, p.y - l.y) > 1.2) pts.push(p);
+    }
+    const lastRun = i1 >= trail.length;
+    const useP = INK.lzHeld && lastRun && INK.lzPred && pts.length;
+    if (useP) pts.push({ x: INK.lzPred.x, y: INK.lzPred.y, t: now }); // 아직 오지 않은 입력을 예측해 머리가 손보다 뒤처지지 않게
+    runs.push(n);
+    if (pts.length === 1) emit(pts[0].x * dpr, pts[0].y * dpr, life(pts[0].t));
+    else if (pts.length > 1) {
+      emit(pts[0].x * dpr, pts[0].y * dpr, life(pts[0].t));
+      for (let i = 1; i < pts.length; i++) {
+        const a = pts[i - 1], b = pts[i], c = pts[i + 1];
+        const sx = (i === 1 ? a.x : (a.x + b.x) / 2) * dpr, sy = (i === 1 ? a.y : (a.y + b.y) / 2) * dpr;
+        const ex = (c ? (b.x + c.x) / 2 : b.x) * dpr, ey = (c ? (b.y + c.y) / 2 : b.y) * dpr;
+        const la = life(a.t), lb = life(b.t), lc = c ? life(c.t) : lb;
+        const N = Math.max(1, Math.ceil((Math.hypot(ex - sx, ey - sy) + Math.hypot(b.x * dpr - sx, b.y * dpr - sy)) / STEP));
+        for (let k = 1; k <= N; k++) {
+          const t = k / N, u = 1 - t;
+          emit(u * u * sx + 2 * u * t * b.x * dpr + t * t * ex, u * u * sy + 2 * u * t * b.y * dpr + t * t * ey,
+            c ? (t < 0.5 ? la + (lb - la) * t * 2 : lb + (lc - lb) * (t - 0.5) * 2) : la + (lb - la) * t);
+        }
       }
     }
-    dense.push(out);
-  });
-  // 2) 구간마다 투명도가 겹쳐 생기는 끊김/구슬 무늬를 없애려고, 불투명하게 이어 그린 레이어를 합성한다
+    i0 = i1;
+  }
+  runs.push(n);
+  // 2) 이번에 그릴 영역(바운딩 박스)
+  const head = trail[trail.length - 1];
+  const dotA = INK.lzHeld ? 1 : Math.max(0, 1 - (now - (INK.lzEnd || 0)) / 260);
+  let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
+  for (let i = 0; i < n; i++) { const x = LZ.x[i], y = LZ.y[i]; if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
+  const hp = head && dotA > 0 ? (INK.lzHeld && INK.lzPred ? INK.lzPred : head) : null;
+  if (hp) { x0 = Math.min(x0, hp.x * dpr); x1 = Math.max(x1, hp.x * dpr); y0 = Math.min(y0, hp.y * dpr); y1 = Math.max(y1, hp.y * dpr); }
+  if (x0 > x1) { INK.lzBox = null; return; }
+  const pad = 22 * dpr;
+  const bx = Math.max(0, Math.floor(x0 - pad)), by = Math.max(0, Math.floor(y0 - pad));
+  const bw = Math.min(cv.width, Math.ceil(x1 + pad)) - bx, bh = Math.min(cv.height, Math.ceil(y1 + pad)) - by;
+  INK.lzBox = { x: bx, y: by, w: bw, h: bh };
+  const ease = l => 1 - Math.pow(1 - l, 1.6); // 꼬리 끝은 빨리 가늘어지고 머리 근처는 굵게
+  const stroke = (c2, wf, minW) => {
+    c2.lineCap = 'round'; c2.lineJoin = 'round';
+    for (let r = 0; r < runs.length - 1; r++) {
+      const a = runs[r], b = runs[r + 1];
+      if (b - a === 1) { if (LZ.l[a] > 0) { c2.beginPath(); c2.arc(LZ.x[a], LZ.y[a], ((minW + wf * ease(LZ.l[a])) * dpr) / 2, 0, 7); c2.fill(); } continue; }
+      for (let i = a + 1; i < b; i++) {
+        const l = LZ.l[i]; if (l <= 0) continue;
+        c2.lineWidth = (minW * Math.min(1, l * 4) + wf * ease(l)) * dpr;
+        c2.beginPath(); c2.moveTo(LZ.x[i - 1], LZ.y[i - 1]); c2.lineTo(LZ.x[i], LZ.y[i]); c2.stroke();
+      }
+    }
+  };
+  ctx.save();
+  // 바깥 빛만 레이어에서 불투명으로 그려 반투명하게 합성 (구슬 무늬 방지). 합성은 바운딩 박스만.
   const lay = INK.laserLayer || (INK.laserLayer = document.createElement('canvas'));
   if (lay.width !== cv.width || lay.height !== cv.height) { lay.width = cv.width; lay.height = cv.height; }
   const lc2 = lay.getContext('2d');
-  const ease = l => 1 - Math.pow(1 - l, 1.6); // 꼬리 끝은 더 빨리 가늘어지고 머리 근처는 굵게 유지
-  const pass = (color, wf, minW, alpha) => {
-    lc2.clearRect(0, 0, lay.width, lay.height);
-    lc2.lineCap = 'round'; lc2.lineJoin = 'round'; lc2.strokeStyle = color; lc2.fillStyle = color;
-    dense.forEach(o => {
-      if (o.length === 1) {
-        if (o[0].l > 0) { lc2.beginPath(); lc2.arc(o[0].x, o[0].y, ((minW + wf * ease(o[0].l)) * dpr) / 2, 0, 7); lc2.fill(); }
-        return;
-      }
-      for (let i = 1; i < o.length; i++) {
-        const q = o[i];
-        if (q.l <= 0) continue;
-        lc2.lineWidth = (minW * Math.min(1, q.l * 4) + wf * ease(q.l)) * dpr;
-        lc2.beginPath(); lc2.moveTo(o[i - 1].x, o[i - 1].y); lc2.lineTo(q.x, q.y); lc2.stroke();
-      }
-    });
-    ctx.globalAlpha = alpha;
-    ctx.drawImage(lay, 0, 0);
-  };
-  ctx.save();
-  pass('#ff3b3b', 10, 3, 0.26); // 바깥 빛
-  pass('#ff2b2b', 4.6, 1, 1); // 붉은 심
-  pass('#fff0f0', 1.8, 0.4, 1); // 하얀 중심선
+  lc2.clearRect(bx, by, bw, bh);
+  lc2.strokeStyle = lc2.fillStyle = '#ff3b3b';
+  stroke(lc2, 10, 3);
+  ctx.globalAlpha = 0.26;
+  ctx.drawImage(lay, bx, by, bw, bh, bx, by, bw, bh);
+  // 붉은 심·하얀 중심선은 불투명이라 레이어 없이 바로 그린다
+  ctx.globalAlpha = 1;
+  ctx.strokeStyle = ctx.fillStyle = '#ff2b2b'; stroke(ctx, 4.6, 1);
+  ctx.strokeStyle = ctx.fillStyle = '#fff0f0'; stroke(ctx, 1.8, 0.4);
   // 3) 펜이 닿은 곳의 빛나는 점 (뗀 뒤에는 서서히 사라짐)
-  const head = trail[trail.length - 1];
-  const dotA = INK.lzHeld ? 1 : Math.max(0, 1 - (now - (INK.lzEnd || 0)) / 260);
-  if (head && dotA > 0) {
-    const hx = (INK.lzHeld && INK.lzPred ? INK.lzPred.x : head.x) * dpr, hy = (INK.lzHeld && INK.lzPred ? INK.lzPred.y : head.y) * dpr;
+  if (hp) {
     ctx.globalAlpha = dotA;
-    ctx.shadowColor = '#ff4d4d'; ctx.shadowBlur = 14 * dpr; ctx.fillStyle = '#ff2b2b';
-    ctx.beginPath(); ctx.arc(hx, hy, 4.6 * dpr * (0.6 + 0.4 * dotA), 0, Math.PI * 2); ctx.fill();
+    ctx.shadowColor = '#ff4d4d'; ctx.shadowBlur = 12 * dpr; ctx.fillStyle = '#ff2b2b';
+    ctx.beginPath(); ctx.arc(hp.x * dpr, hp.y * dpr, 4.6 * dpr * (0.6 + 0.4 * dotA), 0, Math.PI * 2); ctx.fill();
     ctx.shadowBlur = 0; ctx.fillStyle = '#fff';
-    ctx.beginPath(); ctx.arc(hx, hy, 1.9 * dpr, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(hp.x * dpr, hp.y * dpr, 1.9 * dpr, 0, Math.PI * 2); ctx.fill();
   }
   ctx.restore();
 }
@@ -12650,12 +12675,14 @@ function inkRedraw(qid) {
   (INK.data[qid] || []).forEach(st => inkDrawStroke(ctx, st, r.width * dpr, dpr));
 }
 function inkLaserMove(e) {
+  if (e.type === 'pointerrawupdate') INK.rawOk = true;
+  else if (INK.rawOk) return; // 고빈도 입력을 받는 기기에서는 pointermove를 중복 처리하지 않는다
   const tr = (INK.lz = INK.lz || []);
   const evs = e.getCoalescedEvents ? e.getCoalescedEvents() : [e];
   const t = performance.now();
   (evs.length ? evs : [e]).forEach(ev => {
     const l = tr[tr.length - 1];
-    if (!l || Math.abs(ev.clientX - l.x) + Math.abs(ev.clientY - l.y) > 0.01) tr.push({ x: ev.clientX, y: ev.clientY, t });
+    if (!l || Math.abs(ev.clientX - l.x) + Math.abs(ev.clientY - l.y) > 1) tr.push({ x: ev.clientX, y: ev.clientY, t });
   });
   const pr = e.getPredictedEvents ? e.getPredictedEvents() : [];
   INK.lzPred = pr.length ? { x: pr[pr.length - 1].clientX, y: pr[pr.length - 1].clientY } : null;
