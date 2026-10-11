@@ -794,6 +794,7 @@ body.quiet-preview .sidebar{ padding-top:22px; }
       <!-- 수업 · 주차 -->
       <div class="tabpanel active" id="tab-a-schedule">
         <div class="page-head"><div><h1>수업 · 주차</h1><p>수업을 개설하고 학생을 배정한 뒤, 수업별로 주차와 회차(요일·시간·교실)를 등록합니다. 과제·시험·영상은 주차를 골라 부여합니다.</p></div></div>
+        <div id="adm-overview" class="ov-grid"></div>
         <div class="card">
           <h3>수업 개설</h3>
           <div style="display:flex; gap:8px; margin-bottom:12px;">
@@ -1474,6 +1475,7 @@ body.quiet-preview .sidebar{ padding-top:22px; }
 
         <div id="stu-todo"></div>
         <div id="stu-wrong-card"></div>
+        <div id="stu-progress"></div>
 
         <div class="card sm-att">
           <h3>출석</h3>
@@ -2789,6 +2791,7 @@ function ensureScoreSlots() {
 }
 function renderAll() {
   renderStudents();
+  try { renderAdminOverview(); } catch (e) { console.error(e); }
   renderSchedules();
   renderQSetOptions();
   renderQuestions();
@@ -11407,6 +11410,71 @@ setInterval(() => {
     renderUrgentBanner();
   } catch (e) {}
 }, 60000);
+
+/* ---------- 인포그래픽: 관리자 요약 / 학생 진행 스트립 / 페이지 제목 아이콘 ---------- */
+function ovRing(pct, color) {
+  const r = 15, c = 2 * Math.PI * r, v = Math.max(0, Math.min(100, pct)) / 100 * c;
+  return `<svg class="ov-ring" viewBox="0 0 40 40" aria-hidden="true"><circle cx="20" cy="20" r="${r}" fill="none" stroke="var(--paper-line)" stroke-width="4.5"/><circle cx="20" cy="20" r="${r}" fill="none" stroke="${color}" stroke-width="4.5" stroke-linecap="round" stroke-dasharray="${v.toFixed(1)} ${c.toFixed(1)}" transform="rotate(-90 20 20)"/></svg>`;
+}
+function renderAdminOverview() {
+  const box = $('adm-overview');
+  if (!box || !currentUserIsAdmin) return;
+  const ok = students.filter(x => x.approved), wait = students.length - ok.length;
+  const now = Date.now(), wk = now + 7 * 864e5;
+  const inWeek = schedules.filter(sc => { const t = new Date(sc.date).getTime(); return !isNaN(t) && t >= now - 864e5 && t <= wk; }).length;
+  let total = 0, done = 0, needs = 0, open = 0;
+  ['hw', 'exam'].forEach(kind => (tasks[kind] || []).forEach(t => {
+    if (t.startAt && new Date(t.startAt) > new Date()) return;
+    open++;
+    taskTargetStudents(t).forEach(st => {
+      total++;
+      const sub = submissions[t.tid + '|' + st.uid], rec = ((scores[kind] || {})[t.tid] || {})[st.uid];
+      if (sub) done++;
+      const scored = !!(rec && String(rec.score || '').trim());
+      if (isPhotoPending(kind, t.tid, st.uid) || (sub && sub.mode === 'offline' && !scored)) needs++;
+    });
+  }));
+  const pct = total ? Math.round(done / total * 100) : 0;
+  const ic = p => `<span class="ov-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${p}</svg></span>`;
+  box.innerHTML = `
+    <div class="ov-tile">${ic('<circle cx="9" cy="8.5" r="3.2"/><path d="M3.5 19c.6-3.2 2.8-4.8 5.5-4.8s4.9 1.6 5.5 4.8"/><path d="M16 5.6a3 3 0 0 1 0 5.8M17.5 14.5c1.7.5 2.8 2 3 4.5"/>')}
+      <div class="ov-b"><div class="ov-l">학생</div><div class="ov-v">${ok.length}<small>명</small></div><div class="ov-s">${wait ? `<span class="ov-pill warn">승인 대기 ${wait}</span>` : '승인 대기 없음'}</div></div></div>
+    <div class="ov-tile">${ic('<rect x="4" y="5.5" width="16" height="14" rx="2.5"/><path d="M4 10h16M9 3.5v4M15 3.5v4"/>')}
+      <div class="ov-b"><div class="ov-l">수업</div><div class="ov-v">${classes.length}<small>개</small></div><div class="ov-s">앞으로 7일 일정 ${inWeek}회</div></div></div>
+    <div class="ov-tile">${ovRing(pct, 'var(--brand)')}
+      <div class="ov-b"><div class="ov-l">제출률</div><div class="ov-v">${total ? pct : '-'}<small>${total ? '%' : ''}</small></div><div class="ov-s">진행 중 ${open}건 · ${done}/${total}</div></div></div>
+    <div class="ov-tile">${ic('<rect x="5" y="3.5" width="14" height="17" rx="2.5"/><path d="M9 9h6M9 13h6M9 17h3"/>')}
+      <div class="ov-b"><div class="ov-l">채점 대기</div><div class="ov-v">${needs}<small>건</small></div><div class="ov-s">${needs ? '<span class="ov-pill warn">채점 확인 탭에서 처리</span>' : '모두 처리됨'}</div></div></div>`;
+}
+/* 학생 메인: 내 과제·시험 진행을 점으로 한눈에 */
+function renderStuProgress() {
+  const box = $('stu-progress');
+  if (!box) return;
+  if (!currentStudent || adminViewAll) { box.innerHTML = ''; return; }
+  const now = Date.now();
+  const all = [...tasks.hw.filter(isAssignedToMe).map(t => ({ t, kind: 'hw' })), ...tasks.exam.filter(isAssignedToMe).map(t => ({ t, kind: 'exam' }))]
+    .filter(x => !x.t.startAt || new Date(x.t.startAt).getTime() <= now);
+  if (!all.length) { box.innerHTML = ''; return; }
+  all.sort((a, b) => (new Date(a.t.due).getTime() || 9e15) - (new Date(b.t.due).getTime() || 9e15));
+  const done = all.filter(x => submissions[x.t.tid + '|' + currentStudent]).length;
+  const dots = all.slice(0, 24).map(x => {
+    const sub = submissions[x.t.tid + '|' + currentStudent];
+    const late = !sub && x.t.due && new Date(x.t.due).getTime() < now;
+    return `<span class="pg-dot ${sub ? 'on' : late ? 'late' : ''} ${x.kind}" title="${x.kind === 'hw' ? '과제' : '시험'} · ${esc(x.t.title)}${sub ? ' (제출)' : late ? ' (마감 지남)' : ''}"></span>`;
+  }).join('');
+  box.innerHTML = `<div class="card st-prog"><div class="st-todo-h"><h3>내 학습 진행</h3><span class="st-prog-n"><b>${done}</b> / ${all.length} 제출</span></div>
+    <div class="pg-dots">${dots}</div>
+    <div class="pg-leg"><span><i class="pg-dot on"></i>제출</span><span><i class="pg-dot"></i>남음</span><span><i class="pg-dot late"></i>마감 지남</span><span style="margin-left:auto"><i class="pg-dot"></i>네모 과제 · <i class="pg-dot exam"></i>동그라미 시험</span></div></div>`;
+}
+/* 각 페이지 제목 앞에 사이드바와 같은 아이콘을 은은하게 붙인다 */
+function decoratePageHeads() {
+  document.querySelectorAll('.tabpanel[id^="tab-"]').forEach(p => {
+    const h = p.querySelector('.page-head h1'); if (!h || h.querySelector('.ph-ic')) return;
+    const nav = document.querySelector(`[data-tab="${p.id.slice(4)}"] svg.ni`); if (!nav) return;
+    const sp = document.createElement('span'); sp.className = 'ph-ic'; sp.innerHTML = nav.outerHTML.replace('class="ni"', '');
+    h.prepend(sp);
+  });
+}
 /* 메인: 해야 할 일 전체 목록(마감 없는 것 포함) + 오답노트 복습 카드 */
 function renderStuExtras() {
   const todo = $('stu-todo'),
@@ -11453,6 +11521,7 @@ function renderStudentDashboard(s) {
   if (!currentStudent) return;
   renderUrgentBanner();
   renderStuExtras();
+  renderStuProgress();
   const now = new Date();
 
   // 인사
@@ -15335,6 +15404,7 @@ window.__state = {
     return currentUserIsAdmin;
   }
 };
+decoratePageHeads();
 </script>
 
 <script type="module">
