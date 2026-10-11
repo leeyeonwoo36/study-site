@@ -3038,7 +3038,7 @@ function startSubscriptions(isAdmin, ownerUid) {
   const sub = (name, handler, customRef) => {
     try {
       const ref = customRef || collection(db, name);
-      unsubs.push(onSnapshot(ref, handler, err => console.error(name + ' 구독 에러:', err.code, err.message)));
+      unsubs.push(onSnapshot(ref, snapSoon(handler), err => console.error(name + ' 구독 에러:', err.code, err.message)));
     } catch (e) {
       // 구독 하나가 실패해도 나머지는 계속 걸리도록 격리
       console.error(name + ' 구독 생성 실패:', e.message);
@@ -3096,7 +3096,7 @@ function startSubscriptions(isAdmin, ownerUid) {
     unsubs.push(
       onSnapshot(
         doc(db, 'students', currentStudent),
-        snap => {
+        snapSoon(snap => {
           if (!snap.exists()) return;
           const me = { uid: snap.id, ...snap.data() };
           const i = students.findIndex(s => s.uid === me.uid);
@@ -3104,7 +3104,7 @@ function startSubscriptions(isAdmin, ownerUid) {
           else students.push(me);
           ensureScoreSlots();
           renderStudentSite();
-        },
+        }),
         err => console.error('내 문서 구독 에러:', err.code)
       )
     );
@@ -3113,13 +3113,13 @@ function startSubscriptions(isAdmin, ownerUid) {
     unsubs.push(
       onSnapshot(
         doc(db, 'wrongBank', currentStudent),
-        snap => {
+        snapSoon(snap => {
           wrongItems = snap.exists() ? snap.data().items || {} : {};
           renderWrongNote();
           try {
             renderStuExtras();
           } catch (e) {}
-        },
+        }),
         err => console.error('wrongBank 구독 에러:', err.code)
       )
     );
@@ -3127,10 +3127,10 @@ function startSubscriptions(isAdmin, ownerUid) {
     unsubs.push(
       onSnapshot(
         doc(db, 'variants', currentStudent),
-        snap => {
+        snapSoon(snap => {
           myVariants = snap.exists() ? snap.data().items || [] : [];
           renderVariantList();
-        },
+        }),
         err => console.error('variants 구독 에러:', err.code)
       )
     );
@@ -3378,7 +3378,52 @@ async function migrateLegacyV2() {
     console.error('이전 형식 데이터 복사 실패:', e.message);
   }
 }
+let subsGen = 0; // 구독을 끊을 때마다 올라가는 값
+/* 스냅샷 처리 중에 요청된 화면 그리기는 모아 두었다가 한 번만 실행한다.
+   (데이터 반영은 즉시 하고, 비싼 그리기만 합친다 — 일괄 등록·서버 재확인으로 스냅샷이 연달아 와도 렉이 걸리지 않게) */
+let snapDepth = 0;
+const renderQ = new Map();
+let renderTimer = 0;
+function snapSoon(handler) {
+  return snap => {
+    snapDepth++;
+    try {
+      handler(snap);
+    } finally {
+      snapDepth--;
+    }
+  };
+}
+function flushRenders() {
+  renderTimer = 0;
+  const jobs = [...renderQ.values()];
+  renderQ.clear();
+  jobs.forEach(([f, a]) => {
+    try {
+      f.apply(null, a);
+    } catch (e) {
+      console.error(e);
+    }
+  });
+}
+[
+  'renderAttendance', 'renderBank', 'renderClassAdmin', 'renderDraft', 'renderGradingTable', 'renderKeySepCard', 'renderMemos', 'renderNotices',
+  'renderQSetList', 'renderQSetOptions', 'renderQuestions', 'renderSchedules', 'renderScoreSelects', 'renderScoreTable', 'renderStuExtras',
+  'renderStudentNotices', 'renderStudentSchedule', 'renderStudentSite', 'renderStudentVideos', 'renderStudents', 'renderTasks',
+  'renderVariantList', 'renderVideos', 'renderWrongNote'
+].forEach(name => {
+  const f = window[name];
+  if (typeof f !== 'function') return;
+  window[name] = function (...a) {
+    if (!snapDepth) return f.apply(this, a);
+    const k = name + '|' + JSON.stringify(a);
+    if (!renderQ.has(k)) renderQ.set(k, [f, a]);
+    if (!renderTimer) renderTimer = setTimeout(flushRenders, 40);
+  };
+});
 function stopSubscriptions() {
+  subsGen++;
+  renderQ.clear();
   unsubs.forEach(fn => {
     try {
       fn();
@@ -9467,15 +9512,17 @@ function newTaskCode(seed) {
   return String(Math.floor(Math.random() * 10000)).padStart(4, '0');
 }
 /* 코드가 없는 과제·시험에 관리자 접속 때 한 번 부여한다 */
+const codeBusy = new Set();
 function ensureTaskCodes() {
   if (!currentUserIsAdmin || !window.fb) return;
   const { db, doc, updateDoc } = window.fb;
   tasks.hw.concat(tasks.exam).forEach(t => {
-    if (/^\d{4}$/.test(String(t.code || '')) || t._codeBusy) return;
-    t._codeBusy = true;
+    // 스냅샷마다 과제 객체가 새로 만들어지므로 '진행 중' 표시는 tid 기준 집합에 둔다 (안 그러면 쓰기마다 전부 다시 요청되는 폭주가 생김)
+    if (/^\d{4}$/.test(String(t.code || '')) || codeBusy.has(t.tid)) return;
+    codeBusy.add(t.tid);
     const c = newTaskCode(fallbackTaskCode(t.tid));
     updateDoc(doc(db, 'tasks', t.tid), { code: c }).catch(() => {
-      t._codeBusy = false;
+      codeBusy.delete(t.tid);
       codePending.delete(c);
     });
   });
@@ -12586,10 +12633,18 @@ function inkFit(qid) {
   if (!cv) return;
   const r = cv.parentElement.getBoundingClientRect();
   if (!r.width || !r.height) return;
+  // 필기를 켜지 않았고 쓴 획도 없으면 큰 캔버스를 잡아 두지 않는다 (문항이 많은 시험에서 메모리·렉의 주범)
+  if (!INK.on && !(INK.data[qid] && INK.data[qid].length)) {
+    if (cv.width !== 1) {
+      cv.width = 1;
+      cv.height = 1;
+    }
+    return;
+  }
   let dpr = Math.min(Math.max(window.devicePixelRatio || 1, 2), 3); // 저해상도 화면에서도 선이 각지지 않게 2배 이상
   // 문항이 많으면 캔버스 메모리가 폭증하므로(특히 폰) 전체 픽셀 예산 안에서 배율을 낮춘다
   const n = Math.max(1, Object.keys(INK.cvs).length),
-    budget = 40e6;
+    budget = 30e6;
   while (dpr > 1 && n * r.width * r.height * dpr * dpr > budget) dpr -= 0.25;
   const w = Math.round(r.width * dpr),
     h = Math.round(r.height * dpr);
@@ -13536,6 +13591,7 @@ function inkRefreshBar() {
 }
 function inkToggle() {
   INK.on = !INK.on;
+  if (INK.on) Object.keys(INK.cvs).forEach(inkFit);
   if (!INK.on) inkClearSel();
   inkEcur(null);
   inkRefreshBar();
