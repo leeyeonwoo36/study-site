@@ -1252,7 +1252,7 @@ body.quiet-preview .sidebar{ padding-top:22px; }
             <div><label>검색어</label><input type="text" id="bank-search" placeholder="물음·보기·선지·#번호 검색" oninput="renderBank()"></div>
           </div>
           <div id="bank-count" class="note" style="margin-bottom:10px;"></div>
-  <div style="display:flex; align-items:center; gap:8px; margin-bottom:10px; flex-wrap:wrap;">
+  <div class="bank-toolbar">
   <label style="display:flex; align-items:center; gap:6px; font-size:12.5px; font-weight:600; color:var(--ink-soft);">
     <input type="checkbox" id="bank-select-all" onchange="toggleBankSelectAll()"> 전체 선택 (검색·필터에 걸린 문제 전부)
   </label>
@@ -5714,46 +5714,73 @@ function buildTrendSvgMarkup(arr){
   const x = i => arr.length>1 ? padL+i*xStep : (w/2);
   const y = s => padT + (100-Math.max(0,Math.min(100,s)))/100*(h-padT-padB);
   const pts = arr.map((p,i)=>x(i)+','+y(p.score)).join(' ');
+  const avgPts = arr.filter(p=>p.avg!==null && p.avg!==undefined).map(p=>x(arr.indexOf(p))+','+y(p.avg));
+  const avgLine = avgPts.length>1 ? `<polyline points="${avgPts.join(' ')}" fill="none" stroke="#9aa6a0" stroke-width="2" stroke-dasharray="5 4"></polyline>` : avgPts.length===1 ? `<circle cx="${avgPts[0].split(',')[0]}" cy="${avgPts[0].split(',')[1]}" r="3.5" fill="#9aa6a0"></circle>` : '';
   const dots = arr.map((p,i)=>`<circle cx="${x(i)}" cy="${y(p.score)}" r="4" fill="#2F5D50"></circle>
     <text x="${x(i)}" y="${y(p.score)-10}" font-size="11" text-anchor="middle" fill="#1c2420">${p.score}</text>
     <text x="${x(i)}" y="${h-12}" font-size="10" text-anchor="middle" fill="#7a857f">${esc(p.label)}</text>`).join('');
-  return `<svg viewBox="0 0 ${w} ${h}" style="width:100%; max-width:500px;">
+  return `<svg viewBox="0 0 ${w} ${h}" style="width:100%; max-width:100%;">
     <line x1="${padL}" y1="${padT}" x2="${padL}" y2="${h-padB}" stroke="#dfe5e2"></line>
     <line x1="${padL}" y1="${h-padB}" x2="${w-padR}" y2="${h-padB}" stroke="#dfe5e2"></line>
-    <polyline points="${pts}" fill="none" stroke="#2F5D50" stroke-width="2.5"></polyline>${dots}</svg>`;
+    <polyline points="${pts}" fill="none" stroke="#2F5D50" stroke-width="2.5"></polyline>${avgLine}${dots}</svg>`;
 }
 
 function buildStudentReportHtml(uid){
   const s = students.find(x=>x.uid===uid);
   if(!s) return null;
 
-  const visibleSch = schedules.filter(sc => inClass(sc,uid));
+  /* 출결 */
+  const visibleSch = schedules.filter(sc => inClass(sc,uid)).slice().sort((a,b)=>String(a.date).localeCompare(String(b.date)) || String(a.time||'').localeCompare(String(b.time||'')));
   let p=0,l=0,a=0,n=0;
-  visibleSch.forEach(sc=>{
+  const attRows = visibleSch.map(sc=>{
     const st=(attendance[sc.sid]||{})[uid];
     const v = st?st.status:null;
     if(v==='p')p++; else if(v==='l')l++; else if(v==='a')a++; else n++;
-  });
+    const f = fmtDate(sc.date);
+    const pill = v==='p' ? '<span class="pill g">출석</span>' : v==='l' ? '<span class="pill y">지각</span>' : v==='a' ? '<span class="pill r">결석</span>' : '<span class="pill n">미체크</span>';
+    const why = st && st.reason ? esc(st.reason).replace(/\n/g,' ') : '';
+    return `<tr><td>${f.label} (${f.day.charAt(0)})</td><td>${esc(sc.time||'')}</td><td>${pill}</td><td class="why">${why||'-'}</td></tr>`;
+  }).join('') || '<tr><td colspan="4" class="empty">배정된 수업 일정이 없습니다.</td></tr>';
   const checked = p+l+a;
   const rate = checked ? Math.round(p/checked*100) : null;
 
-  const hwRows = tasks.hw.filter(t=>inClass(t,uid)).map(t=>{
+  /* 과제 */
+  const hwList = tasks.hw.filter(t=>inClass(t,uid));
+  let hwDone = 0;
+  const hwRows = hwList.map(t=>{
+    const sub = submissions[t.tid+'|'+uid];
     const rec = (scores.hw[t.tid]||{})[uid] || {score:'',status:'미완료'};
-    return `<tr><td>${esc(t.title)}</td><td>${fmtPeriod(t)}</td><td>${esc(rec.status||'미완료')}</td><td>${esc(rec.score)||'-'}</td></tr>`;
+    const done = !!sub || /완료/.test(rec.status||'') && !/미완료/.test(rec.status||'');
+    if(done) hwDone++;
+    const late = sub && typeof isLateSub==='function' && isLateSub(sub);
+    const pill = !done ? '<span class="pill r">미제출</span>' : late ? '<span class="pill y">지각 제출</span>' : '<span class="pill g">제출</span>';
+    return `<tr><td>${esc(t.title)}</td><td class="per">${fmtPeriod(t)}</td><td>${pill}</td><td>${esc(rec.score)||'-'}</td></tr>`;
   }).join('') || '<tr><td colspan="4" class="empty">배정된 과제가 없습니다.</td></tr>';
+  const hwRate = hwList.length ? Math.round(hwDone/hwList.length*100) : null;
 
-  const examRows = tasks.exam.filter(t=>inClass(t,uid)).map(t=>{
+  /* 시험 + 성적 추이(반 평균 비교) */
+  const exList = tasks.exam.filter(t=>inClass(t,uid));
+  const examRows = exList.map(t=>{
     const rec = (scores.exam[t.tid]||{})[uid] || {score:''};
-    return `<tr><td>${esc(t.title)}</td><td>${fmtPeriod(t)}</td><td>${esc(rec.score)||'-'}</td></tr>`;
+    return `<tr><td>${esc(t.title)}</td><td class="per">${fmtPeriod(t)}</td><td>${esc(rec.score)||'-'}</td></tr>`;
   }).join('') || '<tr><td colspan="3" class="empty">배정된 시험이 없습니다.</td></tr>';
-
+  const classAvg = t => {
+    const vals = students.filter(x=>x.approved!==false && inClass(t,x.uid)).map(x=>{ const r=(scores.exam[t.tid]||{})[x.uid]; return r ? scoreToPercent(r.score) : null; }).filter(v=>v!==null);
+    return vals.length>=2 ? Math.round(vals.reduce((s,v)=>s+v,0)/vals.length) : null;
+  };
   const trendArr = tasks.exam.map(t=>{
     const rec = (scores.exam[t.tid]||{})[uid];
     const pct = rec ? scoreToPercent(rec.score) : null;
-    return pct===null ? null : {label:t.title, score:pct};
+    return pct===null ? null : {label:t.title, score:pct, avg:classAvg(t)};
   }).filter(Boolean);
+  const exAvg = trendArr.length ? Math.round(trendArr.reduce((s,v)=>s+v.score,0)/trendArr.length) : null;
+  const exLast = trendArr.length ? trendArr[trendArr.length-1] : null;
 
   const today = new Date().toLocaleDateString('ko-KR');
+  const ring = (v,label,sub) => {
+    const pct = v===null ? 0 : Math.max(0,Math.min(100,v));
+    return `<div class="kpi"><div class="rg" style="--v:${pct}"><b>${v===null?'-':v+'%'}</b></div><div class="kl">${label}</div><div class="ks">${sub}</div></div>`;
+  };
 
   return `<!DOCTYPE html><html lang="ko"><head><meta charset="UTF-8">
 <title>${esc(s.name)} 학생 학습현황표</title>
@@ -5761,30 +5788,48 @@ function buildStudentReportHtml(uid){
 <style>
 ${PRINT_PAD_CSS}
   :root{--b:#2F5D50; --bs:#E8F1EE; --ink:#1c2420; --mute:#7a857f; --line:#e3e8e5;}
+  *{-webkit-print-color-adjust:exact; print-color-adjust:exact;}
   body{font-family:'Pretendard Variable','Pretendard','Noto Sans KR',-apple-system,sans-serif; color:var(--ink); line-height:1.55; letter-spacing:-.01em; margin:0; -webkit-font-smoothing:antialiased;}
   .hd{display:flex; align-items:flex-end; justify-content:space-between; gap:12px; padding-bottom:14px; border-bottom:3px solid var(--b);}
   .hd .k{font-size:11px; font-weight:800; letter-spacing:.12em; color:var(--b);}
   h1{font-size:24px; font-weight:900; margin:2px 0 0;}
-  .hd .d{font-size:11.5px; color:var(--mute);}
+  .hd .d{font-size:11.5px; color:var(--mute); text-align:right;}
   .info{display:grid; grid-template-columns:repeat(3,1fr); gap:8px 16px; margin:14px 0 4px;}
   .info div{font-size:12.5px; font-weight:700;}
   .info b{display:block; color:var(--mute); font-size:10.5px; font-weight:600; margin-bottom:1px;}
   h2{font-size:13.5px; font-weight:900; margin:24px 0 10px; display:flex; align-items:center; gap:8px; break-after:avoid;}
   h2:before{content:''; width:4px; height:15px; border-radius:2px; background:var(--b);}
-  .stats{display:grid; grid-template-columns:repeat(5,1fr); gap:8px;}
-  .stat{border:1px solid var(--line); border-radius:10px; padding:10px 8px; text-align:center; background:#fff;}
-  .stat b{display:block; font-size:20px; font-weight:900; line-height:1.2;}
+  h2 small{font-weight:600; color:var(--mute); font-size:11.5px; margin-left:2px;}
+  .kpis{display:grid; grid-template-columns:repeat(4,1fr); gap:10px; margin-top:16px;}
+  .kpi{border:1px solid var(--line); border-radius:14px; padding:14px 8px 12px; text-align:center; break-inside:avoid;}
+  .rg{--v:0; width:76px; height:76px; border-radius:50%; margin:0 auto 8px; display:grid; place-items:center;
+      background:conic-gradient(var(--b) calc(var(--v)*1%), var(--bs) 0);}
+  .rg b{width:58px; height:58px; border-radius:50%; background:#fff; display:grid; place-items:center; font-size:15px; font-weight:900;}
+  .kl{font-size:12.5px; font-weight:800;} .ks{font-size:11px; color:var(--mute); margin-top:1px;}
+  .stats{display:grid; grid-template-columns:repeat(4,1fr); gap:8px; margin-bottom:10px;}
+  .stat{border-radius:10px; padding:9px 8px; text-align:center; background:#f5f7f6;}
+  .stat b{display:block; font-size:18px; font-weight:900; line-height:1.2;}
   .stat span{font-size:11px; color:var(--mute); font-weight:600;}
-  .stat.rate{background:var(--bs); border-color:var(--bs);} .stat.rate b{color:var(--b);}
+  .stat.g b{color:#1d7a47;} .stat.y b{color:#b07800;} .stat.r b{color:#c2453b;}
   table.t{width:100%; border-collapse:collapse; font-size:12.5px;}
   .t th{font-size:11px; font-weight:700; color:var(--mute); text-align:left; padding:6px 8px; border-bottom:1.5px solid var(--ink);}
-  .t td{padding:8px; border-bottom:1px solid var(--line); text-align:left;}
+  .t td{padding:8px; border-bottom:1px solid var(--line); text-align:left; vertical-align:top;}
   .t tr{break-inside:avoid;}
   .t td:last-child,.t th:last-child{text-align:right;}
+  .t td.per{color:var(--mute); font-size:11.5px;}
+  .t td.why{color:var(--mute); font-size:11.5px; text-align:left;} .att th:last-child{text-align:left;}
+  .pill{display:inline-block; padding:1px 9px; border-radius:99px; font-size:11px; font-weight:800;}
+  .pill.g{background:#e4f6ec; color:#1d7a47;} .pill.y{background:#fff1d1; color:#8a5a00;} .pill.r{background:#fdeceb; color:#b13a30;} .pill.n{background:#eef0ef; color:#6b7570;}
   .empty{color:var(--mute); font-size:12.5px; padding:6px 0;}
+  .cmt{border:1px solid var(--line); border-radius:12px; min-height:84px; padding:12px 14px; font-size:13px; line-height:1.7; outline:none;}
+  .cmt:empty:before{content:'선생님 의견 (인쇄 전에 여기를 눌러 직접 입력할 수 있습니다)'; color:#b3bbb7;}
+  .sign{display:flex; justify-content:flex-end; gap:6px; margin-top:14px; font-size:12px; color:var(--mute);}
+  .legend{display:flex; gap:14px; font-size:11px; color:var(--mute); margin-top:4px;}
+  .legend i{display:inline-block; width:14px; height:0; border-top:2.5px solid var(--b); vertical-align:middle; margin-right:5px;}
+  .legend i.d{border-top:2px dashed #9aa6a0;}
   .no-print{text-align:center; margin-bottom:16px;}
   .no-print button{padding:10px 20px; font-size:14px; cursor:pointer; border:0; border-radius:10px; background:var(--b); color:#fff; font-weight:700;}
-  @media print{ .no-print{display:none;} }
+  @media print{ .no-print{display:none;} .cmt:empty:before{content:'';} .cmt{min-height:70px;} }
 </style></head><body>
 <table class="pad"><thead><tr><td></td></tr></thead><tbody><tr><td>
 <div class="no-print"><button onclick="window.print()">인쇄 / PDF로 저장</button></div>
@@ -5799,23 +5844,35 @@ ${PRINT_PAD_CSS}
   <div><b>전화번호</b>${esc(phoneShow(s.phone))||'-'}</div>
 </div>
 
-<h2>출결 현황</h2>
-<div class="stats">
-  <div class="stat"><b>${p}</b><span>출석</span></div>
-  <div class="stat"><b>${l}</b><span>지각</span></div>
-  <div class="stat"><b>${a}</b><span>결석</span></div>
-  <div class="stat"><b>${n}</b><span>미체크</span></div>
-  <div class="stat rate"><b>${rate===null?'-':rate+'%'}</b><span>출석률</span></div>
+<div class="kpis">
+  ${ring(rate,'출석률',`출석 ${p} / 체크 ${checked}`)}
+  ${ring(hwRate,'과제 제출률',`${hwDone} / ${hwList.length}개`)}
+  ${ring(exAvg,'시험 평균',`${trendArr.length}회 응시`)}
+  ${ring(exLast?exLast.score:null,'최근 시험',exLast?esc(exLast.label):'기록 없음')}
 </div>
 
+<h2>출결 현황</h2>
+<div class="stats">
+  <div class="stat g"><b>${p}</b><span>출석</span></div>
+  <div class="stat y"><b>${l}</b><span>지각</span></div>
+  <div class="stat r"><b>${a}</b><span>결석</span></div>
+  <div class="stat"><b>${n}</b><span>미체크</span></div>
+</div>
+<table class="t att"><tr><th>날짜</th><th>시간</th><th>출결</th><th>사유</th></tr>${attRows}</table>
+
 <h2>과제 현황</h2>
-<table class="t"><tr><th>과제명</th><th>기간</th><th>수행여부</th><th>점수</th></tr>${hwRows}</table>
+<table class="t"><tr><th>과제명</th><th>기간</th><th>제출</th><th>점수</th></tr>${hwRows}</table>
 
 <h2>시험 현황</h2>
 <table class="t"><tr><th>시험명</th><th>기간</th><th>점수</th></tr>${examRows}</table>
 
 <h2>시험 성적 추이</h2>
 ${buildTrendSvgMarkup(trendArr)}
+${trendArr.some(v=>v.avg!==null) ? '<div class="legend"><span><i></i>학생 점수</span><span><i class="d"></i>반 평균</span></div>' : ''}
+
+<h2>선생님 의견</h2>
+<div class="cmt" contenteditable="true"></div>
+<div class="sign">명덕외고 국제정치 스터디 · ${today}</div>
 
 </td></tr></tbody><tfoot><tr><td></td></tr></tfoot></table>
 </body></html>`;

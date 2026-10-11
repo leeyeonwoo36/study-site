@@ -684,3 +684,16 @@ body.on-login{
 @media (max-width:760px){
   #student-detail-modal th, #student-detail-modal td{white-space:normal;}
 }
+
+/* ---- 공통 UI 다듬기 ---- */
+:focus-visible{outline:2.5px solid color-mix(in srgb, var(--brand) 55%, transparent); outline-offset:2px; border-radius:8px;}
+input:focus-visible, select:focus-visible, textarea:focus-visible{outline:none; border-color:var(--brand); box-shadow:0 0 0 3px color-mix(in srgb, var(--brand) 22%, transparent);}
+.bank-toolbar{display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:12px; padding:9px 12px; background:var(--soft); border:1px solid var(--border); border-radius:12px;}
+.bank-toolbar .badge{margin:0;}
+.bank-toolbar > .btn{margin:0;}
+table tbody tr{transition:background .12s;}
+@media (hover:hover){ table tr:hover td{background:color-mix(in srgb, var(--brand-soft) 55%, transparent);} }
+.empty-hint{padding:18px 12px; text-align:center; border:1px dashed var(--border); border-radius:12px; background:var(--soft); color:var(--muted);}
+*{scrollbar-width:thin; scrollbar-color:color-mix(in srgb, var(--muted) 45%, transparent) transparent;}
+.card{transition:box-shadow .2s;}
+@media (prefers-reduced-motion:reduce){ *{animation-duration:.01ms!important; transition-duration:.01ms!important;} }
