@@ -582,21 +582,18 @@ body.booting #boot-splash{ display:flex; min-height:100vh; }
   #boot-splash .bs-main{ order:1; padding:16px 14px; }
 }
 @keyframes bs-spin{ to{ transform:rotate(360deg); } }
-/* 선택 전에는 뒤 화면이 보이지도, 눌리지도 않게 */
-#role-choice-modal{
-  background:var(--card);            /* 반투명 검정 → 불투명 흰색 */
-  backdrop-filter:none;
-}
-#role-choice-modal .modal{
-  width:100%; max-width:640px; height:100vh; max-height:none;
-  border-radius:0; margin:0; box-shadow:none; background:transparent;
-  display:flex; flex-direction:column; align-items:center; justify-content:center;
-  padding:40px 24px;
-}
-#role-choice-modal h3{ font-size:23px; }
-#role-choice-modal .role-pick{ width:100%; }
-#role-choice-modal .role-card{ padding:26px 22px; }
-#role-choice-modal .role-card .rc-title{ font-size:18px; }
+/* 선택 전에는 뒤 화면이 보이지도, 눌리지도 않게: 모달이 아니라 화면 전체를 덮는 별도 게이트 */
+#role-gate{ position:fixed; inset:0; z-index:9999; background:var(--paper); display:flex; align-items:center; justify-content:center; padding:32px 24px; overflow:auto; }
+#role-gate[hidden]{ display:none; }
+body.role-gating{ overflow:hidden; }
+body.role-gating .app-shell, body.role-gating #preview-banner{ visibility:hidden; pointer-events:none; }
+#role-gate .rg-inner{ width:100%; max-width:560px; text-align:center; }
+#role-gate .rg-logo{ font-size:13px; font-weight:700; color:var(--brand); letter-spacing:.02em; margin-bottom:14px; }
+#role-gate h2{ font-size:27px; margin:0 0 8px; }
+#role-gate .rg-sub{ color:var(--ink-soft); font-size:14px; margin:0 0 26px; }
+#role-gate .role-pick{ width:100%; text-align:left; }
+#role-gate .role-card{ padding:26px 22px; }
+#role-gate .role-card .rc-title{ font-size:18px; }
 /* 로그인 직후 역할 선택 */
 .role-pick{
   display:flex; gap:12px; flex-wrap:wrap; margin-top:6px;
@@ -1583,10 +1580,11 @@ body.quiet-preview .sidebar{ padding-top:22px; }
 </div>
 
 <!-- ============ 모달 ============ -->
-<div class="modal-bg" id="role-choice-modal">
-  <div class="modal">
-    <h3 style="margin-top:0;">어떤 화면으로 들어갈까요?</h3>
-    <p class="note" style="margin-bottom:16px;">언제든 사이드바에서 바꿀 수 있습니다.</p>
+<div id="role-gate" role="dialog" aria-modal="true" aria-labelledby="role-gate-t" hidden>
+  <div class="rg-inner">
+    <div class="rg-logo">명덕외고 국제정치 스터디</div>
+    <h2 id="role-gate-t">어떤 화면으로 들어갈까요?</h2>
+    <p class="rg-sub">언제든 사이드바에서 바꿀 수 있습니다.</p>
     <div class="role-pick">
       <button type="button" class="role-card" onclick="chooseRole('admin')">
         <div class="rc-title">관리자 화면</div>
@@ -3339,6 +3337,7 @@ setTimeout(() => {
 /* Firebase 세션이 끊겼을 때(로그아웃, 승인 거절, 토큰 만료) 공통 정리 */
 /* 세션이 끝나면 열려 있던 모달·풀이 화면·카메라·미리보기를 전부 닫고 로그인 화면 상태로 되돌린다 */
 function resetUiForLogin() {
+  try { hideRoleGate(); } catch (e) {}
   try {
     closeAllModals();
   } catch (e) {}
@@ -3420,7 +3419,7 @@ async function routeAfterAuth(user) {
     startSubscriptions(true, user.uid);
     if (pendingRoleChoice) {
       pendingRoleChoice = false; // 자동 로그인에서는 뜨지 않도록 1회성
-      setTimeout(() => openModal('role-choice-modal'), 250);
+      showRoleGate();
     }
     return true;
   }
@@ -8868,8 +8867,32 @@ function setPreviewBanner(text) {
 let pendingAdminLogin = false;
 let pendingRoleChoice = false; // doLogin이 세우고 routeAfterAuth가 소비
 
+function showRoleGate() {
+  const g = $('role-gate');
+  if (!g) return;
+  g.hidden = false;
+  document.body.classList.add('role-gating');
+  document.querySelectorAll('.app-shell').forEach(el => el.setAttribute('inert', ''));
+  const first = g.querySelector('.role-card');
+  if (first) first.focus();
+}
+function hideRoleGate() {
+  const g = $('role-gate');
+  if (g) g.hidden = true;
+  document.body.classList.remove('role-gating');
+  document.querySelectorAll('.app-shell').forEach(el => el.removeAttribute('inert'));
+}
+/* 게이트가 떠 있는 동안 Tab 키가 뒤 화면으로 빠져나가지 않게 가둔다 */
+document.addEventListener('keydown', e => {
+  const g = $('role-gate');
+  if (!g || g.hidden || e.key !== 'Tab') return;
+  const btns = [...g.querySelectorAll('button')];
+  const i = btns.indexOf(document.activeElement);
+  e.preventDefault();
+  btns[(i + (e.shiftKey ? btns.length - 1 : 1)) % btns.length].focus();
+});
 function chooseRole(which) {
-  closeModal('role-choice-modal');
+  hideRoleGate();
   if (which === 'student') startQuietPreview();
 }
 /* 복귀 버튼을 body 맨 끝에 직접 만든다 (HTML 배치 실수를 없애기 위해) */
