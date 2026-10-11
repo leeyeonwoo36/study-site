@@ -2319,6 +2319,10 @@ function enterSolveFocus() {
   if (m) m.scrollTop = 0;
 }
 function leaveSolveFocus() {
+  try {
+    inkEcur(null);
+    INK.base = null;
+  } catch (e) {}
   try { inkLaserClear(); } catch (e) {}
   document.body.classList.remove('solving');
   if (!document.body.classList.contains('role-gating')) document.querySelectorAll('.app-shell').forEach(el => el.removeAttribute('inert'));
@@ -13446,6 +13450,7 @@ function inkBind(cv, qid) {
     }
     cur = null;
     mode = '';
+    inkTrimUndo();
     inkRefreshBar();
   };
   cv.addEventListener('pointerrawupdate', e => {
@@ -13463,6 +13468,9 @@ function inkBind(cv, qid) {
     if (mode === 'pen') discardIfTiny(); // 스크롤로 넘어간 터치: 점 하나짜리 획은 버린다
     end(e && { ...{}, pointerType: e.pointerType });
   });
+}
+function inkTrimUndo() {
+  if (INK.undo.length > 80) INK.undo.splice(0, INK.undo.length - 80);
 }
 function inkRefreshBar() {
   const body = $('solve-body');
