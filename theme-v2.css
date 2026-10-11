@@ -7,7 +7,7 @@
 @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css');
 
 :root{
-  --ink:#16201D; --ink-soft:#52605B; --muted:#8B9792;
+  --ink:#16201D; --ink-soft:#52605B; --muted:#66726D;
   --paper:#F3F5F4; --paper-line:#EAEEEC; --card:#FFFFFF; --border:#E2E8E5;
   --brand:#2F5D50; --brand-deep:#1F4036; --brand-soft:#E8F1EE;
   --accent:#D4623D; --accent-soft:#FCEEE8;
@@ -746,3 +746,21 @@ table tbody tr{transition:background .12s;}
 #back-toast.show{opacity:1; transform:translate(-50%,0);}
 
 #laser-overlay{position:fixed; left:0; top:0; width:100vw; height:100vh; z-index:85; pointer-events:none;}
+
+.pend-banner{display:flex; align-items:center; gap:12px; background:var(--warn-soft); border:1px solid var(--border); border-left:5px solid var(--warn); border-radius:14px; padding:12px 14px; margin-bottom:12px;}
+.pend-banner > div{flex:1; min-width:0;} .pend-ic{font-size:20px;} .pend-sub{font-size:12px; color:var(--ink-soft); margin-top:2px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+
+/* ===== 접근성 ===== */
+.set-row{display:flex; align-items:center; justify-content:space-between; gap:14px; padding:12px 0; border-top:1px solid var(--paper-line);}
+.set-row:first-of-type{border-top:none;} .set-sub{font-size:12.5px; color:var(--ink-soft); margin-top:2px;}
+.seg{display:inline-flex; background:var(--paper-line); border-radius:999px; padding:3px; flex-shrink:0;}
+.seg button{border:none; background:transparent; color:var(--ink-soft); padding:7px 12px; border-radius:999px; font-size:13px; font-weight:700; cursor:pointer; font-family:inherit; min-height:34px;}
+.seg button.on{background:var(--card); color:var(--brand); box-shadow:var(--shadow-sm);}
+@media (max-width:520px){ .set-row{flex-direction:column; align-items:flex-start;} }
+.modal-close{min-width:40px; min-height:40px;}
+.flag-btn{min-width:40px; min-height:40px;}
+@media (prefers-reduced-motion: reduce){ *,*::before,*::after{animation-duration:.01ms !important; animation-iteration-count:1 !important; transition-duration:.01ms !important; scroll-behavior:auto !important;} }
+:focus-visible{outline:2.5px solid var(--brand); outline-offset:2px;}
+
+.ov-note{grid-column:1/-1; display:flex; align-items:center; justify-content:space-between; gap:10px; font-size:12.5px; color:var(--ink-soft); padding:2px 4px;}
+.ov-note.stale{color:var(--warn);}

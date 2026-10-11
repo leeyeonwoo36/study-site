@@ -5,6 +5,13 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>명덕외고 국제정치 학습관리</title>
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#2F5D50">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="국제정치 스터디">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='22' fill='%232F5D50'/%3E%3Ctext x='50' y='50' font-family='sans-serif' font-size='52' font-weight='700' fill='%23ffffff' text-anchor='middle' dominant-baseline='central'%3E政%3C/text%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&display=swap" rel="stylesheet">
@@ -1433,6 +1440,7 @@ body.quiet-preview .sidebar{ padding-top:22px; }
             <button class="btn" id="backup-all-btn" onclick="backupAllJson()">전체 백업 (JSON)</button>
             <button class="btn secondary" onclick="backupQuestionsJson()">문제은행만 (JSON)</button>
             <button class="btn secondary" onclick="backupScoresCsv()">성적 (CSV)</button>
+            <button class="btn secondary" onclick="backupSubmissionsCsv()">제출 답안 (CSV)</button>
             <button class="btn secondary" onclick="backupAttendanceCsv()">출결 (CSV)</button>
             <button class="btn secondary" onclick="backupStudentsCsv()">학생 명단 (CSV)</button>
           </div>
@@ -1470,6 +1478,7 @@ body.quiet-preview .sidebar{ padding-top:22px; }
 
            <div class="tabpanel active" id="tab-t-main">
         <div class="page-head"><div><h1 id="stu-greeting">메인</h1><p>오늘 할 일과 나의 학습 현황을 한눈에 확인하세요.</p></div></div>
+        <div id="stu-pending"></div>
         <div id="stu-urgent"></div>
         <div id="stu-notice-area"></div>
 
@@ -1550,6 +1559,17 @@ body.quiet-preview .sidebar{ padding-top:22px; }
 
       <div class="tabpanel" id="tab-t-me">
         <div class="page-head"><div><h1>내 정보</h1><p>인적사항은 본인이 수정할 수 없으며, 이메일 변경은 본인 확인이 필요합니다.</p></div></div>
+        <div class="card" id="app-settings">
+          <h3>화면 설정</h3>
+          <div class="set-row"><div><b>글자 크기</b><div class="set-sub">화면 전체 글자와 버튼 크기를 키웁니다 (이 기기에만 적용)</div></div>
+            <div class="seg" role="group" aria-label="글자 크기">
+              <button type="button" data-fs="1" onclick="setFontScale(1)">기본</button>
+              <button type="button" data-fs="1.12" onclick="setFontScale(1.12)">크게</button>
+              <button type="button" data-fs="1.25" onclick="setFontScale(1.25)">더 크게</button>
+            </div></div>
+          <div class="set-row" id="install-row" style="display:none;"><div><b>앱처럼 설치</b><div class="set-sub" id="install-sub">홈 화면에 추가하면 주소창 없이 넓게 쓸 수 있어요</div></div>
+            <button type="button" class="btn small" id="install-btn" onclick="installApp()">홈 화면에 추가</button></div>
+        </div>
         <div class="card me-acct"><div class="me-acct-row"><button class="btn small secondary theme-btn" onclick="toggleTheme()">다크 모드</button><button class="btn small secondary" onclick="logout()">로그아웃</button></div></div>
 
                <div class="card">
@@ -2261,11 +2281,23 @@ function toggleTheme() {
 try {
   applyTheme(localStorage.getItem('theme') === 'dark' ? 'dark' : 'light');
 } catch (e) {}
+const _modalReturnFocus = {};
 function openModal(id) {
+  _modalReturnFocus[id] = document.activeElement;
   $(id).classList.add('show');
+  // 키보드·스크린리더 사용자를 위해 창 안으로 포커스를 옮긴다 (입력칸이 있으면 그곳, 없으면 창 자체)
+  setTimeout(() => {
+    const m = $(id);
+    if (!m || !m.classList.contains('show') || id === 'solve-modal') return;
+    const f = m.querySelector('input:not([type=hidden]):not([disabled]), select, textarea, button:not(.modal-close)');
+    const box = m.querySelector('.modal');
+    if (box && !box.hasAttribute('tabindex')) box.setAttribute('tabindex', '-1');
+    (f && f.offsetParent !== null ? f : box || m).focus({ preventScroll: true });
+  }, 30);
 }
 function closeModal(id) {
   $(id).classList.remove('show');
+  try { const r = _modalReturnFocus[id]; if (r && r.focus && document.contains(r) && id !== 'solve-modal') r.focus({ preventScroll: true }); } catch (e) {}
   if (id === 'solve-modal') leaveSolveFocus();
 }
 /* 풀이 집중 모드: 뒤 화면은 눌리지도, 스크롤되지도, Tab으로 이동되지도 않게 */
@@ -11509,7 +11541,17 @@ function renderAdminOverview() {
     <div class="ov-tile">${ovRing(pct, 'var(--brand)')}
       <div class="ov-b"><div class="ov-l">제출률</div><div class="ov-v">${total ? pct : '-'}<small>${total ? '%' : ''}</small></div><div class="ov-s">진행 중 ${open}건 · ${done}/${total}</div></div></div>
     <div class="ov-tile">${ic('<rect x="5" y="3.5" width="14" height="17" rx="2.5"/><path d="M9 9h6M9 13h6M9 17h3"/>')}
-      <div class="ov-b"><div class="ov-l">채점 대기</div><div class="ov-v">${needs}<small>건</small></div><div class="ov-s">${needs ? '<span class="ov-pill warn">채점 확인 탭에서 처리</span>' : '모두 처리됨'}</div></div></div>`;
+      <div class="ov-b"><div class="ov-l">채점 대기</div><div class="ov-v">${needs}<small>건</small></div><div class="ov-s">${needs ? '<span class="ov-pill warn">채점 확인 탭에서 처리</span>' : '모두 처리됨'}</div></div></div>
+    ${backupNoteHtml()}`;
+}
+/* 마지막 전체 백업이 오래되면 은은하게 알려 준다 */
+function backupNoteHtml() {
+  let t = 0;
+  try { t = parseInt(localStorage.getItem('lastFullBackupAt') || '0', 10) || 0; } catch (e) {}
+  const days = t ? Math.floor((Date.now() - t) / 864e5) : null;
+  const stale = days === null || days >= 7;
+  const msg = days === null ? '아직 이 기기에서 전체 백업을 받은 적이 없어요' : days === 0 ? '오늘 전체 백업을 받았어요' : `마지막 전체 백업 ${days}일 전`;
+  return `<div class="ov-note${stale ? ' stale' : ''}"><span>💾 ${msg}</span><button class="btn small secondary" onclick="setAdminTab('a-firebase')">백업하러 가기</button></div>`;
 }
 /* 학생 메인: 내 과제·시험 진행을 점으로 한눈에 */
 function renderStuProgress() {
@@ -11587,6 +11629,7 @@ function renderStudentDashboard(s) {
   renderUrgentBanner();
   renderStuExtras();
   renderStuProgress();
+  renderPendingBanner();
   const now = new Date();
 
   // 인사
@@ -12949,6 +12992,10 @@ function openStudentSolve(kind, tid) {
     alert(fmtDue(t.startAt) + '부터 풀 수 있습니다.');
     return;
   }
+  if (!adminViewAll && localStorage.getItem(PENDING_PREFIX + currentStudent + ':' + tid)) {
+    alert('이미 답안을 제출했고 전송 대기 중입니다. 연결되면 자동으로 제출돼요.');
+    return;
+  }
   currentSolve = { kind, tid };
   loadSolveFlags(tid);
   $('solve-title').textContent = t.title + ' · 온라인 OMR 풀이';
@@ -13098,9 +13145,34 @@ async function submitSolve() {
   const studentUid = currentStudent;
 
   let step = '';
+  // 오프라인이면(파일 첨부가 없을 때) 대기열에 저장했다가 연결되면 자동 제출한다
+  if (!navigator.onLine && !photos.length) {
+    queueSubmit(subData, t.title);
+    closeModal('solve-modal');
+    inkClearStored(tid);
+    currentSolve = null;
+    backToast('오프라인이라 제출을 보관했어요. 연결되면 자동으로 제출됩니다');
+    renderPendingBanner();
+    return;
+  }
   try {
     step = '제출물';
-    await setDoc(doc(db, 'submissions', tid + '|' + studentUid), subData);
+    try {
+      await withTimeout(setDoc(doc(db, 'submissions', tid + '|' + studentUid), subData), 20000);
+    } catch (e) {
+      if ((e && e.code === 'timeout') || !navigator.onLine || (e && /network|unavailable|offline/i.test(e.code || e.message || ''))) {
+        if (!photos.length) {
+          queueSubmit(subData, t.title);
+          closeModal('solve-modal');
+          inkClearStored(tid);
+          currentSolve = null;
+          backToast('연결이 불안정해 제출을 보관했어요. 연결되면 자동으로 제출됩니다');
+          renderPendingBanner();
+          return;
+        }
+      }
+      throw e;
+    }
     step = '정답 확인';
     if (mode === 'omr') {
       await loadTaskKeys(tid, true); // 제출이 저장된 뒤에야 규칙이 정답 키를 열어 준다
@@ -13148,6 +13220,75 @@ async function submitSolve() {
     alert('제출 실패: ' + e.message + '\n\n풀던 답은 임시 저장되어 있으니 잠시 후 다시 시도해주세요.');
   }
 }
+
+/* ---------- 제출 대기열: 네트워크가 끊겨도 답이 사라지지 않게 보관하고, 연결되면 자동으로 제출 ---------- */
+function withTimeout(p, ms) {
+  return new Promise((res, rej) => {
+    const t = setTimeout(() => rej(Object.assign(new Error('응답이 늦어지고 있어요'), { code: 'timeout' })), ms);
+    Promise.resolve(p).then(v => { clearTimeout(t); res(v); }, e => { clearTimeout(t); rej(e); });
+  });
+}
+const PENDING_PREFIX = 'pendingSubmit:';
+function queueSubmit(subData, title) {
+  try { localStorage.setItem(PENDING_PREFIX + subData.studentUid + ':' + subData.taskId, JSON.stringify({ subData, title, queuedAt: Date.now() })); } catch (e) {}
+}
+function pendingList(uid) {
+  const out = [];
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k && k.startsWith(PENDING_PREFIX + uid + ':')) { try { out.push({ key: k, ...JSON.parse(localStorage.getItem(k)) }); } catch (e) {} }
+    }
+  } catch (e) {}
+  return out;
+}
+function renderPendingBanner() {
+  const box = $('stu-pending');
+  if (!box) return;
+  const list = !currentStudent || adminViewAll ? [] : pendingList(currentStudent);
+  box.innerHTML = list.length
+    ? `<div class="pend-banner"><span class="pend-ic">📡</span><div><b>전송 대기 ${list.length}건</b><div class="pend-sub">${list.map(x => esc(x.title || '')).join(', ')} · 연결되면 자동으로 제출됩니다</div></div><button class="btn small secondary" onclick="flushPendingSubmits(true)">지금 보내기</button></div>`
+    : '';
+}
+let pendingFlushing = false;
+async function flushPendingSubmits(manual) {
+  if (pendingFlushing || !currentStudent || adminViewAll || previewingStudent || !window.fb) return;
+  if (!navigator.onLine) { if (manual) backToast('아직 오프라인이에요'); return; }
+  const list = pendingList(currentStudent);
+  if (!list.length) return;
+  pendingFlushing = true;
+  let sent = 0;
+  try {
+    for (const p of list) {
+      const sd = p.subData, tid = sd.taskId;
+      if (submissions[tid + '|' + sd.studentUid]) { localStorage.removeItem(p.key); continue; } // 이미 올라갔다면(지연된 쓰기) 정리만
+      try {
+        const { db, doc, setDoc } = window.fb;
+        await withTimeout(setDoc(doc(db, 'submissions', tid + '|' + sd.studentUid), sd), 20000);
+      } catch (e) { continue; } // 다음 기회에 다시 시도
+      localStorage.removeItem(p.key);
+      sent++;
+      try {
+        const t = tasks[sd.kind].find(x => x.tid === tid);
+        if (t) {
+          await loadTaskKeys(tid, true);
+          const qs = (t.qids || []).map(q => questions.find(x => x.qid === q)).filter(Boolean);
+          if (sd.mode === 'omr' && qs.every(q => q.answer !== undefined)) await updateWrongBankAfterGrade(sd.studentUid, sd.kind, tid, t.title, qs, sd.answers);
+          const meName = (students.find(x => x.uid === sd.studentUid) || {}).name || '학생';
+          notifyTelegram(`${sd.kind === 'exam' ? '📕' : '📘'} <b>${tgEsc(meName)}</b> — <b>${tgEsc(t.title)}</b> ${sd.kind === 'exam' ? '시험' : '과제'}\n✅ 온라인 제출 (연결 복구 후 자동 전송)${sd.late ? '  ⚠️ <b>지각</b>' : ''}`);
+        }
+        clearSolveDraft(tid); clearSolveFlags(tid); clearCloudDraft(tid);
+      } catch (e) { console.warn('대기열 후처리 실패', e); }
+    }
+    if (sent) { try { rebuildScores(); } catch (e) {} backToast(`대기 중이던 제출 ${sent}건을 보냈어요`); }
+  } finally {
+    pendingFlushing = false;
+    renderPendingBanner();
+    try { renderStudentSite(); } catch (e) {}
+  }
+}
+window.addEventListener('online', () => flushPendingSubmits());
+setInterval(() => { try { flushPendingSubmits(); } catch (e) {} }, 30000);
 /* ---------- 제출 직후 결과 화면 ---------- */
 function showSubmitResult(r) {
   const kindKo = r.kind === 'exam' ? '시험' : '과제';
@@ -15040,6 +15181,8 @@ async function backupAllJson() {
       },
       students,
       studentMemos: memosByUid,
+      classes,
+      notices,
       schedules,
       attendance,
       videos,
@@ -15053,7 +15196,9 @@ async function backupAllJson() {
 
     const counts = `학생 ${students.length} · 문제 ${questions.length} · 과제 ${tasks.hw.length} · 시험 ${tasks.exam.length} · 제출 ${Object.keys(submissions).length}`;
     downloadBlob(JSON.stringify(data, null, 2), `lms-backup-${backupStamp()}.json`, 'application/json');
+    try { localStorage.setItem('lastFullBackupAt', String(Date.now())); } catch (e) {}
     setBackupStatus(`전체 백업 완료 — ${counts}`);
+    try { renderAdminOverview(); } catch (e) {}
   } catch (e) {
     alert('백업 실패: ' + e.message);
     setBackupStatus('백업에 실패했습니다: ' + e.message);
@@ -15084,6 +15229,33 @@ function backupQuestionsJson() {
 }
 
 /* ---------- 성적 (CSV) ---------- */
+/* 제출 답안 (CSV): 학생 × 과제·시험 한 줄씩, 문항별 선택 답과 자동채점 결과 */
+function backupSubmissionsCsv() {
+  const rows = [['이름', '구분', '제목', '수업 · 주차', '제출 시각', '지각', '방식', '맞은 개수', '문항 수', '문항별 답 (번호:답 ○/×)']];
+  const nameOf = uid => (students.find(x => x.uid === uid) || {}).name || uid;
+  ['hw', 'exam'].forEach(kind =>
+    tasks[kind].forEach(t => {
+      const qs = (t.qids || []).map(q => questions.find(x => x.qid === q)).filter(Boolean);
+      targetsOf(t).forEach(st => {
+        const sub = submissions[t.tid + '|' + st.uid];
+        if (!sub) return;
+        let right = 0;
+        const cells = qs.map((q, i) => {
+          const a = (sub.answers || {})[q.qid];
+          const mine = Array.isArray(a) ? a.join('+') : a == null ? '' : String(a);
+          if (q.answer === undefined || !mine) return `${i + 1}:${mine || '-'}`;
+          const ok = isCorrect(q, a);
+          if (ok) right++;
+          return `${i + 1}:${mine} ${ok ? '○' : '×'}`;
+        });
+        rows.push([nameOf(st.uid), kind === 'hw' ? '과제' : '시험', t.title, classWeekText(t), sub.date || new Date(sub.submittedAt || 0).toLocaleString('ko-KR'), sub.late ? '지각' : '', sub.mode === 'photo' ? '파일 제출' : sub.mode === 'offline' ? '오프라인' : '온라인 OMR', sub.mode === 'omr' ? right : '', sub.mode === 'omr' ? qs.length : '', cells.join(' / ')]);
+      });
+    })
+  );
+  if (rows.length === 1) { alert('제출된 답안이 없습니다.'); return; }
+  downloadBlob(toCsv(rows), `제출답안-${backupStamp()}.csv`, 'text/csv');
+  setBackupStatus(`제출 답안 ${rows.length - 1}건을 내려받았습니다.`);
+}
 function backupScoresCsv() {
   const targets = students.filter(s => s.approved);
   if (!targets.length) {
@@ -15259,6 +15431,8 @@ function renderFirebaseGuide() {
   <h3 ${h3}>학생 화면</h3>
   <ul ${ul}>
     <li><b>메인</b>: 다음 수업, 가장 급한 할 일·제출 진행률, 출석 현황, 공지(안 읽은 공지는 NEW, 중요 공지는 맨 위). 마감 24시간 이내 미제출 과제·시험은 남은 시간과 '풀기' 버튼이 뜨고, 3일 이내 마감과 지난 지 7일 이내의 미제출 항목도 알려 줍니다. 시작 전 과제는 시작 시각만 보입니다.</li>
+    <li><b>오프라인·불안정한 연결</b>: 제출 순간 연결이 끊기면(파일 첨부가 없을 때) 답을 기기에 보관했다가 연결되면 자동으로 제출합니다. 학생 메인에 '전송 대기' 표시가 뜹니다.</li>
+    <li><b>앱처럼 설치</b>: 학생 '내 정보' → 화면 설정에서 홈 화면에 추가(아이폰은 공유 → 홈 화면에 추가)하고 글자 크기를 키울 수 있습니다. 관리자 첫 화면 아래에 마지막 백업 시점이 표시됩니다(7일 넘으면 주황색).</li>
     <li><b>풀이 화면</b>(전체 화면 집중 모드, 상단 ← 나가기 / 제출 버튼, 나가도 체크한 답은 임시 저장): 진행률 바, ★ 나중에 볼 문제, 메모, 필기·레이저 포인터, 미응답 번호 경고, <b>체크 전체 지우기</b>. 풀던 답과 ★는 3초 뒤 서버에 저장되어 다른 기기에서 이어 풀 수 있습니다(첨부 파일 제외).</li>
     <li><b>오답노트</b>: 기본이 <b>복습 필요만</b>입니다. <b>복습 퀴즈</b>로 한 문제씩 풀면 맞힌 문제는 마스터 처리됩니다. 해설 화면의 ★·메모는 이 기기 브라우저에만 저장됩니다. 다크 모드는 왼쪽 메뉴에서 켭니다.</li>
     <li>제출 직후 점수·틀린 문항·오답노트 안내와 '해설 보기'가 나옵니다(파일 제출은 '제출 완료'만).</li>
@@ -15559,6 +15733,69 @@ function handleBackStep() {
     history.pushState({ guard: 1 }, '');
     backToast('뒤로가기를 한 번 더 누르면 사이트를 나갑니다');
   });
+})();
+
+/* ---------- 앱 설치(PWA) · 글자 크기 · 접근성 ---------- */
+(function initPwaAndA11y() {
+  // 서비스 워커: https 또는 localhost에서만 (파일로 열었을 때는 건너뜀)
+  if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
+    window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+  }
+  const standalone = () => window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+  window.__installEvt = null;
+  window.addEventListener('beforeinstallprompt', e => {
+    e.preventDefault();
+    window.__installEvt = e;
+    refreshInstallRow();
+  });
+  window.addEventListener('appinstalled', () => { window.__installEvt = null; refreshInstallRow(); });
+  window.refreshInstallRow = function () {
+    const row = $('install-row');
+    if (!row) return;
+    const ios = /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    if (standalone()) { row.style.display = 'none'; return; }
+    if (window.__installEvt) { row.style.display = 'flex'; $('install-btn').style.display = ''; $('install-sub').textContent = '홈 화면에 추가하면 주소창 없이 넓게 쓸 수 있어요'; }
+    else if (ios) { row.style.display = 'flex'; $('install-btn').style.display = 'none'; $('install-sub').textContent = '사파리 하단 공유 버튼(□↑) → "홈 화면에 추가"를 누르면 앱처럼 쓸 수 있어요'; }
+    else row.style.display = 'none';
+  };
+  window.installApp = async function () {
+    const e = window.__installEvt;
+    if (!e) return;
+    e.prompt();
+    try { await e.userChoice; } catch (err) {}
+    window.__installEvt = null;
+    refreshInstallRow();
+  };
+  // 글자 크기
+  const applyFs = v => {
+    document.documentElement.style.setProperty('--ui-zoom', String(v));
+    document.querySelectorAll('.app-shell, .sv-content').forEach(el => { el.style.zoom = v === 1 ? '' : String(v); });
+    document.querySelectorAll('#app-settings [data-fs]').forEach(b => b.classList.toggle('on', +b.dataset.fs === v));
+  };
+  window.setFontScale = function (v) {
+    try { localStorage.setItem('uiFontScale', String(v)); } catch (e) {}
+    applyFs(v);
+  };
+  window.reapplyFontScale = function () {
+    let v = 1;
+    try { v = parseFloat(localStorage.getItem('uiFontScale')) || 1; } catch (e) {}
+    applyFs(v);
+  };
+  reapplyFontScale();
+  refreshInstallRow();
+  // 접근성: 대화상자 의미 부여, 아이콘 버튼 이름
+  document.querySelectorAll('.modal-bg').forEach(m => {
+    if (m.id === 'role-gate') return;
+    m.setAttribute('role', 'dialog');
+    m.setAttribute('aria-modal', 'true');
+    const h = m.querySelector('h3, h2');
+    if (h) { if (!h.id) h.id = m.id + '-t'; m.setAttribute('aria-labelledby', h.id); }
+  });
+  document.querySelectorAll('.modal-close').forEach(b => { if (!b.getAttribute('aria-label')) b.setAttribute('aria-label', '닫기'); });
+  new MutationObserver(ms => ms.forEach(m => m.addedNodes.forEach(n => {
+    if (n.nodeType !== 1) return;
+    n.querySelectorAll && n.querySelectorAll('.flag-btn').forEach(b => { b.setAttribute('aria-label', '나중에 다시 볼 문제로 표시'); b.setAttribute('aria-pressed', b.classList.contains('on') ? 'true' : 'false'); });
+  }))).observe(document.body, { childList: true, subtree: true });
 })();
 decoratePageHeads();
 </script>
