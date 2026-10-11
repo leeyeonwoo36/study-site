@@ -2963,8 +2963,19 @@ setTimeout(()=>{
   }
 }, 8000);
 /* Firebase 세션이 끊겼을 때(로그아웃, 승인 거절, 토큰 만료) 공통 정리 */
+/* 세션이 끝나면 열려 있던 모달·풀이 화면·카메라·미리보기를 전부 닫고 로그인 화면 상태로 되돌린다 */
+function resetUiForLogin(){
+  try{ closeAllModals(); }catch(e){}
+  try{ document.querySelectorAll('.modal-bg.show').forEach(el=>el.classList.remove('show')); }catch(e){}
+  try{ if(typeof INK!=='undefined'){ clearTimeout(INK.saveTimer); INK.on = false; INK.laser = {}; INK.laserHeld = null; } }catch(e){}
+  try{ previewingStudent = false; adminViewAll = false; document.body.classList.remove('previewing','quiet-preview'); setPreviewBanner(null); }catch(e){}
+  try{ document.querySelectorAll('.nav-sect.m-open').forEach(e=>e.classList.remove('m-open')); }catch(e){}
+  try{ ['login-id','login-pw'].forEach(id=>{ const el=$(id); if(el) el.value=''; }); }catch(e){}
+  try{ window.scrollTo(0,0); }catch(e){}
+}
 function handleSignedOut(){
   finishBoot();
+  resetUiForLogin();
   if(subsOwner === null && !currentStudent && !currentUserIsAdmin){ switchSite('login'); return; }
   stopSubscriptions();
   currentStudent = null;
@@ -2975,7 +2986,7 @@ function handleSignedOut(){
 
 function logout(){
   if(previewingStudent){ exitStudentPreview(); return; }
-  closeAllModals();
+  resetUiForLogin();
   stopSubscriptions();
   currentStudent = null;
   currentUserIsAdmin = false;
