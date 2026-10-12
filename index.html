@@ -12936,6 +12936,10 @@ function inkLaserCanvas() {
     try { c.getContext('2d', { desynchronized: true }); } catch (e) {} // 지연이 적은 그리기 힌트
   }
   const dpr = Math.min(window.devicePixelRatio || 1, 1.5), w = Math.round(innerWidth * dpr), h = Math.round(innerHeight * dpr); // 레이저는 번짐이 있어 1.5배면 충분 (픽셀 수 절반)
+  // CSS 100vh는 아이패드 사파리에서 실제 보이는 높이(innerHeight)보다 커서, 그리는 좌표가 아래로 어긋난다 → px로 정확히 맞춘다
+  const ws = innerWidth + 'px', hs = innerHeight + 'px';
+  if (c.style.width !== ws) c.style.width = ws;
+  if (c.style.height !== hs) c.style.height = hs;
   if (c.width !== w || c.height !== h) { c.width = w; c.height = h; INK.lzBox = null; }
   return c;
 }

@@ -745,7 +745,7 @@ table tbody tr{transition:background .12s;}
 #back-toast{position:fixed; left:50%; bottom:84px; transform:translate(-50%,12px); background:rgba(22,32,29,.92); color:#fff; padding:10px 16px; border-radius:999px; font-size:13px; font-weight:600; opacity:0; pointer-events:none; transition:opacity .2s, transform .2s; z-index:10000; max-width:90vw; text-align:center;}
 #back-toast.show{opacity:1; transform:translate(-50%,0);}
 
-#laser-overlay{position:fixed; left:0; top:0; width:100vw; height:100vh; z-index:85; pointer-events:none;}
+#laser-overlay{position:fixed; left:0; top:0; z-index:85; pointer-events:none;}
 
 .pend-banner{display:flex; align-items:center; gap:12px; background:var(--warn-soft); border:1px solid var(--border); border-left:5px solid var(--warn); border-radius:14px; padding:12px 14px; margin-bottom:12px;}
 .pend-banner > div{flex:1; min-width:0;} .pend-ic{font-size:20px;} .pend-sub{font-size:12px; color:var(--ink-soft); margin-top:2px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
