@@ -872,3 +872,54 @@ tr.skel-row td{padding:10px 12px; border-bottom:none;}
 :root[data-theme="dark"] .sa-stamps{background:var(--soft);}
 :root[data-theme="dark"] .sa-stamp.f{border-color:#60726a;}
 :root[data-theme="dark"] .sa-stamp.n,:root[data-theme="dark"] .sa-dot.n{background:#3b4944;}
+
+/* =========================================================
+   OMR 풀이 화면 디자인 다듬기 (되돌리려면 이 블록만 지우면 됩니다)
+   ========================================================= */
+.omr-q{
+  background:var(--card); border:1px solid var(--border); border-radius:18px;
+  padding:18px 18px 14px; margin-bottom:14px; box-shadow:var(--shadow-sm);
+}
+.omr-q:last-child{border-bottom:1px solid var(--border);}
+.omr-q.flagged{border-left:4px solid var(--warn); border-radius:18px; padding-left:15px; background:linear-gradient(90deg,var(--warn-soft),var(--card) 38%);}
+.omr-q .qnum{font-size:15.5px; font-weight:700; line-height:1.55; margin-bottom:10px;}
+.omr-q .omr-choices{gap:8px;}
+.omr-q .omr-bubble{
+  gap:12px; padding:12px 14px; border:1.5px solid var(--border); border-radius:14px; background:var(--card);
+  align-items:center; transition:border-color .14s, background .14s, box-shadow .14s, transform .08s; cursor:pointer;
+}
+.omr-q .omr-bubble:active{transform:scale(.992);}
+.omr-q .omr-bubble:hover{border-color:var(--brand); background:var(--brand-soft);}
+.omr-q .omr-bubble input[type=checkbox]{
+  -webkit-appearance:none; appearance:none; flex:none; width:22px; height:22px; margin:0;
+  border:2px solid var(--muted); border-radius:50%; background:transparent; display:grid; place-content:center;
+  transition:background .14s, border-color .14s;
+}
+.omr-q .omr-bubble input[type=checkbox]::after{
+  content:''; width:11px; height:6px; border:solid #fff; border-width:0 0 2.5px 2.5px; transform:rotate(-45deg) scale(0); margin-top:-2px;
+  transition:transform .14s;
+}
+.omr-q .omr-bubble input[type=checkbox]:checked{background:var(--brand); border-color:var(--brand);}
+.omr-q .omr-bubble input[type=checkbox]:checked::after{transform:rotate(-45deg) scale(1);}
+.omr-q .omr-bubble input[type=checkbox]:focus-visible{outline:3px solid var(--brand-soft); outline-offset:2px; box-shadow:0 0 0 2px var(--brand);}
+.omr-q .omr-bubble.picked{background:var(--brand-soft); border-color:var(--brand); color:var(--ink); box-shadow:0 0 0 3px rgba(47,93,80,.12);}
+.omr-q .omr-bubble.picked:hover{background:var(--brand-soft);}
+.omr-q .omr-bubble.picked .ch-n{color:var(--brand); font-weight:800;}
+.omr-q .omr-bubble.picked .ch-t{font-weight:600;}
+.omr-q .omr-list .omr-bubble{align-items:flex-start;}
+.omr-q .omr-list .omr-bubble input[type=checkbox]{margin-top:1px;}
+/* 보기 박스 */
+.omr-q .passage-box{border-radius:14px; border-color:var(--border); background:var(--soft); padding:12px 14px; line-height:1.7; font-size:13.5px;}
+.omr-q .passage-box .ptitle{display:inline-block; padding:1px 9px; border-radius:99px; background:var(--brand-soft); color:var(--brand); margin-bottom:6px;}
+/* 단답 입력 */
+.omr-q input[type=text]{padding:12px 14px; border-radius:14px; font-size:15px;}
+/* 진행률 줄 */
+.solve-progress .sp-bar{border-radius:99px; overflow:hidden;}
+@media (max-width:520px){
+  .omr-q{padding:14px 12px 10px; border-radius:16px;}
+  .omr-q.flagged{padding-left:9px;}
+  .omr-q .omr-bubble{padding:12px;}
+}
+:root[data-theme="dark"] .omr-q .omr-bubble.picked{box-shadow:0 0 0 3px rgba(63,125,107,.25);}
+:root[data-theme="dark"] .omr-q.flagged{background:linear-gradient(90deg,var(--warn-soft),var(--card) 38%);}
+@media (prefers-reduced-motion:reduce){ .omr-q .omr-bubble,.omr-q .omr-bubble input::after{transition:none;} }
