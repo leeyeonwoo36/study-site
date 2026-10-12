@@ -10154,6 +10154,43 @@ function omrFindQuadT(im, info, TH) {
   if (window.__omrDebug) window.__omrDebug.cands = cands.map(c => ({ x: Math.round(c.x), y: Math.round(c.y), a: c.a }));
   if (info) info.cands = cands.length;
   if (cands.length < 4) return null;
+  /* 먼저: 후보 중 '종이 모서리 네 점'답게 생긴 사각형(볼록, 변 비율이 용지와 비슷, 표식 크기가 비슷)을 직접 고른다.
+     배경의 검은 물건이 후보에 섞여 있어도 볼록 껍질 방식처럼 진짜 모서리가 밀려나지 않는다. */
+  {
+    const cs = cands.slice().sort((p, q) => q.a - p.a).slice(0, 26);
+    const cr = (o, a, b) => (a.x - o.x) * (b.y - o.y) - (a.y - o.y) * (b.x - o.x);
+    let bq = null, bs = 0;
+    const n0 = cs.length;
+    for (let i = 0; i < n0 - 3; i++)
+      for (let j = i + 1; j < n0 - 2; j++)
+        for (let k = j + 1; k < n0 - 1; k++)
+          for (let l = k + 1; l < n0; l++) {
+            const q4 = [cs[i], cs[j], cs[k], cs[l]];
+            const sz = q4.map(p => p.a);
+            if (Math.max(...sz) > 5.5 * Math.min(...sz)) continue;
+            const c0 = q4.reduce((m, p) => ({ x: m.x + p.x / 4, y: m.y + p.y / 4 }), { x: 0, y: 0 });
+            q4.sort((p, q) => Math.atan2(p.y - c0.y, p.x - c0.x) - Math.atan2(q.y - c0.y, q.x - c0.x));
+            let cvx = true;
+            for (let m = 0; m < 4; m++) if (cr(q4[m], q4[(m + 1) % 4], q4[(m + 2) % 4]) <= 0) cvx = false;
+            if (!cvx) continue;
+            const d = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+            const e = [d(q4[0], q4[1]), d(q4[1], q4[2]), d(q4[2], q4[3]), d(q4[3], q4[0])];
+            if (Math.max(e[0], e[2]) / Math.min(e[0], e[2]) > 1.7 || Math.max(e[1], e[3]) / Math.min(e[1], e[3]) > 1.7) continue;
+            const A = (e[0] + e[2]) / 2, B = (e[1] + e[3]) / 2, asp = Math.min(A, B) / Math.max(A, B);
+            if (asp < 0.5 || asp > 0.88) continue; // A4 세로(약 0.69) — 원근을 감안해 넉넉하게
+            const ar = Math.abs(cr(q4[0], q4[1], q4[2])) / 2 + Math.abs(cr(q4[0], q4[2], q4[3])) / 2;
+            if (ar < N * 0.04) continue;
+            const sc = ar * (1 - Math.abs(asp - 0.69));
+            if (sc > bs) {
+              bs = sc;
+              bq = q4.slice();
+            }
+          }
+    if (bq) {
+      if (window.__omrDebug) window.__omrDebug.best = bq.map(c => ({ x: Math.round(c.x), y: Math.round(c.y), a: c.a }));
+      return bq;
+    }
+  }
   // 볼록 껍질
   const pts = cands.slice().sort((p, q) => p.x - q.x || p.y - q.y);
   const cross = (o, a, b) => (a.x - o.x) * (b.y - o.y) - (a.y - o.y) * (b.x - o.x);
@@ -10525,6 +10562,7 @@ function omrReadWithQuad(im0, quad, opt) {
   const pg = layout.pages[page];
   if (!pg) return { ok: false, reason: '쪽 번호가 이 과제와 맞지 않습니다' };
   const byQ = {};
+  const ringQ = {};
   let bad = false;
   const rowsQ = {};
   pg.bubbles.forEach(b => {
@@ -10532,6 +10570,8 @@ function omrReadWithQuad(im0, quad, opt) {
   });
   Object.values(rowsQ).forEach(list => {
     const o = omrRowShift(im, H, list);
+    // 칸 테두리(인쇄된 원)가 거의 안 보이면 그 줄은 반사광에 날아갔거나 심하게 흐려 읽을 수 없다
+    ringQ[list[0].q] = list.reduce((m, c) => m + (omrRingScore(im, H, c.x + o.dx, c.y + o.dy, c.r) || 0), 0) / list.length;
     list.forEach(b => {
       const s = omrDisc(im, H, b.x + o.dx, b.y + o.dy, b.r);
       if (s == null) {
@@ -10542,6 +10582,8 @@ function omrReadWithQuad(im0, quad, opt) {
     });
   });
   if (bad) return { ok: false, reason: '답안 칸 일부가 사진 밖으로 나갔습니다' };
+  const rv = Object.values(ringQ).sort((x, y) => x - y),
+    ringLow = Math.max(0.025, 0.45 * (rv[Math.floor(rv.length * 0.8)] || 0));
   const allS = [].concat(...Object.values(byQ));
   const bm = omrMedian(allS);
   Object.keys(byQ)
@@ -10563,6 +10605,7 @@ function omrReadWithQuad(im0, quad, opt) {
         /* 반사광·그림자로 칠한 자국이 옅어진 경우: 같은 줄의 다른 칸보다 뚜렷이 진한 한 칸만 '확실하지 않음'으로 표시해 확인을 받는다 */
         const o = sc.map((v, i) => [v, i + 1]).sort((a, b) => b[0] - a[0]);
         if (o.length > 1 && o[0][0] - o[1][0] >= 0.07 && o[0][0] - bm >= 0.07) res.answers.push({ n, marked: [o[0][1]], unsure: true });
+        else if (ringQ[n] != null && ringQ[n] < ringLow) res.answers.push({ n, marked: [], unsure: true }); // 읽을 수 없는 줄을 '안 칠함'으로 넘기지 않고 확인 대상으로 표시
       }
     });
   for (let i = page * OMR_PER_PAGE; i < Math.min(ctx.qs.length, (page + 1) * OMR_PER_PAGE); i++)
@@ -13121,6 +13164,32 @@ function inkMomentum(el, v) {
   };
   if (Math.abs(v) > 0.08) INK.mom = requestAnimationFrame(step);
 }
+/* 펜을 뗄 때: 쓰는 동안은 지연 없이 따라가게 가볍게만 거르고, 끝난 뒤에 앞뒤 점을 함께 보고 한 번 더 다듬는다
+   (지연이 생기지 않으면서 잔떨림·계단이 사라진다). 날카롭게 꺾인 곳은 살리고, 시작·끝점은 그대로 둔다. */
+function inkSmoothStroke(st) {
+  const p = st.p,
+    n = p.length / 2;
+  if (n < 5) return;
+  for (let pass = 0; pass < 2; pass++) {
+    const x = p.slice();
+    for (let i = 1; i < n - 1; i++) {
+      const ax = p[i * 2] - p[i * 2 - 2], ay = p[i * 2 + 1] - p[i * 2 - 1], bx = p[i * 2 + 2] - p[i * 2], by = p[i * 2 + 3] - p[i * 2 + 1];
+      const la = Math.hypot(ax, ay), lb = Math.hypot(bx, by);
+      if (la > 0 && lb > 0 && (ax * bx + ay * by) / (la * lb) < 0.5) continue; // 약 60° 넘게 꺾인 점
+      x[i * 2] = 0.25 * p[i * 2 - 2] + 0.5 * p[i * 2] + 0.25 * p[i * 2 + 2];
+      x[i * 2 + 1] = 0.25 * p[i * 2 - 1] + 0.5 * p[i * 2 + 1] + 0.25 * p[i * 2 + 3];
+    }
+    for (let i = 0; i < p.length; i++) p[i] = Math.round(x[i] * 1e5) / 1e5;
+  }
+  if (st.q && st.q.length === n) {
+    // 필압도 같이 다듬어 굵기가 들쭉날쭉하지 않게
+    for (let pass = 0; pass < 3; pass++) {
+      const y = st.q.slice();
+      for (let i = 1; i < n - 1; i++) y[i] = Math.round(0.25 * st.q[i - 1] + 0.5 * st.q[i] + 0.25 * st.q[i + 1]);
+      st.q = y;
+    }
+  }
+}
 const inkClone = st => ({ ...st, p: st.p.slice(), q: st.q ? st.q.slice() : undefined });
 function inkSegDist(px, py, ax, ay, bx, by) {
   const dx = bx - ax, dy = by - ay, L = dx * dx + dy * dy;
@@ -13305,7 +13374,7 @@ function inkBind(cv, qid) {
     else {
       const dt = Math.max(1, t - sm.t),
         v = Math.hypot(ev.clientX - sm.x, ev.clientY - sm.y) / dt,
-        lo = ev.pointerType === 'pen' ? 0.55 : 0.34,
+        lo = ev.pointerType === 'pen' ? 0.5 : 0.32,
         a = force ? 1 : lo + (0.96 - lo) * Math.min(1, v / 1.1);
       sm.x += (ev.clientX - sm.x) * a;
       sm.y += (ev.clientY - sm.y) * a;
@@ -13517,6 +13586,7 @@ function inkBind(cv, qid) {
       inkLaserKick();
     } else if (mode === 'pen') {
       if (!locked && !cur.line && e && e.clientX != null) addPt(e, true); // 필터 때문에 모자란 끝부분을 채운다
+      if (!locked && !cur.line) inkSmoothStroke(cur);
       flushPaint();
       INK.base = null;
       inkRedraw(qid);
