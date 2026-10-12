@@ -473,8 +473,7 @@
 /* 필기(펜) 레이어 */
 .omr-q{position:relative;}
 .ink-cv{position:absolute; left:0; top:0; width:100%; height:100%; z-index:3; pointer-events:none; touch-action:auto;}
-#solve-body.ink-on .ink-cv{pointer-events:auto; touch-action:pan-y; cursor:crosshair;}
-#solve-body.ink-on.ink-finger .ink-cv{touch-action:none;}
+#solve-body.ink-on .ink-cv{pointer-events:auto; touch-action:none; cursor:crosshair; user-select:none; -webkit-user-select:none; -webkit-touch-callout:none;}
 #solve-body.ink-on.ink-lasso .ink-cv{cursor:crosshair;}
 #solve-body.ink-on.ink-eraser .ink-cv{cursor:none;}
 .ink-bar{display:flex; flex-wrap:wrap; gap:6px; align-items:center; margin-top:9px; padding-bottom:2px;}
@@ -13094,6 +13093,27 @@ function inkLaserMove(e) {
   (evs.length ? evs : [e]).forEach(ev => inkLaserPush(ev.clientX, ev.clientY, lzTime(ev))); // 묶여 온 입력도 각자의 시각을 써서 굵기가 뭉텅이로 변하지 않게
   inkLaserKick();
 }
+/* 필기가 켜져 있으면 캔버스는 touch-action:none (애플펜슬로 쓸 때 화면이 같이 밀리지 않게).
+   대신 손가락 스크롤은 여기서 직접 처리한다. */
+function inkScroller(el) {
+  for (let n = el.parentElement; n && n !== document.body; n = n.parentElement) {
+    const o = getComputedStyle(n).overflowY;
+    if ((o === 'auto' || o === 'scroll') && n.scrollHeight > n.clientHeight) return n;
+  }
+  return document.scrollingElement || document.documentElement;
+}
+function inkMomentum(el, v) {
+  cancelAnimationFrame(INK.mom || 0);
+  let last = performance.now();
+  const step = now => {
+    const dt = Math.min(48, now - last);
+    last = now;
+    el.scrollTop -= v * dt;
+    v *= Math.pow(0.94, dt / 16);
+    INK.mom = Math.abs(v) > 0.02 ? requestAnimationFrame(step) : 0;
+  };
+  if (Math.abs(v) > 0.08) INK.mom = requestAnimationFrame(step);
+}
 const inkClone = st => ({ ...st, p: st.p.slice(), q: st.q ? st.q.slice() : undefined });
 function inkSegDist(px, py, ax, ay, bx, by) {
   const dx = bx - ax, dy = by - ay, L = dx * dx + dy * dy;
@@ -13185,7 +13205,8 @@ function inkBind(cv, qid) {
     lastE = null,
     drag = null,
     rafQ = 0,
-    locked = false;
+    locked = false,
+    scr = null;
   const taps = new Map();
   let tapInfo = null,
     tapT0 = 0;
@@ -13294,8 +13315,14 @@ function inkBind(cv, qid) {
   /* 두 손가락 탭 = 되돌리기, 세 손가락 탭 = 다시 실행 */
   cv.addEventListener('pointerdown', e => {
     if (!INK.on) return;
-    if (e.pointerType === 'pen') INK.sawPen = true;
+    if (e.pointerType === 'pen') {
+      INK.sawPen = true;
+      INK.penDown = true;
+    }
     if (e.pointerType !== 'touch') return;
+    cancelAnimationFrame(INK.mom || 0);
+    if (!(INK.finger && !INK.sawPen) && !INK.penDown && performance.now() - (INK.penUpT || 0) > 450 && !taps.size && !((e.width || 0) > 45 || (e.height || 0) > 45))
+      scr = { id: e.pointerId, y: e.clientY, t: e.timeStamp, v: 0, el: inkScroller(cv) }; // 손가락 한 개 = 스크롤
     if (!taps.size) {
       tapT0 = performance.now();
       tapInfo = { n: 0, mv: false };
@@ -13387,6 +13414,17 @@ function inkBind(cv, qid) {
   });
   cv.addEventListener('pointermove', e => {
     if (e.pointerType === 'pen' && INK.on) INK.sawPen = true;
+    if (scr && e.pointerId === scr.id) {
+      if (INK.penDown || taps.size > 1) scr = null;
+      else {
+        const dy = e.clientY - scr.y,
+          dt = Math.max(1, e.timeStamp - scr.t);
+        scr.y = e.clientY;
+        scr.t = e.timeStamp;
+        scr.v = 0.7 * scr.v + 0.3 * (dy / dt);
+        scr.el.scrollTop -= dy;
+      }
+    }
     if (e.pointerType === 'touch' && tapInfo && taps.has(e.pointerId)) {
       const s = taps.get(e.pointerId);
       if (Math.hypot(e.clientX - s[0], e.clientY - s[1]) > 14) tapInfo.mv = true;
@@ -13511,7 +13549,18 @@ function inkBind(cv, qid) {
   cv.addEventListener('pointerrawupdate', e => {
     if (mode === 'laser') inkLaserMove(e);
   }); // 지원 기기에서는 프레임 사이 입력까지 받아 더 촘촘하게
+  const scrEnd = e => {
+    if (e.pointerType === 'pen') {
+      INK.penDown = false;
+      INK.penUpT = performance.now();
+    }
+    if (scr && e.pointerId === scr.id) {
+      inkMomentum(scr.el, scr.v);
+      scr = null;
+    }
+  };
   cv.addEventListener('pointerup', e => {
+    scrEnd(e);
     tapEnd(e, false);
     end(e);
   });
@@ -13519,6 +13568,7 @@ function inkBind(cv, qid) {
     if (!cur && e.pointerType !== 'touch') inkEcur(null);
   });
   cv.addEventListener('pointercancel', e => {
+    scrEnd(e);
     tapEnd(e, true);
     if (mode === 'pen') discardIfTiny(); // 스크롤로 넘어간 터치: 점 하나짜리 획은 버린다
     end(e && { ...{}, pointerType: e.pointerType });
@@ -16193,7 +16243,7 @@ function renderFirebaseGuide() {
     <li><b>메인</b>: 다음 수업, 가장 급한 할 일·제출 진행률, 출석 현황, 공지(안 읽은 공지는 NEW, 중요 공지는 맨 위). 마감 24시간 이내 미제출 과제·시험은 남은 시간과 '풀기' 버튼이 뜨고, 3일 이내 마감과 지난 지 7일 이내의 미제출 항목도 알려 줍니다. 시작 전 과제는 시작 시각만 보입니다.</li>
     <li><b>오프라인·불안정한 연결</b>: 제출 순간 연결이 끊기면(파일 첨부가 없을 때) 답을 기기에 보관했다가 연결되면 자동으로 제출합니다. 학생 메인에 '전송 대기' 표시가 뜹니다.</li>
     <li><b>앱처럼 설치</b>: 학생 '내 정보' → 화면 설정에서 홈 화면에 추가(아이폰은 공유 → 홈 화면에 추가)하고 글자 크기를 키울 수 있습니다. 관리자 첫 화면 아래에 마지막 백업 시점이 표시됩니다(7일 넘으면 주황색).</li>
-    <li><b>풀이 화면</b>(전체 화면 집중 모드, 상단 ← 나가기 / 제출 버튼, 나가도 체크한 답은 임시 저장): 진행률 바, ★ 나중에 볼 문제, 메모, 필기(필압 지원 펜·형광펜·획/부분 지우개·올가미 선택/이동/삭제·도형 자동 보정·두 손가락 탭 되돌리기)·레이저 포인터, 미응답 번호 경고, <b>체크 전체 지우기</b>. 풀던 답과 ★는 3초 뒤 서버에 저장되어 다른 기기에서 이어 풀 수 있습니다(첨부 파일 제외).</li>
+    <li><b>풀이 화면</b>(전체 화면 집중 모드, 상단 ← 나가기 / 제출 버튼, 나가도 체크한 답은 임시 저장): 진행률 바, ★ 나중에 볼 문제, 메모, 필기(필압 지원 펜·형광펜·획/부분 지우개·올가미 선택/이동/삭제·도형 자동 보정·두 손가락 탭 되돌리기, 펜슬로 쓸 땐 화면이 밀리지 않고 손가락으로 스크롤)·레이저 포인터, 미응답 번호 경고, <b>체크 전체 지우기</b>. 풀던 답과 ★는 3초 뒤 서버에 저장되어 다른 기기에서 이어 풀 수 있습니다(첨부 파일 제외).</li>
     <li><b>오답노트</b>: 기본이 <b>복습 필요만</b>입니다. <b>복습 퀴즈</b>로 한 문제씩 풀면 맞힌 문제는 마스터 처리됩니다. 해설 화면의 ★·메모는 이 기기 브라우저에만 저장됩니다. 다크 모드는 왼쪽 메뉴에서 켭니다.</li>
     <li>제출 직후 점수·틀린 문항·오답노트 안내와 '해설 보기'가 나옵니다(파일 제출은 '제출 완료'만).</li>
   </ul>
