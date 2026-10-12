@@ -476,14 +476,16 @@
 #solve-body.ink-on .ink-cv{pointer-events:auto; touch-action:none; cursor:crosshair; user-select:none; -webkit-user-select:none; -webkit-touch-callout:none;}
 #solve-body.ink-on.ink-lasso .ink-cv{cursor:crosshair;}
 #solve-body.ink-on.ink-eraser .ink-cv{cursor:none;}
-.ink-bar{display:flex; flex-wrap:wrap; gap:6px; align-items:center; margin-top:9px; padding-bottom:2px;}
-@media(max-width:760px){.ink-bar{flex-wrap:nowrap; overflow-x:auto; scrollbar-width:none;} .ink-bar .ink-tools{flex-wrap:nowrap;}}
-.ink-bar::-webkit-scrollbar{display:none;}
-.ink-bar > *{flex-shrink:0;}
+.ink-bar{display:flex; flex-direction:column; align-items:stretch; gap:6px; margin-top:9px; min-width:0;}
+.ink-bar .ink-rowa,.ink-bar .ink-rowb{display:flex; align-items:center; gap:6px; flex-wrap:nowrap; overflow-x:auto; overflow-y:hidden; min-width:0; max-width:100%; scrollbar-width:none; -webkit-overflow-scrolling:touch;}
+.ink-bar .ink-rowa::-webkit-scrollbar,.ink-bar .ink-rowb::-webkit-scrollbar{display:none;}
+.ink-bar .ink-rowa > *,.ink-bar .ink-rowb > *{flex-shrink:0;}
+.ink-bar .ink-rowb{display:none; min-height:36px; padding:3px;}
+#solve-body.ink-on .ink-rowb{display:flex;}
 .ink-bar button{border:1px solid var(--border); background:var(--card); color:var(--ink); border-radius:999px; padding:6px 11px; font-size:12.5px; font-weight:600; cursor:pointer; font-family:inherit; white-space:nowrap;}
 .ink-bar button:disabled{opacity:.4; cursor:default;}
 .ink-bar button.on{background:var(--brand); border-color:var(--brand); color:#fff;}
-.ink-bar .ink-tools{display:none; gap:6px; align-items:center; flex-wrap:wrap;}
+.ink-bar .ink-tools{display:none; gap:6px; align-items:center; flex-wrap:nowrap;}
 #solve-body.ink-on .ink-tools{display:inline-flex;}
 .ink-bar .ink-grp{display:inline-flex; gap:2px; background:var(--paper-line); border-radius:999px; padding:3px;}
 .ink-bar .ink-tb{display:inline-flex; align-items:center; gap:4px; border:none; background:transparent; padding:6px 10px; min-height:34px; color:var(--ink-soft);}
@@ -12576,7 +12578,7 @@ function inkInit(tid) {
     const bar = document.createElement('div');
     bar.className = 'ink-bar';
     bar.id = 'ink-bar';
-    bar.innerHTML = `<button type="button" id="ink-toggle" onclick="inkToggle()">✏️ 필기</button>
+    bar.innerHTML = `<div class="ink-rowa"><button type="button" id="ink-toggle" onclick="inkToggle()">✏️ 필기</button>
       <span class="ink-tools">
         <span class="ink-grp">
           <button type="button" class="ink-tb" id="ink-pen" onclick="inkSetTool('pen')" title="펜">${inkIcon('pen')}<span>펜</span></button>
@@ -12586,6 +12588,11 @@ function inkInit(tid) {
           <button type="button" class="ink-tb" id="ink-laser" onclick="inkPickTool('laser')" title="굿노트 레이저 포인터처럼, 그린 선이 잠깐 뒤 사라져요">${inkIcon('laser')}<span>레이저</span></button>
         </span>
         <span class="ink-sep"></span>
+        <button type="button" id="ink-undo" onclick="inkUndo()" title="되돌리기 (Ctrl+Z · 두 손가락 탭)">↶</button>
+        <button type="button" id="ink-redo" onclick="inkRedo()" title="다시 실행 (Ctrl+Shift+Z · 세 손가락 탭)">↷</button>
+        <button type="button" onclick="inkClearAll()">전체 지우기</button>
+      </span></div>
+      <div class="ink-rowb">
         <span class="ink-ctx" data-for="pen,lasso" id="ink-colors">
           ${INK_COLORS.map(c => `<button type="button" class="ink-dot" data-c="${c}" style="background:${c}" onclick="inkPickColor('${c}')" title="색"></button>`).join('')}
           <label class="ink-dot ink-cc" id="ink-cc-l" title="직접 고른 색"><input type="color" id="ink-cc" value="#1f2937" oninput="inkPickColor(this.value)"></label>
@@ -12599,15 +12606,11 @@ function inkInit(tid) {
         <span class="ink-ctx" data-for="lasso" id="ink-selbar">
           <button type="button" id="ink-seldel" onclick="inkSelDelete()">선택 삭제</button>
         </span>
-        <span class="ink-sep"></span>
-        <button type="button" id="ink-undo" onclick="inkUndo()" title="되돌리기 (Ctrl+Z · 두 손가락 탭)">↶</button>
-        <button type="button" id="ink-redo" onclick="inkRedo()" title="다시 실행 (Ctrl+Shift+Z · 세 손가락 탭)">↷</button>
-        <button type="button" onclick="inkClearAll()">전체 지우기</button>
-        <span class="ink-sep"></span>
+        <span class="ink-sep ink-sep-b"></span>
         <button type="button" id="ink-snap" onclick="inkToggleSnap()" title="펜을 멈추고 잠깐 누르고 있으면 직선·원·사각형·삼각형으로 바로잡아요">도형 보정</button>
         <button type="button" id="ink-pr" onclick="inkTogglePressure()" title="애플펜슬 등 필압(세게 누르면 굵게) 사용">필압</button>
         <button type="button" id="ink-fg" onclick="inkToggleFinger()">손가락도 쓰기</button>
-      </span>`;
+      </div>`;
     prog.appendChild(bar);
   }
   if (typeof ResizeObserver !== 'undefined')
@@ -13546,6 +13549,17 @@ function inkBind(cv, qid) {
     inkTrimUndo();
     inkRefreshBar();
   };
+  // iPad Safari는 펜슬을 touch 이벤트로도 알린다 — 펜슬이거나 쓰는 중이면 스크롤을 확실히 막는다
+  ['touchstart', 'touchmove'].forEach(tp =>
+    cv.addEventListener(
+      tp,
+      ev => {
+        const t = ev.touches && ev.touches[0];
+        if (INK.on && (INK.penDown || mode || (t && t.touchType === 'stylus'))) ev.preventDefault();
+      },
+      { passive: false }
+    )
+  );
   cv.addEventListener('pointerrawupdate', e => {
     if (mode === 'laser') inkLaserMove(e);
   }); // 지원 기기에서는 프레임 사이 입력까지 받아 더 촘촘하게
