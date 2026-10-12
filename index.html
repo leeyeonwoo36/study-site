@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-<script>try{ if(localStorage.getItem('theme')==='dark') document.documentElement.setAttribute('data-theme','dark'); }catch(e){}</script>
+<script>try{ var _t=localStorage.getItem('theme'); if(_t==='dark'||(_t!=='light'&&window.matchMedia&&matchMedia('(prefers-color-scheme: dark)').matches)) document.documentElement.setAttribute('data-theme','dark'); }catch(e){}</script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>명덕외고 국제정치 학습관리</title>
@@ -2226,6 +2226,8 @@ function jsq(s) {
 /* 다크 모드 */
 function applyTheme(t) {
   document.documentElement.setAttribute('data-theme', t === 'dark' ? 'dark' : 'light');
+  const mt = document.querySelector('meta[name=theme-color]');
+  if (mt) mt.setAttribute('content', t === 'dark' ? '#111715' : '#2F5D50');
   document.querySelectorAll('.theme-btn').forEach(b => {
     const l = t === 'dark' ? '라이트 모드' : '다크 모드';
     const sp = b.querySelector('span');
@@ -2290,8 +2292,22 @@ function toggleTheme() {
   } catch (e) {}
   applyTheme(n);
 }
+const sysDark = () => !!(window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches);
+function storedTheme() {
+  try {
+    return localStorage.getItem('theme');
+  } catch (e) {
+    return null;
+  }
+}
 try {
-  applyTheme(localStorage.getItem('theme') === 'dark' ? 'dark' : 'light');
+  const st0 = storedTheme();
+  applyTheme(st0 === 'dark' || (st0 !== 'light' && sysDark()) ? 'dark' : 'light');
+  /* 직접 고른 적이 없으면 기기의 다크 모드 설정을 따라간다 */
+  if (window.matchMedia)
+    matchMedia('(prefers-color-scheme: dark)').addEventListener('change', e => {
+      if (!storedTheme()) applyTheme(e.matches ? 'dark' : 'light');
+    });
 } catch (e) {}
 const _modalReturnFocus = {};
 function openModal(id) {
@@ -2811,6 +2827,10 @@ function weekText(n) {
 function classWeekText(x) {
   return (classNameOf(x.classId) || '(삭제된 수업)') + ' · ' + weekText(x.week);
 }
+const snapSeen = new Set(); // 첫 스냅샷을 받은 컬렉션 (로딩 스켈레톤 판단용)
+const isLoading = name => subsOwner !== null && !snapSeen.has(name);
+const skelRows = (n, cols) => Array.from({ length: n }, () => `<tr class="skel-row"><td colspan="${cols}"><span class="skel skel-box"></span></td></tr>`).join('');
+const skelBlock = n => Array.from({ length: n }, () => '<div class="skel-card"><span class="skel skel-line m"></span><span class="skel skel-line l"></span><span class="skel skel-line s"></span></div>').join('');
 let subsOwner = null; // 현재 구독을 시작한 계정 uid (계정 전환 감지용)
 
 /* 온라인 OMR 제출을 답안과 정답으로 채점 (저장된 correct 값은 쓰지 않는다) */
@@ -3025,6 +3045,7 @@ function startSubscriptions(isAdmin, ownerUid) {
     return;
   }
   subsOwner = ownerUid;
+  snapSeen.clear();
   subsIsAdmin = !!isAdmin;
   migFlags = { att: false, scores: false, subs: false, tasks: false, sch: false, started: false };
   ansCache = {};
@@ -3039,7 +3060,7 @@ function startSubscriptions(isAdmin, ownerUid) {
   const sub = (name, handler, customRef) => {
     try {
       const ref = customRef || collection(db, name);
-      unsubs.push(onSnapshot(ref, snapSoon(handler), err => console.error(name + ' 구독 에러:', err.code, err.message)));
+      unsubs.push(onSnapshot(ref, snapSoon(snap => { snapSeen.add(name); handler(snap); }), err => console.error(name + ' 구독 에러:', err.code, err.message)));
     } catch (e) {
       // 구독 하나가 실패해도 나머지는 계속 걸리도록 격리
       console.error(name + ' 구독 생성 실패:', e.message);
@@ -4099,7 +4120,7 @@ function saveStudentEdit() {
    ========================================================= */
 function loadAdminWrongNote(uid) {
   const { db, doc, getDoc } = window.fb;
-  $('admin-wrong-list').innerHTML = '<p class="empty-hint">불러오는 중...</p>';
+  $('admin-wrong-list').innerHTML = '<p class="empty-hint loading">불러오는 중...</p>';
   getDoc(doc(db, 'wrongBank', uid))
     .then(snap => {
       adminWrongItems = snap.exists() ? snap.data().items || {} : {};
@@ -5244,6 +5265,10 @@ const ATT_LABEL = { p: '출석', l: '지각', a: '결석', n: '미체크', f: '�
 function renderStudentSchedule() {
   const list = $('stu-sched-list');
   if (!list || !currentStudent) return;
+  if (isLoading('schedules')) {
+    list.innerHTML = skelBlock(2);
+    return;
+  }
   const ts = todayStr();
   const visible = (adminViewAll ? schedules.slice() : schedules.filter(s => inClass(s, currentStudent))).sort(
     (a, b) => (a.week || 1) - (b.week || 1) || (String(a.date) < String(b.date) ? -1 : 1) || String(a.time).localeCompare(String(b.time))
@@ -5602,6 +5627,11 @@ let lastStudentVideoKey = '';
 function renderStudentVideos() {
   const box = $('t-video-list');
   if (!box || !currentStudent) return;
+  if (isLoading('videos')) {
+    box.innerHTML = skelBlock(2);
+    lastStudentVideoKey = '';
+    return;
+  }
   const list = videos
     .filter(v => adminViewAll || inClass(v, currentStudent))
     .sort((a, b) => (a.week || 1) - (b.week || 1) || (b.createdAt || 0) - (a.createdAt || 0));
@@ -11757,7 +11787,9 @@ function renderStudentDashboard(s) {
 
   /* ── 가장 급한 할 일 ── */
   const box = $('stu-deadline-card');
-  if (box) {
+  if (box && isLoading('tasks')) {
+    box.innerHTML = skelBlock(1);
+  } else if (box) {
     const pending = [...myHw.map(t => ({ t, kind: 'hw' })), ...myExam.map(t => ({ t, kind: 'exam' }))]
       .filter(x => unsubmittedCount(x.t) > 0)
       .filter(x => adminViewAll || !x.t.startAt || new Date(x.t.startAt) <= now) // 시작 전 과제 제외
@@ -11883,6 +11915,10 @@ function setStuWeek(kind, w) {
 function renderStudentTasks(kind) {
   const tb = $(kind === 'hw' ? 't-hw-table' : 't-exam-table');
   if (!tb) return;
+  if (isLoading('tasks')) {
+    tb.innerHTML = skelRows(3, 4);
+    return;
+  }
   const all = tasks[kind]
     .filter(isAssignedToMe)
     .slice()
@@ -15807,7 +15843,7 @@ async function openWrongSolve(qid, wantVariant) {
   $('wrong-solve-result').innerHTML = '';
   if (wantVariant) {
     $('wrong-solve-title').textContent = '변형 문제 풀이';
-    $('wrong-solve-body').innerHTML = '<p class="empty-hint">AI가 변형 문제를 만드는 중입니다...</p>';
+    $('wrong-solve-body').innerHTML = '<p class="empty-hint loading">AI가 변형 문제를 만드는 중입니다...</p>';
     openModal('wrong-solve-modal');
     await generateWrongVariant(qid, false);
   } else {
@@ -15830,7 +15866,7 @@ async function generateWrongVariant(qid, isRetry) {
   }
   if (isRetry) {
     $('wrong-solve-result').innerHTML = '';
-    $('wrong-solve-body').innerHTML = '<p class="empty-hint">새 변형 문제를 만드는 중입니다...</p>';
+    $('wrong-solve-body').innerHTML = '<p class="empty-hint loading">새 변형 문제를 만드는 중입니다...</p>';
   }
 
   const passagesText = getPassages(q)
@@ -16332,6 +16368,7 @@ function renderFirebaseGuide() {
     <li><b>오프라인·불안정한 연결</b>: 제출 순간 연결이 끊기면(파일 첨부가 없을 때) 답을 기기에 보관했다가 연결되면 자동으로 제출합니다. 학생 메인에 '전송 대기' 표시가 뜹니다.</li>
     <li><b>앱처럼 설치</b>: 학생 '내 정보' → 화면 설정에서 홈 화면에 추가(아이폰은 공유 → 홈 화면에 추가)하고 글자 크기를 키울 수 있습니다. 관리자 첫 화면 아래에 마지막 백업 시점이 표시됩니다(7일 넘으면 주황색).</li>
     <li><b>풀이 화면</b>(전체 화면 집중 모드, 상단 ← 나가기 / 제출 버튼, 나가도 체크한 답은 임시 저장): 진행률 바, ★ 나중에 볼 문제, 메모, 필기(필압 지원 펜·형광펜·획/부분 지우개·올가미 선택/이동/삭제·도형 자동 보정·두 손가락 탭 되돌리기, 펜슬로 쓸 땐 화면이 밀리지 않고 손가락으로 스크롤)·레이저 포인터, 미응답 번호 경고, <b>체크 전체 지우기</b>. 풀던 답과 ★는 3초 뒤 서버에 저장되어 다른 기기에서 이어 풀 수 있습니다(첨부 파일 제외).</li>
+    <li><b>화면 표시</b>: 처음엔 기기의 다크 모드 설정을 따르고, 메뉴의 <b>다크 모드/라이트 모드</b> 버튼으로 직접 바꿀 수 있습니다. 제출·채점·출석 상태는 색과 함께 ✓ ! ◐ ✕ 같은 기호로 표시하고, 데이터를 불러오는 동안에는 회색 스켈레톤을, 내용이 없을 땐 안내 박스를 보여 줍니다.</li>
     <li><b>오답노트</b>: 기본이 <b>복습 필요만</b>입니다. <b>복습 퀴즈</b>로 한 문제씩 풀면 맞힌 문제는 마스터 처리됩니다. 해설 화면의 ★·메모는 이 기기 브라우저에만 저장됩니다. 다크 모드는 왼쪽 메뉴에서 켭니다.</li>
     <li>제출 직후 점수·틀린 문항·오답노트 안내와 '해설 보기'가 나옵니다(파일 제출은 '제출 완료'만).</li>
   </ul>
