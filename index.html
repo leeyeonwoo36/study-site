@@ -2851,7 +2851,9 @@ function gradeOmr(sub) {
 }
 /* 화면에 쓰는 scores를 다시 만든다:
    ① 관리자가 기록한 점수  ② 온라인 OMR은 답안에서 계산  ③ 파일 제출은 '채점중' — 관리자 기록이 있으면 그것이 우선 */
+let autoScores = { hw: {}, exam: {} }; // 답안에서 자동 계산된 점수 (관리자가 직접 고친 값과 비교용)
 function rebuildScores() {
+  autoScores = { hw: {}, exam: {} };
   const out = { hw: {}, exam: {} };
   ['hw', 'exam'].forEach(kind => {
     Object.keys(rawScores[kind]).forEach(tid => {
@@ -2880,7 +2882,15 @@ function rebuildScores() {
     }
     if (!auto) return;
     out[kind][tid] = out[kind][tid] || {};
-    out[kind][tid][uid] = Object.assign({}, auto, (rawScores[kind][tid] || {})[uid]);
+    (autoScores[kind][tid] = autoScores[kind][tid] || {})[uid] = auto;
+    const raw = (rawScores[kind][tid] || {})[uid];
+    const merged = Object.assign({}, auto, raw);
+    /* 관리자가 점수를 비워 둔 기록이 자동 채점 결과를 덮어쓰지 않게 한다 */
+    if (raw && auto.score && !String(raw.score || '').trim()) {
+      merged.score = auto.score;
+      merged.status = auto.status;
+    }
+    out[kind][tid][uid] = merged;
   });
   scores = out;
   ensureScoreSlots();
@@ -13058,6 +13068,30 @@ function inkLaserDraw(now) {
       const p = trail[i], l = pts[pts.length - 1];
       if (!l || Math.hypot(p.x - l.x, p.y - l.y) > 1.2) pts.push(p);
     }
+    /* 오래된 부분일수록 한 번 더 부드럽게 다듬는다 (머리 쪽은 반응성을 위해 거의 그대로) */
+    if (pts.length > 3) {
+      for (let pass = 0; pass < 2; pass++) {
+        let px = pts[0].x, py = pts[0].y;
+        for (let i = 1; i < pts.length - 1; i++) {
+          const q = pts[i], w = Math.max(0, Math.min(1, (now - q.t - 40) / 160)) * 0.9, nx = (px + 2 * q.x + pts[i + 1].x) / 4, ny = (py + 2 * q.y + pts[i + 1].y) / 4;
+          px = q.x; py = q.y;
+          pts[i] = { x: q.x + (nx - q.x) * w, y: q.y + (ny - q.y) * w, t: q.t };
+        }
+      }
+    }
+    /* 필터 때문에 머리가 손보다 살짝 늦게 보이는 걸 속도로 앞질러 메운다 (저장되지 않는 표시용 점) */
+    if (i1 === trail.length && INK.lzHeld && pts.length > 2) {
+      const h = pts[pts.length - 1];
+      let k = pts.length - 2;
+      while (k > 0 && h.t - pts[k].t < 45) k--;
+      const dt = h.t - pts[k].t;
+      if (dt > 8) {
+        let vx = (h.x - pts[k].x) / dt, vy = (h.y - pts[k].y) / dt;
+        const age = Math.max(0, now - h.t), lead = Math.min(28, age + 12), mag = Math.hypot(vx, vy) * lead, cap = 22,
+          f = (mag > cap ? cap / mag : 1) * Math.max(0, Math.min(1, 1 - (age - 30) / 60)); // 손이 멈추면 예측도 서서히 0으로
+        if (mag > 0.8) pts.push({ x: h.x + vx * lead * f, y: h.y + vy * lead * f, t: h.t });
+      }
+    }
     runs.push(n);
     if (pts.length === 1) emit(pts[0].x * dpr, pts[0].y * dpr, life(pts[0].t));
     else if (pts.length > 1) {
@@ -15587,7 +15621,11 @@ function renderGradingTable() {
                <button class="btn small danger" onclick="cancelSubmission('${kind}','${t.tid}','${s.uid}')">제출 취소</button>`;
         } else {
           mode = '<span class="badge muted">온라인 OMR</span>';
-          status = `<span class="badge good">자동채점 완료 (${sub.correct}/${sub.total})</span>`;
+          const autoTxt = sub.correct + '/' + sub.total;
+          status =
+            rec && String(rec.score || '').trim() && String(rec.score).trim() !== autoTxt
+              ? `<span class="badge good">채점 완료 (${esc(rec.score)})</span> <span class="badge part" title="자동 채점 결과는 ${autoTxt}">수동 수정됨</span>`
+              : `<span class="badge good">자동채점 완료 (${autoTxt})</span>`;
           btn = `<button class="btn small secondary" onclick="openReview('${kind}','${t.tid}','${s.uid}',true)">결과 보기</button>
                <button class="btn small danger" onclick="cancelSubmission('${kind}','${t.tid}','${s.uid}')">제출 취소</button>`;
         }
@@ -15607,7 +15645,7 @@ function renderGradingTable() {
           <span><span class="badge muted">${kindLabel}</span> ${esc(t.title)}
             <span class="gg-meta">· 제출 ${submitted}/${total}</span></span>
           <span style="display:flex; gap:6px; align-items:center;">
-            ${needsBadge}<span class="gg-arrow">▼</span>
+            ${needsBadge}<a href="#" onclick="event.stopPropagation(); gotoScores('${kind}','${t.tid}'); return false;" style="font-size:12px;">성적 관리 ›</a><span class="gg-arrow">▼</span>
           </span>
         </div>
         <div class="grade-group-body">
@@ -15676,7 +15714,22 @@ function renderScoreTable(kind) {
       .map(s => {
         const rec = (scores[kind][tid] || {})[s.uid] || { score: '', status: '미완료' };
         const sub = submissions[tid + '|' + s.uid];
-        const flags = (isPhotoPending(kind, tid, s.uid) ? ' <span class="badge part">사진 채점 대기</span>' : '') + lateBadge(sub);
+        const auto = ((autoScores[kind][tid] || {})[s.uid] || {}).score;
+        const manual = !!(auto && String(rec.score || '').trim() !== auto);
+        const modeBadge = !sub
+          ? '<span class="badge muted">미제출</span>'
+          : sub.mode === 'omr'
+            ? '<span class="badge muted">온라인 OMR · 자동채점</span>'
+            : sub.mode === 'offline'
+              ? '<span class="badge muted">현장 제출</span>'
+              : '<span class="badge muted">파일 첨부</span>';
+        const flags =
+          ' ' +
+          modeBadge +
+          (isPhotoPending(kind, tid, s.uid) ? ' <span class="badge part">사진 채점 대기</span>' : '') +
+          (manual ? ` <span class="badge part" title="자동 채점 결과는 ${esc(auto)}">수동 수정됨</span> <a href="#" onclick="resetScoreToAuto('${kind}','${tid}','${s.uid}'); return false;" style="font-size:12px;">자동값으로</a>` : '') +
+          lateBadge(sub) +
+          (sub ? ` <a href="#" onclick="gotoGrading('${kind}','${tid}'); return false;" style="font-size:12px;">채점 확인 ›</a>` : '');
         const statusCell =
           kind === 'hw'
             ? `<td>
@@ -15690,6 +15743,31 @@ function renderScoreTable(kind) {
       <td><button class="btn small" onclick="saveScore('${kind}','${s.uid}')">저장</button></td></tr>`;
       })
       .join('') || `<tr><td colspan="${colspan}" class="empty-hint">등록된 학생이 없습니다.</td></tr>`;
+}
+/* 성적 관리 ↔ 채점 확인 오가기 */
+function gotoGrading(kind, tid) {
+  setAdminTab('a-grading');
+  const kf = $('grading-kind-filter'),
+    sf = $('grading-status-filter');
+  if (kf) kf.value = '';
+  if (sf) sf.value = '';
+  renderGradingTable();
+  const tf = $('grading-task-filter');
+  if (tf) tf.value = kind + '|' + tid;
+  gradeGroupOpen.add(kind + '|' + tid);
+  renderGradingTable();
+}
+function gotoScores(kind, tid) {
+  setAdminTab('a-scores');
+  const sel = $(kind === 'hw' ? 'score-hw-select' : 'score-exam-select');
+  if (sel) sel.value = tid;
+  renderScoreTable(kind);
+}
+/* 직접 고친 점수를 지우고 자동 채점 결과로 되돌린다 */
+function resetScoreToAuto(kind, tid, uid) {
+  if (!confirm('직접 입력한 점수를 지우고 답안 기준 자동 채점 결과로 되돌릴까요?')) return;
+  const { db, doc, deleteDoc } = window.fb;
+  deleteDoc(doc(db, 'scores', scoreDocId(kind, tid, uid))).catch(e => alert('실패: ' + e.message));
 }
 function saveScore(kind, u) {
   const tid = $(kind === 'hw' ? 'score-hw-select' : 'score-exam-select').value;
@@ -16369,6 +16447,7 @@ function renderFirebaseGuide() {
     <li><b>앱처럼 설치</b>: 학생 '내 정보' → 화면 설정에서 홈 화면에 추가(아이폰은 공유 → 홈 화면에 추가)하고 글자 크기를 키울 수 있습니다. 관리자 첫 화면 아래에 마지막 백업 시점이 표시됩니다(7일 넘으면 주황색).</li>
     <li><b>풀이 화면</b>(전체 화면 집중 모드, 상단 ← 나가기 / 제출 버튼, 나가도 체크한 답은 임시 저장): 진행률 바, ★ 나중에 볼 문제, 메모, 필기(필압 지원 펜·형광펜·획/부분 지우개·올가미 선택/이동/삭제·도형 자동 보정·두 손가락 탭 되돌리기, 펜슬로 쓸 땐 화면이 밀리지 않고 손가락으로 스크롤)·레이저 포인터, 미응답 번호 경고, <b>체크 전체 지우기</b>. 풀던 답과 ★는 3초 뒤 서버에 저장되어 다른 기기에서 이어 풀 수 있습니다(첨부 파일 제외).</li>
     <li><b>화면 표시</b>: 처음엔 기기의 다크 모드 설정을 따르고, 메뉴의 <b>다크 모드/라이트 모드</b> 버튼으로 직접 바꿀 수 있습니다. 제출·채점·출석 상태는 색과 함께 ✓ ! ◐ ✕ 같은 기호로 표시하고, 데이터를 불러오는 동안에는 회색 스켈레톤을, 내용이 없을 땐 안내 박스를 보여 줍니다.</li>
+    <li><b>채점 확인 ↔ 성적 관리</b>: 두 탭은 같은 점수를 봅니다. 온라인 OMR은 답안에서 자동 계산되고, 성적 관리에서 직접 고치면 두 탭 모두 <b>수동 수정됨</b>으로 표시되며 <b>자동값으로</b>를 누르면 되돌아갑니다. 각 화면의 '채점 확인 ›' / '성적 관리 ›' 링크로 바로 오갈 수 있습니다.</li>
     <li><b>오답노트</b>: 기본이 <b>복습 필요만</b>입니다. <b>복습 퀴즈</b>로 한 문제씩 풀면 맞힌 문제는 마스터 처리됩니다. 해설 화면의 ★·메모는 이 기기 브라우저에만 저장됩니다. 다크 모드는 왼쪽 메뉴에서 켭니다.</li>
     <li>제출 직후 점수·틀린 문항·오답노트 안내와 '해설 보기'가 나옵니다(파일 제출은 '제출 완료'만).</li>
   </ul>
