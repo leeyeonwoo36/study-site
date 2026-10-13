@@ -7288,13 +7288,10 @@ ${PRINT_PAD_CSS}
   .pill{display:inline-block; padding:1px 9px; border-radius:99px; font-size:11px; font-weight:800;}
   .pill.g{background:#e4f6ec; color:#1d7a47;} .pill.y{background:#fff1d1; color:#8a5a00;} .pill.r{background:#fdeceb; color:#b13a30;} .pill.n{background:#eef0ef; color:#6b7570;}
   .empty{color:var(--mute); font-size:12.5px; padding:6px 0;}
-  .cmt{border:1px solid var(--line); border-radius:12px; min-height:84px; padding:12px 14px; font-size:13px; line-height:1.7; outline:none;}
-  .cmt:empty:before{content:'선생님 의견 (인쇄 전에 여기를 눌러 직접 입력할 수 있습니다)'; color:#b3bbb7;}
   .sign{display:flex; justify-content:flex-end; gap:6px; margin-top:14px; font-size:12px; color:var(--mute);}
   .legend{display:flex; gap:14px; font-size:11px; color:var(--mute); margin-top:4px;}
   .legend i{display:inline-block; width:14px; height:0; border-top:2.5px solid var(--b); vertical-align:middle; margin-right:5px;}
   .legend i.d{border-top:2px dashed #9aa6a0;}
-  @media print{ .cmt:empty:before{content:'';} .cmt{min-height:70px;} }
 </style></head><body>
 ${PRINT_BAR_HTML}
 <table class="pad"><thead><tr><td></td></tr></thead><tbody><tr><td>
@@ -7334,8 +7331,6 @@ ${PRINT_BAR_HTML}
 <h2>시험 성적 추이</h2>
 ${buildTrendSvgMarkup(trendArr)}
 
-<h2>선생님 의견</h2>
-<div class="cmt" contenteditable="true"></div>
 <div class="sign">명덕외고 국제정치 스터디 · ${today}</div>
 
 </td></tr></tbody><tfoot><tr><td></td></tr></tfoot></table>
