@@ -923,3 +923,11 @@ tr.skel-row td{padding:10px 12px; border-bottom:none;}
 :root[data-theme="dark"] .omr-q .omr-bubble.picked{box-shadow:0 0 0 3px rgba(63,125,107,.25);}
 :root[data-theme="dark"] .omr-q.flagged{background:linear-gradient(90deg,var(--warn-soft),var(--card) 38%);}
 @media (prefers-reduced-motion:reduce){ .omr-q .omr-bubble,.omr-q .omr-bubble input::after{transition:none;} }
+
+/* ---------- 필기(펜) 켰을 때 좌표·레이아웃 안정화 ---------- */
+/* 화면 밖 문항을 건너뛰는 content-visibility는 크기를 어림값(220px)으로 잡아 두었다가 바뀌어서, 필기 캔버스 크기와 어긋나 획이 밀려 보일 수 있다 */
+#solve-body.ink-on .omr-q{content-visibility:visible; contain:none;}
+/* 옆으로 삐져나온 표·이미지가 있어도 화면 자체가 넓어지거나 줄어들지 않게 */
+#solve-modal .sv-content{overflow-x:clip; max-width:100%;}
+#solve-body .passage-box{max-width:100%; overflow-x:auto;}
+#solve-body img,#solve-body table{max-width:100%;}
