@@ -931,3 +931,9 @@ tr.skel-row td{padding:10px 12px; border-bottom:none;}
 #solve-modal .sv-content{overflow-x:clip; max-width:100%;}
 #solve-body .passage-box{max-width:100%; overflow-x:auto;}
 #solve-body img,#solve-body table{max-width:100%;}
+
+/* 과제 순서 끌어서 바꾸기 */
+.task-row .drag-grip{cursor:grab; color:var(--muted); margin-right:4px; user-select:none;}
+.task-row.dragging{opacity:.45;}
+.task-row.drop-before td{box-shadow:inset 0 3px 0 var(--accent,#2F5D4E);}
+.task-row.drop-after td{box-shadow:inset 0 -3px 0 var(--accent,#2F5D4E);}
