@@ -948,3 +948,18 @@ tr.skel-row td{padding:10px 12px; border-bottom:none;}
 
 #hw-table .ra-wrap, #exam-table .ra-wrap{display:flex; flex-wrap:wrap; gap:6px; width:206px;}
 #hw-table .row-actions button, #exam-table .row-actions button{margin:0;}
+
+/* 과제·시험 목록: 과제명 칸을 넉넉히, 표가 흰 카드 밖으로 나가지 않게 */
+.card:has(#hw-table), .card:has(#exam-table){overflow-x:auto;}
+#hw-table td:first-child, #exam-table td:first-child{min-width:210px; width:34%;}
+#hw-table td:nth-child(2), #exam-table td:nth-child(2){font-size:12.5px;}
+#hw-table .ra-wrap, #exam-table .ra-wrap{width:140px;}
+#hw-table td:nth-child(5), #hw-table td:nth-child(6), #exam-table td:nth-child(5), #exam-table td:nth-child(6){white-space:normal;}
+#hw-table td, #exam-table td{padding-left:8px; padding-right:8px;}
+#hw-table td:first-child, #exam-table td:first-child{min-width:190px;}
+#hw-table td:nth-child(2), #exam-table td:nth-child(2), #hw-table td:nth-child(5), #exam-table td:nth-child(5), #hw-table td:nth-child(6), #exam-table td:nth-child(6){white-space:normal;}
+#hw-table td:nth-child(2), #exam-table td:nth-child(2){max-width:110px;}
+#hw-table td .badge, #exam-table td .badge{white-space:normal;}
+#hw-table td:nth-child(3), #exam-table td:nth-child(3){white-space:nowrap;}
+#hw-table td .badge, #exam-table td .badge{white-space:nowrap;}
+#hw-table td:nth-child(2), #exam-table td:nth-child(2){min-width:104px; max-width:130px;}
