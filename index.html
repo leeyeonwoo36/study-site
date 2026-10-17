@@ -9253,14 +9253,14 @@ function renderTasks() {
     <td>${pdfCell(t)}</td>
     <td><span class="badge muted" style="cursor:pointer;" onclick="showAssignedStudents('${kind}','${t.tid}')">${esc(targetLabel)}</span></td>
     <td><span class="badge muted">제출 ${submitCount(t)}/${targetCount}</span></td>
-    <td class="row-actions">
+    <td class="row-actions"><div class="ra-wrap">
       <button class="btn small ghost" title="위로" aria-label="위로" ${pos.first ? 'disabled' : ''} onclick="moveTask('${kind}','${t.tid}',-1)">▲</button>
       <button class="btn small ghost" title="아래로" aria-label="아래로" ${pos.last ? 'disabled' : ''} onclick="moveTask('${kind}','${t.tid}',1)">▼</button>
       <button class="btn small secondary" onclick="startTaskEdit('${kind}','${t.tid}')">수정</button>
       <button class="btn small secondary" onclick="openDuplicateTask('${kind}','${t.tid}')">복제</button>
       <button class="btn small secondary" onclick="openTaskPrint('${kind}','${t.tid}')">인쇄</button>
       <button class="btn small danger" onclick="removeTask('${kind}','${t.tid}')">삭제</button>
-    </td></tr>`;
+    </div></td></tr>`;
   };
   ensureTaskCodes();
   const grouped = (kind, label) => {

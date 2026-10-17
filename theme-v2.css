@@ -937,3 +937,14 @@ tr.skel-row td{padding:10px 12px; border-bottom:none;}
 .task-row.dragging{opacity:.45;}
 .task-row.drop-before td{box-shadow:inset 0 3px 0 var(--accent,#2F5D4E);}
 .task-row.drop-after td{box-shadow:inset 0 -3px 0 var(--accent,#2F5D4E);}
+
+/* 과제·시험 목록 버튼 간격: 좁아도 겹치지 않고 줄바꿈 */
+#hw-table .row-actions, #exam-table .row-actions{white-space:normal; min-width:230px; max-width:300px;}
+#hw-table .row-actions button, #exam-table .row-actions button{margin:0 6px 6px 0;}
+#hw-table .row-actions button[title="위로"], #hw-table .row-actions button[title="아래로"],
+#exam-table .row-actions button[title="위로"], #exam-table .row-actions button[title="아래로"]{padding-left:10px; padding-right:10px; min-width:34px;}
+#hw-table td:not(:first-child), #exam-table td:not(:first-child){white-space:nowrap;}
+#hw-table .row-actions, #exam-table .row-actions{white-space:normal; min-width:0; max-width:none; width:200px;}
+
+#hw-table .ra-wrap, #exam-table .ra-wrap{display:flex; flex-wrap:wrap; gap:6px; width:206px;}
+#hw-table .row-actions button, #exam-table .row-actions button{margin:0;}
