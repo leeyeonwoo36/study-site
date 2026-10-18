@@ -997,12 +997,23 @@ body.on-login::after{width:340px; height:340px; right:-110px; top:-120px; backgr
 /* OMR 답만 체크 과제: 문제 없이 번호만 */
 .omr-only-note{margin:0 0 12px; padding:10px 14px; border-radius:12px; background:var(--brand-soft); color:var(--ink-soft); font-size:13.5px;}
 .omr-only-note a{font-weight:800;}
-.omr-q.omr-only{padding:10px 0; border-bottom:1px solid var(--paper-line);}
-.omr-q.omr-only .qnum-row{display:flex; align-items:center; gap:12px;}
-.omr-q.omr-only .qnum{flex:0 0 46px; font-weight:800; font-size:15px;}
-.omr-q.omr-only .omr-nums{display:flex; gap:8px; flex-wrap:wrap; flex:1;}
-.omr-q.omr-only .omr-nums .omr-bubble{display:grid; place-items:center; min-width:46px; height:46px; padding:0; border-radius:50%; font-size:18px;}
-.omr-q.omr-only .omr-nums .omr-bubble input{position:absolute; opacity:0; width:0; height:0;}
-.omr-q.omr-only input[type=text]{flex:1; max-width:220px;}
-.omr-q.omr-only .omr-nums .omr-bubble.picked{background:var(--brand); border-color:var(--brand); color:#fff;}
-.omr-q.omr-only .omr-nums .omr-bubble.picked .ob-n{color:#fff;}
+.omr-q.omr-only{padding:8px 12px 8px 14px; margin:0 0 8px; border-radius:16px; content-visibility:visible; contain:none;}
+.omr-q.omr-only.flagged{padding-left:11px;}
+.omr-q.omr-only .qnum-row{display:flex; align-items:center; gap:10px;}
+.omr-q.omr-only .qnum{flex:0 0 38px; margin:0; font-weight:800; font-size:15px; white-space:nowrap; color:var(--ink);}
+.omr-q.omr-only .omr-nums{display:flex; gap:6px; flex:1 1 auto; min-width:0; flex-wrap:nowrap;}
+.omr-q.omr-only .omr-nums .omr-bubble{position:relative; display:grid; place-items:center; flex:1 1 0; min-width:0; max-width:50px; aspect-ratio:1; height:auto; padding:0; border-radius:50%; font-size:clamp(16px,4.6vw,20px); line-height:1;}
+.omr-q.omr-only .omr-nums .omr-bubble input{position:absolute; opacity:0; width:0; height:0; margin:0; pointer-events:none;}
+.omr-q.omr-only .omr-nums .omr-bubble .ob-n{display:block; pointer-events:none;}
+.omr-q.omr-only input[type=text]{flex:1; min-width:0; max-width:260px;}
+.omr-q.omr-only .flag-btn{flex:0 0 auto; margin-left:auto;}
+.omr-q.omr-only .omr-nums .omr-bubble.picked,
+.omr-q.omr-only .omr-nums .omr-bubble.picked:hover{background:var(--brand); border-color:var(--brand); color:#fff; box-shadow:0 0 0 3px rgba(47,93,80,.18);}
+.omr-q.omr-only .omr-nums .omr-bubble.picked .ob-n{color:#fff; font-weight:800;}
+@media (max-width:420px){
+  .omr-q.omr-only{padding:7px 8px 7px 10px;}
+  .omr-q.omr-only .qnum-row{gap:7px;}
+  .omr-q.omr-only .qnum{flex-basis:34px; font-size:14px;}
+  .omr-q.omr-only .omr-nums{gap:4px;}
+  .omr-q.omr-only .flag-btn{padding:6px 8px;}
+}
