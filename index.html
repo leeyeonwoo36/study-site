@@ -1863,6 +1863,7 @@ body.quiet-preview .sidebar{ padding-top:22px; }
     <h3 id="tp-heading">인쇄</h3>
     <p class="note" id="tp-sub"></p>
     <label class="dup-opt"><input type="checkbox" id="tp-problem" checked> 문제지 <span id="tp-pdfnote" style="color:var(--muted); font-size:12px;"></span></label>
+    <div class="dup-opt" style="gap:8px; flex-wrap:wrap;"><span>문제지 출처</span><select id="tp-src" style="width:auto;"><option value="pdf">원본 PDF 우선 (없으면 문제은행에서 만든 문제지)</option><option value="bank">항상 문제은행에서 만든 문제지</option></select></div>
     <label class="dup-opt"><input type="checkbox" id="tp-omr"> OMR 답안지</label>
     <label class="dup-opt"><input type="checkbox" id="tp-explain"> 해설지 (빠른 정답 + 정답·해설)</label>
     <label class="dup-opt"><input type="checkbox" id="tp-duplex" checked> 양면 인쇄 맞춤 (각 항목을 앞면에서 시작 · 빈 면 자동 삽입)</label>
@@ -1881,6 +1882,7 @@ body.quiet-preview .sidebar{ padding-top:22px; }
     <div id="bundle-list" class="bundle-list"></div>
     <label class="dup-opt"><input type="checkbox" id="bundle-cover" checked> 표지 포함</label>
     <label class="dup-opt"><input type="checkbox" id="bundle-problem" checked> 문제지 포함</label>
+    <div class="dup-opt" style="gap:8px; flex-wrap:wrap;"><span>문제지 출처</span><select id="bundle-src" style="width:auto;"><option value="pdf">원본 PDF 우선 (없으면 문제은행에서 만든 문제지)</option><option value="bank">항상 문제은행에서 만든 문제지</option></select></div>
     <label class="dup-opt"><input type="checkbox" id="bundle-omr" checked> OMR 답안지 포함</label>
     <label class="dup-opt"><input type="checkbox" id="bundle-explain"> 해설지 포함 (빠른 정답 + 정답·해설, 과제마다 뒤에 붙음)</label>
     <label class="dup-opt"><input type="checkbox" id="bundle-duplex" checked> 양면 인쇄 맞춤 (표지·문제지·OMR·해설지를 각각 앞면에서 시작 · 홀수 쪽에서 끝나면 빈 면 삽입)</label>
@@ -9815,12 +9817,14 @@ function openBundlePrint() {
   $('bundle-list').innerHTML = list
     .map(
       x =>
-        `<label><input type="checkbox" class="bundle-ck" value="${x.kind}|${x.t.tid}" checked><span class="badge ${x.kind === 'exam' ? 'part' : 'muted'}">${x.kind === 'exam' ? '시험' : '과제'}</span> ${esc(x.t.title)}<small>${(x.t.qids || []).length}문항</small></label>`
+        `<label><input type="checkbox" class="bundle-ck" value="${x.kind}|${x.t.tid}" checked><span class="badge ${x.kind === 'exam' ? 'part' : 'muted'}">${x.kind === 'exam' ? '시험' : '과제'}</span> ${esc(x.t.title)}<small>${(x.t.qids || []).length}문항${x.t.pdfUrl ? ' · 원본 PDF 있음' : ''}</small></label>`
     )
     .join('');
+  $('bundle-src').value = 'pdf';
+  $('bundle-src').disabled = !list.some(x => x.t.pdfUrl);
   openModal('bundle-modal');
 }
-function doBundlePrint() {
+async function doBundlePrint() {
   const c = classOf(selClassId);
   if (!c) return;
   const picks = [...document.querySelectorAll('#bundle-list .bundle-ck:checked')].map(x => x.value.split('|'));
@@ -9837,6 +9841,24 @@ function doBundlePrint() {
     return;
   }
   const byId = new Map(questions.map(q => [q.qid, q]));
+  /* 원본 PDF가 올라온 과제는 문제지 자리에 원본을 쓴다(읽기 실패 시 만든 문제지로 대신) */
+  const pdfById = {};
+  let preWin = null;
+  const useOrig = $('bundle-src').value === 'pdf';
+  const withPdf = wantProb && useOrig ? picks.map(([k, id]) => tasks[k].find(x => x.tid === id)).filter(x => x && x.pdfUrl) : [];
+  if (withPdf.length) {
+    preWin = window.open('', '_blank'); // 클릭 직후에 열어야 팝업 차단을 피함
+    if (preWin) {
+      try { preWin.document.write('<p style="font:15px sans-serif; padding:24px;">원본 PDF를 불러오는 중입니다…</p>'); } catch (e) {}
+      let failed = 0;
+      for (const x of withPdf) {
+        const h = await pdfPagesHtml(x.pdfUrl);
+        if (h) pdfById[x.tid] = h;
+        else failed++;
+      }
+      if (failed) alert(`원본 PDF ${failed}개를 불러오지 못해 해당 과제는 만들어진 문제지로 인쇄합니다.`);
+    }
+  }
   let hwNo = 0;
   const items = [];
   const sections = [];
@@ -9846,8 +9868,9 @@ function doBundlePrint() {
     const qs = (t.qids || []).map(id => byId.get(id)).filter(Boolean);
     if (kind === 'hw') hwNo++;
     items.push({ kind, hwNo, title: t.title, n: qs.length, code: taskCodeOf(t) });
+    if (wantProb && pdfById[t.tid]) sections.push(pdfById[t.tid]);
     if (!qs.length) return;
-    if (wantProb)
+    if (wantProb && !pdfById[t.tid])
       sections.push(
         padWrap(
           `<section class="probsec">
@@ -9871,6 +9894,7 @@ ${PRINT_PAD_CSS}
   body{font-family:'Pretendard Variable','Pretendard','Noto Sans KR',-apple-system,sans-serif; color:#111; line-height:1.6; letter-spacing:-.01em; margin:0; -webkit-font-smoothing:antialiased;}
   @media print{ .no-print{display:none;} }
 ${PRINT_PROBLEM_CSS}
+${PDFDOC_CSS}
 ${PRINT_KEY_CSS}
 ${COVER_CSS}
 ${scopeCss(OMR_CSS, '.omrdoc')}
@@ -9881,7 +9905,10 @@ ${sections.join('')}
 <script>${DUPLEX_JS}<\/script>
 </body></html>`;
   closeModal('bundle-modal');
-  openPrintWindow(html, '명덕외고-국제정치');
+  if (preWin) {
+    try { preWin.document.open(); } catch (e) {}
+  }
+  openPrintWindow(html, '명덕외고-국제정치', preWin);
 }
 let taskPrintTarget = null;
 function openTaskPrint(kind, tid) {
@@ -9899,7 +9926,10 @@ function openTaskPrint(kind, tid) {
   $('tp-heading').textContent = '인쇄 · ' + t.title;
   $('tp-sub').textContent = `${classWeekText(t)} · ${n}문항 · 인쇄할 항목을 고르세요 (여러 개 선택 가능)`;
   $('tp-problem').checked = true;
-  $('tp-pdfnote').textContent = t.pdfUrl ? '(원본 PDF로 인쇄)' : '';
+  $('tp-pdfnote').textContent = '';
+  $('tp-src').value = 'pdf';
+  $('tp-src').disabled = !t.pdfUrl;
+  $('tp-src').title = t.pdfUrl ? '' : '이 과제에는 원본 PDF가 없어 문제은행에서 만든 문제지로 인쇄됩니다';
   $('tp-omr').checked = false;
   $('tp-explain').checked = false;
   openModal('task-print-modal');
@@ -9946,7 +9976,7 @@ async function pdfPagesHtml(url) {
 }
 const PDFDOC_CSS = `
   @page pdfpage{ size:A4; margin:0; }
-  .pdfdoc{page:pdfpage;} .pdfpg{width:210mm; height:297mm; break-after:page; page-break-after:always; overflow:hidden; background:#fff;}
+  .pdfdoc{page:pdfpage; break-before:page; page-break-before:always;} .pdfpg{width:210mm; height:297mm; break-after:page; page-break-after:always; overflow:hidden; background:#fff;}
   .pdfpg:last-child{break-after:auto; page-break-after:auto;}
   .pdfpg img{width:210mm; height:297mm; object-fit:contain; display:block;}
 `;
@@ -9972,7 +10002,7 @@ async function doTaskPrint() {
   /* 원본 PDF가 올라와 있으면 문제지 자리에 원본을 쓴다(없거나 읽기 실패 시 아래의 만들어 주는 문제지) */
   let preWin = null,
     pdfHtml = null;
-  if (wantProb && t.pdfUrl) {
+  if (wantProb && t.pdfUrl && $('tp-src').value === 'pdf') {
     preWin = window.open('', '_blank'); // 클릭 직후에 열어야 팝업 차단을 피함
     if (preWin) {
       try { preWin.document.write('<p style="font:15px sans-serif; padding:24px;">원본 PDF를 불러오는 중입니다…</p>'); } catch (e) {}
@@ -16505,7 +16535,7 @@ function renderFirebaseGuide() {
     <li>문제 등록 방법: 직접 입력, <b>PDF 문제 추출</b>(문제지·정답지를 올리면 원본 문번 순서로 정렬, 저장 전 모든 칸 수정 가능), 학생 관리의 학생 목록은 이름·학교·전화번호 검색, 수업별, 미제출자만 보기로 좁혀 볼 수 있습니다. 문제은행에서 체크한 문제는 <b>선택 삭제</b> 버튼으로 한 번에 지울 수 있습니다(과제·시험·오답노트에서도 함께 제외되며 되돌릴 수 없음). <b>과제·시험 원본 PDF</b>는 10MB를 넘으면 등록 시 자동으로 압축해 올립니다(압축본은 글자 선택·검색이 안 될 수 있음). <b>AI 문제 생성</b>(참고 자료 최대 10개·합계 100MB, 3MB가 넘는 PDF는 Gemini 파일 저장소에 올려서 처리하므로 큰 PDF도 가능), <b>문제 JSON 가져오기</b>(문제은행 맨 위 카드의 <b>Claude용 안내문 복사</b> → Claude에게 붙여넣기). 보기 표·복수 정답·이미지 붙여넣기(Ctrl+V)를 지원합니다. <b>그림 정밀 자르기</b>는 AI를 한 번 더 부르니 한도를 아끼려면 평소엔 꺼 두세요.</li>
     <li><b>모든 문제에는 고유 번호(#1, #2…)</b>가 붙습니다(기존 문제는 관리자가 접속하면 등록 순으로 자동 부여, 삭제해도 번호는 안 바뀜). 문제은행 검색창에 <code>#번호</code>를 넣거나 <b>문제 번호순</b> 정렬로 찾습니다.</li>
     <li><b>AI 변형 문제</b>(문제 메뉴의 관리 탭)에서 학생별 변형 문제를 모아 보고, 변형 문제에 표시된 <b>원본 번호</b>와 <b>원본 보기</b>로 어느 문제의 변형인지 확인합니다. 문제은행 추가·삭제·인쇄도 여기서 합니다.</li>
-    <li><b>과제·시험 인쇄의 문제지</b>: 과제·시험에 <b>원본 PDF</b>가 올라와 있으면 인쇄 창의 문제지가 <b>원본 PDF 그대로</b>(쪽마다 A4 한 장) 나오고, 없으면 등록된 문항으로 만든 문제지가 나옵니다. 원본을 불러오지 못하면 안내 후 만든 문제지로 대신합니다. OMR·해설지와 양면 인쇄 맞춤도 같이 쓸 수 있습니다.</li>
+    <li><b>과제·시험 인쇄의 문제지</b>(개별 인쇄·주차 묶음 인쇄 모두): 인쇄 창의 <b>문제지 출처</b>에서 <b>원본 PDF 우선</b>(기본)과 <b>항상 문제은행에서 만든 문제지</b> 중 고를 수 있습니다. 원본 PDF 우선이면 원본 PDF가 올라온 과제·시험은 <b>원본 PDF 그대로</b>(쪽마다 A4 한 장) 나오고, 없으면 등록된 문항으로 만든 문제지가 나옵니다. 원본을 불러오지 못하면 안내 후 만든 문제지로 대신합니다. OMR·해설지와 양면 인쇄 맞춤도 같이 쓸 수 있습니다.</li>
     <li><b>인쇄</b>: 문제은행에서 선택 → 인쇄하기 → 문제 / 빠른 정답 / 해설 선택. 오답노트 인쇄는 학생 상세에서 <b>복습 필요만</b> 또는 <b>전체</b>를 뽑습니다. <b>주차 묶음 인쇄</b>(수업 · 주차 탭)는 표지·문제지·정답·<b>해설지(선택)</b>를 한 번에 뽑습니다. <b>양면 인쇄 맞춤</b>(기본 켜짐)을 쓰면 표지·문제지·OMR·해설지가 각각 앞면에서 시작하도록, 홀수 쪽에서 끝나는 항목 뒤에 빈 면이 자동으로 들어갑니다.</li>
   </ul>
 
