@@ -739,7 +739,7 @@ body.quiet-preview .sidebar{ padding-top:22px; }
       <p>학습관리 시스템</p>
     </div>
     <div class="card">
-      <div id="login-mode-title" style="font-size:13px; font-weight:700; margin-bottom:10px; color:var(--muted);">학생 로그인</div>
+      <div id="login-mode-title" style="font-size:13px; font-weight:700; margin-bottom:10px; color:var(--muted);">로그인</div>
       <label id="login-id-label">전화번호</label>
       <input type="tel" id="login-id" inputmode="tel" autocomplete="username" placeholder="010-1234-5678" oninput="if(loginMode==='student')fmtPhoneInput(this)" style="margin-bottom:14px;">
       <label>비밀번호</label>
@@ -747,7 +747,7 @@ body.quiet-preview .sidebar{ padding-top:22px; }
         onkeydown="if(event.key==='Enter')doLogin()">
       <button class="btn btn-login" onclick="doLogin()">로그인</button>
       <div style="display:flex; justify-content:space-between; margin-top:14px;">
-        <a href="#" id="login-mode-link" onclick="setLoginMode(loginMode==='admin'?'student':'admin'); return false;" style="font-size:12.5px;">관리자 로그인</a>
+        <a href="#" id="login-mode-link" onclick="setLoginMode(loginMode==='admin'?'student':'admin'); return false;" style="font-size:12.5px;">이메일로 로그인</a>
         <a href="#" onclick="openFindPw(); return false;" style="font-size:12.5px; color:var(--muted);">비밀번호를 잊으셨나요?</a>
       </div>
     </div>
@@ -896,6 +896,13 @@ body.quiet-preview .sidebar{ padding-top:22px; }
           <div id="reg-result" style="margin-top:12px; line-height:1.7;"></div>
           <hr style="border:none; border-top:1px solid var(--border); margin:16px 0;">
           <p class="note">기존 학생이 <b>전화번호로 로그인</b>하려면 색인이 필요합니다. 관리자 화면을 열면 자동으로 맞춰지고, 아래 버튼으로 바로 다시 맞출 수도 있습니다.</p>
+          <p class="note" style="margin-top:14px;"><b>관리자 전화번호 로그인</b>: 내 번호를 한 번 등록하면 이메일 대신 전화번호로 로그인할 수 있습니다. 등록은 지금 로그인한 계정에 연결됩니다.</p>
+          <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:6px;">
+            <input type="tel" id="admin-phone" inputmode="tel" placeholder="010-1234-5678" oninput="fmtPhoneInput(this)" style="max-width:200px; margin:0;">
+            <button class="btn small" onclick="saveAdminPhone()">내 번호로 등록</button>
+            <button class="btn small ghost" onclick="clearAdminPhone()">등록 해제</button>
+          </div>
+          <div id="admin-phone-state" class="note" style="margin-bottom:10px;"></div>
           <button class="btn small secondary" onclick="syncPhoneIndex(true).catch(e=>alert('실패: '+(e.code||e.message)+'\\n(규칙 전문을 게시했는지 확인하세요)'))">전화번호 로그인 색인 다시 만들기</button>
         </div>
         <div class="card">
@@ -2422,6 +2429,7 @@ function setAdminTab(id) {
     renderScoreTable('exam');
   }
   if (id === 'a-attendance') renderAttendance();
+  if (id === 'a-students') renderAdminPhoneState();
   if (id === 'a-video') renderVideos();
   if (id === 'a-notice') renderNotices();
   if (id === 'a-preview') renderPreviewStudentSelect();
@@ -3689,6 +3697,8 @@ async function syncPhoneIndex(report) {
         }
         (byPhone[d] = byPhone[d] || []).push(st);
       });
+    const adm = adminPhoneLocal();
+    if (adm && !byPhone[adm.d] && window.fb.auth.currentUser) want[await phoneHash(adm.d)] = { email: adm.email, uid: window.fb.auth.currentUser.uid };
     for (const d of Object.keys(byPhone)) {
       if (byPhone[d].length > 1) {
         dup.push(byPhone[d].map(x => x.name).join(' · ') + ' (' + phoneFmt(d) + ')');
@@ -3733,6 +3743,60 @@ async function syncPhoneIndex(report) {
     return res;
   } finally {
     phoneSyncBusy = false;
+  }
+}
+/* 관리자 전화번호 로그인: 번호 → 관리자 이메일 색인을 한 건 더 둔다. 번호는 이 기기에만 기억한다 */
+function adminPhoneLocal() {
+  try {
+    const o = JSON.parse(localStorage.getItem('admin-phone') || 'null');
+    return o && o.d && o.email ? o : null;
+  } catch (e) {
+    return null;
+  }
+}
+function renderAdminPhoneState() {
+  const el = $('admin-phone-state');
+  if (!el) return;
+  const a = adminPhoneLocal();
+  el.textContent = a ? '등록됨: ' + phoneFmt(a.d) + ' (이 기기에서 등록한 번호)' : '등록된 번호가 없습니다.';
+}
+async function saveAdminPhone() {
+  const { db, doc, setDoc, auth } = window.fb;
+  if (!currentUserIsAdmin || !auth.currentUser) return;
+  const d = phoneDigits($('admin-phone').value);
+  if (!phoneUsable(d)) return alert('전화번호를 010-1234-5678 형식으로 입력하세요.');
+  const clash = students.find(st => st.approved && phoneDigits(st.phone) === d);
+  if (clash) return alert('이미 학생(' + clash.name + ')이 쓰는 번호입니다. 다른 번호를 입력하세요.');
+  try {
+    const old = adminPhoneLocal();
+    await setDoc(doc(db, 'phoneIndex', await phoneHash(d)), { email: auth.currentUser.email, uid: auth.currentUser.uid });
+    if (old && old.d !== d) {
+      try { await window.fb.deleteDoc(doc(db, 'phoneIndex', await phoneHash(old.d))); } catch (e) {}
+    }
+    localStorage.setItem('admin-phone', JSON.stringify({ d, email: auth.currentUser.email }));
+    try {
+      const sig = JSON.parse(localStorage.getItem('phoneidx-sig') || '{}');
+      sig[await phoneHash(d)] = auth.currentUser.uid + '|' + auth.currentUser.email;
+      localStorage.setItem('phoneidx-sig', JSON.stringify(sig));
+    } catch (e) {}
+    $('admin-phone').value = '';
+    renderAdminPhoneState();
+    alert('등록했습니다. 이제 ' + phoneFmt(d) + ' 와 비밀번호로 로그인할 수 있습니다.');
+  } catch (e) {
+    alert('등록 실패: ' + (e.code || e.message));
+  }
+}
+async function clearAdminPhone() {
+  const a = adminPhoneLocal();
+  if (!a) return alert('이 기기에 등록된 번호가 없습니다.');
+  if (!confirm(phoneFmt(a.d) + ' 번호의 전화번호 로그인을 해제할까요? (이메일 로그인은 계속 됩니다)')) return;
+  try {
+    const { db, doc, deleteDoc } = window.fb;
+    await deleteDoc(doc(db, 'phoneIndex', await phoneHash(a.d)));
+    localStorage.removeItem('admin-phone');
+    renderAdminPhoneState();
+  } catch (e) {
+    alert('해제 실패: ' + (e.code || e.message));
   }
 }
 function genInitialPw() {
@@ -3904,21 +3968,13 @@ async function doLogin() {
     alert((loginMode === 'admin' ? '이메일' : '전화번호') + '와 비밀번호를 입력하세요.');
     return;
   }
-  if (loginMode === 'admin' && !id.includes('@')) {
-    alert('관리자 이메일을 입력하세요.');
-    return;
-  }
-  if (loginMode === 'student' && id.includes('@')) {
-    alert('학생은 전화번호로 로그인합니다.');
-    return;
-  }
   if (!window.fb) {
     alert('Firebase가 아직 로드되지 않았습니다. 잠시 후 다시 시도해주세요.');
     return;
   }
   try {
     pendingRoleChoice = true; // 수동 로그인일 때만 선택창을 띄운다
-    pendingAdminLogin = loginMode === 'admin';
+    pendingAdminLogin = false; // 관리자도 전화번호로 로그인하므로, 계정 종류는 로그인 뒤 UID로 가른다
     const email = await resolveLoginEmail(id);
     const cred = await window.fb.signInWithEmailAndPassword(window.fb.auth, email, pw);
     $('login-pw').value = '';
@@ -3938,7 +3994,7 @@ async function doLogin() {
       e.code === 'auth/user-not-found' ||
       e.code === 'auth/invalid-email'
     ) {
-      alert((loginMode === 'admin' ? '이메일' : '전화번호') + ' 또는 비밀번호가 올바르지 않습니다.');
+      alert((id.includes('@') ? '이메일' : '전화번호') + ' 또는 비밀번호가 올바르지 않습니다.');
     } else if (e.code === 'auth/unauthorized-domain') {
       alert('승인되지 않은 도메인입니다.\nFirebase 콘솔 → Authentication → Settings → 승인된 도메인에 현재 주소를 추가해주세요.');
     } else if (e.code === 'auth/too-many-requests') {
@@ -3954,16 +4010,16 @@ let loginMode = 'student';
 function setLoginMode(m) {
   loginMode = m;
   const adm = m === 'admin';
-  $('login-mode-title').textContent = adm ? '관리자 로그인' : '학생 로그인';
-  $('login-id-label').textContent = adm ? '관리자 이메일' : '전화번호';
+  $('login-mode-title').textContent = adm ? '이메일로 로그인' : '로그인';
+  $('login-id-label').textContent = adm ? '이메일' : '전화번호';
   const el = $('login-id');
   el.type = adm ? 'email' : 'tel';
   el.inputMode = adm ? 'email' : 'tel';
-  el.placeholder = adm ? 'admin@gmail.com' : '010-1234-5678';
+  el.placeholder = adm ? 'name@gmail.com' : '010-1234-5678';
   el.value = '';
   $('login-pw').value = '';
-  $('login-mode-link').textContent = adm ? '← 학생 로그인' : '관리자 로그인';
-  $('login-foot').textContent = adm ? '관리자 계정으로만 로그인할 수 있습니다' : '계정은 관리자가 등록합니다. 초기 비밀번호는 담당 선생님께 받으세요';
+  $('login-mode-link').textContent = adm ? '← 전화번호로 로그인' : '이메일로 로그인';
+  $('login-foot').textContent = '계정은 관리자가 등록합니다. 초기 비밀번호는 담당 선생님께 받으세요';
 }
 function openFindPw() {
   const adm = loginMode === 'admin';
@@ -16482,7 +16538,7 @@ function renderFirebaseGuide() {
   <ul ${ul}>
     <li>회원가입은 없습니다. 학생 계정은 <b>학생 관리 → 학생 등록</b>에서 만들고, 학생은 <b>전화번호 + 초기 비밀번호</b>로 로그인해 첫 로그인 때 비밀번호를 바꿉니다. 비밀번호는 학생 목록의 <b>비번 재설정</b>(이메일로 링크 발송)으로 초기화합니다.</li>
     <li><b>자동 로그인은 마지막으로 비밀번호를 입력한 때부터 24시간</b>만 유지됩니다. 지나면 자동 로그아웃됩니다. (AI 채점·추출 등 처리가 진행 중이면 끝난 뒤에 로그아웃됩니다.)</li>
-    <li>관리자는 코드의 <code>window.ADMIN_UIDS</code>와 Firestore 규칙의 <code>isAdmin()</code>에 UID를 넣어 지정합니다. <b>추가할 때는 두 곳을 함께</b> 수정하세요.</li>
+    <li>관리자도 <b>학생 관리 → 관리자 전화번호 로그인</b>에서 번호를 한 번 등록하면 학생처럼 전화번호로 로그인합니다(번호는 학생과 겹치면 안 됩니다. 이메일 로그인도 계속 됩니다). 관리자는 코드의 <code>window.ADMIN_UIDS</code>와 Firestore 규칙의 <code>isAdmin()</code>에 UID를 넣어 지정합니다. <b>추가할 때는 두 곳을 함께</b> 수정하세요.</li>
     <li>학생 삭제·거절은 Firestore 문서만 지웁니다. Authentication 계정은 Firebase 콘솔에서 따로 지우세요.</li>
     <li>전화번호 로그인은 '전화번호(해시) → 이메일' 색인(<code>phoneIndex</code>)을 관리자 화면을 열 때마다 자동으로 맞춥니다. 학생 번호를 바꾼 뒤에는 관리자가 한 번 접속해야 합니다.</li>
     <li>학생 메인에는 <b>해야 할 일</b>(마감 순 전체 목록)과 <b>오답노트 복습</b> 카드가 보이고, 과제·시험 탭에서는 <b>전체 / 해야 할 것 / 제출 완료</b>로 걸러 볼 수 있습니다.</li>
