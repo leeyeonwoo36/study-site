@@ -4013,6 +4013,7 @@ async function sendResetLink() {
    ========================================================= */
 /* 이 학생에게 배정된 과제·시험 중 미제출 건수 (시작 전 항목은 제외) */
 function pendingCountForStudent(uid) {
+  if (isTestAcct(students.find(x => x.uid === uid))) return 0; // 테스트 계정은 미제출로 세지 않음
   const now = new Date();
   let n = 0;
   ['hw', 'exam'].forEach(kind => {
@@ -8944,8 +8945,10 @@ function removeTask(kind, tid) {
   deleteCloudinaryFiles(files);
 }
 /* 과제·시험의 실제 대상 학생 (승인된 학생 중 배정된 학생만) */
+/* 테스트 계정(테스트01·테스트02): 배정·기능 시험용이라 제출하지 않아도 미제출로 잡지 않는다 (제출한 경우는 그대로 표시) */
+const isTestAcct = s => /^테스트\s*0?[12]$/.test(String((s && s.name) || '').trim());
 function taskTargetStudents(t) {
-  return targetsOf(t);
+  return targetsOf(t).filter(s => !isTestAcct(s) || submissions[t.tid + '|' + s.uid]);
 }
 function submitCount(t) {
   return taskTargetStudents(t).filter(s => submissions[t.tid + '|' + s.uid]).length;
@@ -16607,7 +16610,7 @@ function renderFirebaseGuide() {
   <h3 ${h3}>과제 · 시험 · 채점</h3>
   <ul ${ul}>
     <li><b>복제</b> 버튼으로 다른 수업·주차(여러 개 가능)에 같은 구성을 복사합니다. 채점 확인은 과제별로 접혀 있고 제출 인원·채점 대기 건수가 보입니다.</li>
-    <li><b>미제출자 한눈에</b>(채점 · 제출 확인 탭): 과제별·학생별로 보고 <b>안내문 복사</b>로 단체 메시지를 만듭니다.</li>
+    <li><b>미제출자 한눈에</b>(채점 · 제출 확인 탭): 과제별·학생별로 보고 <b>안내문 복사</b>로 단체 메시지를 만듭니다. 이름이 '테스트01'·'테스트02'인 계정은 시험용이라 미제출 현황·마감 리포트(텔레그램)에 잡히지 않습니다.</li>
     <li>파일(사진·PDF) 제출은 <b>성적 관리</b>에서 점수를 입력해야 채점 완료가 되고, 그때 학생에게 정답·해설이 열립니다. 온라인 OMR은 제출 직후 열립니다. 종이로 받은 과제는 채점 확인 탭에서 <b>현장 제출</b>로 문항별 O/X를 기록하면 점수와 오답노트에 반영됩니다.</li>
     <li><b>문항 통계</b>(채점 · 확인): 문항별 정답률, 선지별 선택 분포, 가장 많이 고른 오답을 봅니다.</li>
     <li><b>출석 체크</b>: 회차를 고르고 <b>전체 출석</b>을 누른 뒤 빠진 학생만 바꾸면 빠릅니다.</li>
