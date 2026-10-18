@@ -3201,6 +3201,7 @@ function startSubscriptions(isAdmin, ownerUid) {
     sub('classes', snap => {
       classes = snap.docs.map(d => ({ cid: d.id, ...d.data() }));
       classes.sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
+      resortTasks();
       if (selClassId && !classOf(selClassId)) selClassId = null;
       if (!selClassId && classes.length) selClassId = classes[0].cid;
       renderClassAdmin();
@@ -3300,6 +3301,7 @@ function startSubscriptions(isAdmin, ownerUid) {
     }
     tasks.hw = all.filter(t => t.kind === 'hw');
     tasks.exam = all.filter(t => t.kind === 'exam');
+    resortTasks();
     rebuildScores();
     renderTasks();
     renderScoreSelects();
@@ -9152,6 +9154,15 @@ function renderTaskFilter(kind) {
 }
 /* 같은 수업·주차 안의 과제 순서: 관리자가 정한 order가 있으면 그 순서, 없으면 등록순 */
 const taskOrd = t => (t.order != null ? Number(t.order) : t.createdAt || 0);
+function resortTasks() {
+  const ci = id => {
+    const i = (classes || []).findIndex(c => c.cid === id);
+    return i < 0 ? 999 : i;
+  };
+  const by = (a, b) => ci(a.classId) - ci(b.classId) || (a.week || 1) - (b.week || 1) || taskOrd(a) - taskOrd(b) || String(a.tid).localeCompare(String(b.tid));
+  tasks.hw.sort(by);
+  tasks.exam.sort(by);
+}
 function taskGroup(kind, t) {
   return tasks[kind]
     .filter(x => x.classId === t.classId && (x.week || 1) === (t.week || 1))
