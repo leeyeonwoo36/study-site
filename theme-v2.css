@@ -963,3 +963,33 @@ tr.skel-row td{padding:10px 12px; border-bottom:none;}
 #hw-table td:nth-child(3), #exam-table td:nth-child(3){white-space:nowrap;}
 #hw-table td .badge, #exam-table td .badge{white-space:nowrap;}
 #hw-table td:nth-child(2), #exam-table td:nth-child(2){min-width:104px; max-width:130px;}
+
+/* ---------- 로그인 화면 다듬기 (지우면 이전 모양으로 돌아감) ---------- */
+body.on-login{
+  background:
+    radial-gradient(900px 600px at 12% -8%, rgba(255,255,255,.14), transparent 60%),
+    radial-gradient(700px 520px at 100% 105%, rgba(232,163,61,.20), transparent 62%),
+    linear-gradient(165deg,#3A7060 0%,#2B5649 48%,#1A382F 100%);
+  background-attachment:fixed; position:relative;
+}
+body.on-login::before,body.on-login::after{content:""; position:fixed; border-radius:50%; pointer-events:none; z-index:0;}
+body.on-login::before{width:520px; height:520px; left:-180px; bottom:-200px; border:1.5px solid rgba(255,255,255,.10); box-shadow:0 0 0 60px rgba(255,255,255,.025), 0 0 0 120px rgba(255,255,255,.02);}
+body.on-login::after{width:340px; height:340px; right:-110px; top:-120px; background:rgba(255,255,255,.05);}
+#shell-login .login-wrap{position:relative; z-index:1; padding-top:12vh; animation:loginIn .6s cubic-bezier(.2,.7,.2,1) both;}
+@keyframes loginIn{from{opacity:0; transform:translateY(14px);} to{opacity:1; transform:none;}}
+.login-emblem{width:64px; height:64px; margin:0 auto 16px; border-radius:20px; display:grid; place-items:center; color:#fff;
+  background:rgba(255,255,255,.14); border:1px solid rgba(255,255,255,.28); backdrop-filter:blur(6px); -webkit-backdrop-filter:blur(6px);
+  box-shadow:0 10px 30px rgba(0,0,0,.18);}
+.login-emblem svg{width:34px; height:34px;}
+.login-head{margin-bottom:26px;}
+.login-head h1{font-size:25px; text-shadow:0 2px 14px rgba(0,0,0,.18);}
+.login-head p{margin-top:8px; font-size:12.5px; letter-spacing:.2em; color:rgba(255,255,255,.78);}
+.login-wrap .card{border-radius:26px; padding:30px 26px 26px; box-shadow:0 24px 60px rgba(0,0,0,.28), 0 2px 0 rgba(255,255,255,.5) inset;}
+.login-title{font-size:19px; font-weight:800; color:var(--ink); letter-spacing:-.02em; margin:0 0 18px;}
+.login-wrap .card label{font-size:12.5px; font-weight:700; color:var(--ink-soft); margin-bottom:6px; display:block;}
+.login-wrap .card input{height:48px; border-radius:14px; font-size:15.5px; padding:0 14px; border:1.5px solid var(--border); background:var(--paper); transition:border-color .15s, box-shadow .15s, background .15s;}
+.login-wrap .card input:focus{outline:none; border-color:var(--brand,#2F5D4E); background:var(--card,#fff); box-shadow:0 0 0 4px rgba(47,93,78,.14);}
+.login-wrap .btn-login{height:50px; padding:0 !important; border-radius:14px !important; font-size:16px !important; font-weight:800; letter-spacing:.02em; box-shadow:0 8px 20px rgba(47,93,78,.32); transition:transform .12s, box-shadow .12s;}
+.login-wrap .btn-login:active{transform:translateY(1px); box-shadow:0 4px 10px rgba(47,93,78,.3);}
+@media (max-height:640px){ #shell-login .login-wrap{padding-top:5vh;} .login-emblem{width:52px; height:52px; margin-bottom:10px;} }
+@media (prefers-reduced-motion:reduce){ #shell-login .login-wrap{animation:none;} }

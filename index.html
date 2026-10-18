@@ -735,11 +735,14 @@ body.quiet-preview .sidebar{ padding-top:22px; }
 <div class="app-shell" id="shell-login">
   <div class="login-wrap">
     <div class="login-head">
+      <div class="login-emblem" aria-hidden="true">
+        <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="24" cy="24" r="16"/><ellipse cx="24" cy="24" rx="7" ry="16"/><path d="M8 24h32M10.5 15h27M10.5 33h27"/></svg>
+      </div>
       <h1>명덕외고 국제정치 스터디</h1>
       <p>학습관리 시스템</p>
     </div>
     <div class="card">
-      <div id="login-mode-title" style="font-size:13px; font-weight:700; margin-bottom:10px; color:var(--muted);">로그인</div>
+      <div id="login-mode-title" class="login-title">로그인</div>
       <label id="login-id-label">전화번호</label>
       <input type="tel" id="login-id" inputmode="tel" autocomplete="username" placeholder="010-1234-5678" oninput="if(loginMode==='student')fmtPhoneInput(this)" style="margin-bottom:14px;">
       <label>비밀번호</label>
@@ -750,7 +753,6 @@ body.quiet-preview .sidebar{ padding-top:22px; }
         <a href="#" onclick="openFindPw(); return false;" style="font-size:12.5px; color:var(--muted);">비밀번호를 잊으셨나요?</a>
       </div>
     </div>
-    <div class="login-foot" id="login-foot">계정은 관리자가 등록합니다. 초기 비밀번호는 담당 선생님께 받으세요</div>
   </div>
 </div>
 
@@ -3957,7 +3959,6 @@ function setLoginMode(m) {
   el.placeholder = adm ? 'name@gmail.com' : '010-1234-5678';
   el.value = '';
   $('login-pw').value = '';
-  $('login-foot').textContent = '계정은 관리자가 등록합니다. 초기 비밀번호는 담당 선생님께 받으세요';
 }
 function openFindPw() {
   const adm = loginMode === 'admin';
