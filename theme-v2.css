@@ -993,3 +993,16 @@ body.on-login::after{width:340px; height:340px; right:-110px; top:-120px; backgr
 .login-wrap .btn-login:active{transform:translateY(1px); box-shadow:0 4px 10px rgba(47,93,78,.3);}
 @media (max-height:640px){ #shell-login .login-wrap{padding-top:5vh;} .login-emblem{width:52px; height:52px; margin-bottom:10px;} }
 @media (prefers-reduced-motion:reduce){ #shell-login .login-wrap{animation:none;} }
+
+/* OMR 답만 체크 과제: 문제 없이 번호만 */
+.omr-only-note{margin:0 0 12px; padding:10px 14px; border-radius:12px; background:var(--brand-soft); color:var(--ink-soft); font-size:13.5px;}
+.omr-only-note a{font-weight:800;}
+.omr-q.omr-only{padding:10px 0; border-bottom:1px solid var(--paper-line);}
+.omr-q.omr-only .qnum-row{display:flex; align-items:center; gap:12px;}
+.omr-q.omr-only .qnum{flex:0 0 46px; font-weight:800; font-size:15px;}
+.omr-q.omr-only .omr-nums{display:flex; gap:8px; flex-wrap:wrap; flex:1;}
+.omr-q.omr-only .omr-nums .omr-bubble{display:grid; place-items:center; min-width:46px; height:46px; padding:0; border-radius:50%; font-size:18px;}
+.omr-q.omr-only .omr-nums .omr-bubble input{position:absolute; opacity:0; width:0; height:0;}
+.omr-q.omr-only input[type=text]{flex:1; max-width:220px;}
+.omr-q.omr-only .omr-nums .omr-bubble.picked{background:var(--brand); border-color:var(--brand); color:#fff;}
+.omr-q.omr-only .omr-nums .omr-bubble.picked .ob-n{color:#fff;}

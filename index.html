@@ -957,6 +957,7 @@ body.quiet-preview .sidebar{ padding-top:22px; }
           <div class="field-section">
             <label>원본 PDF 업로드</label>
             <input type="file" id="hw-pdf" accept="application/pdf">
+            <label class="dup-opt" style="margin-top:8px;"><input type="checkbox" id="hw-omronly"> OMR 답만 체크 (학생 풀이 화면에 문제·보기를 숨김 — 문제는 위 원본 PDF로 줄 때 사용)</label>
           </div>
 
           <button class="btn" id="hw-submit-btn" style="width:100%; margin-top:16px;" onclick="addTask('hw')">과제 등록</button>
@@ -1013,6 +1014,7 @@ body.quiet-preview .sidebar{ padding-top:22px; }
           <div class="field-section">
             <label>원본 PDF 업로드</label>
             <input type="file" id="ex-pdf" accept="application/pdf">
+            <label class="dup-opt" style="margin-top:8px;"><input type="checkbox" id="ex-omronly"> OMR 답만 체크 (학생 풀이 화면에 문제·보기를 숨김 — 문제는 위 원본 PDF로 줄 때 사용)</label>
           </div>
 
                     <button class="btn" id="exam-submit-btn" style="width:100%; margin-top:16px;" onclick="addTask('exam')">시험 등록</button>
@@ -6189,8 +6191,16 @@ function chHtml(q, i, c) {
 }
 
 /* OMR 선지 (체크박스, 여러 개 선택) */
-function omrChoicesHtml(q, name, mine) {
+function omrChoicesHtml(q, name, mine, numbersOnly) {
   const picked = parseAnsList(mine);
+  if (numbersOnly)
+    return `<div class="omr-choices omr-nums">${(q.choices || [])
+      .map((c, ci) => {
+        const on = picked.includes(ci + 1);
+        return `<label class="omr-bubble ${on ? 'picked' : ''}"><input type="checkbox" name="${name}" value="${ci + 1}" ${on ? 'checked' : ''}
+        onchange="this.parentElement.classList.toggle('picked', this.checked)"><span class="ob-n">${CIRCLE[ci]}</span></label>`;
+      })
+      .join('')}</div>`;
   return `<div class="omr-choices${isGnChoices(q) ? '' : ' omr-list'}">${(q.choices || [])
     .map((c, ci) => {
       const on = picked.includes(ci + 1);
@@ -8806,6 +8816,7 @@ function startTaskEdit(kind, tid) {
   renderDraft(kind);
   setClassWeek(prefix, t.classId, t.week);
   tgtSet(prefix, t.targetUids || []);
+  $(prefix + '-omronly').checked = !!t.omrOnly;
 
   $(kind + '-form-title').textContent = (kind === 'hw' ? '과제' : '시험') + ' 수정';
   $(kind + '-submit-btn').textContent = '수정 저장';
@@ -8840,8 +8851,10 @@ async function addTask(kind) {
 
   const editId = editTaskId[kind];
   const existing = editId ? tasks[kind].find(x => x.tid === editId) : null;
+  const omrOnly = !!$(prefix + '-omronly').checked;
 
   const pdfFile = $(prefix + '-pdf').files[0];
+  if (omrOnly && !pdfFile && !existing?.pdfUrl && !confirm('원본 PDF가 없는데 \'OMR 답만 체크\'가 켜져 있습니다.\n학생이 문제를 볼 수 없어요. 그래도 등록할까요?')) return;
   let pdfUrl = existing?.pdfUrl ?? null;
   let pdfName = existing?.pdfName ?? '';
   if (pdfFile) {
@@ -8871,6 +8884,7 @@ async function addTask(kind) {
     qids: draftQids[kind].slice(),
     pdfName,
     pdfUrl,
+    omrOnly,
     classId: cw.classId,
     week: cw.week,
     targetUids: tg
@@ -8882,6 +8896,7 @@ async function addTask(kind) {
   $(prefix + '-start').value = '';
   $(prefix + '-due').value = '';
   $(prefix + '-pdf').value = '';
+  $(prefix + '-omronly').checked = false;
   draftQids[kind] = [];
   renderDraft(kind);
 
@@ -14104,7 +14119,7 @@ function openStudentSolve(kind, tid) {
   }
   currentSolve = { kind, tid };
   loadSolveFlags(tid);
-  $('solve-title').textContent = t.title + ' · 온라인 OMR 풀이';
+  $('solve-title').textContent = t.title + (t.omrOnly ? ' · 답안 체크' : ' · 온라인 OMR 풀이');
   const qs = (t.qids || []).map(q => questions.find(x => x.qid === q)).filter(Boolean);
 
   const progressHtml = qs.length
@@ -14118,11 +14133,26 @@ function openStudentSolve(kind, tid) {
     </div>`
     : '';
 
+  const omrOnly = !!t.omrOnly;
+  const omrOnlyBanner = omrOnly
+    ? `<div class="omr-only-note">문제는 ${t.pdfUrl ? `<a href="${t.pdfUrl}" target="_blank" rel="noopener">📄 원본 PDF</a>` : '나눠 받은 자료'}로 보고, 여기에는 <b>답만 체크</b>하세요.</div>`
+    : '';
   $('solve-body').innerHTML = qs.length
-    ? progressHtml +
+    ? omrOnlyBanner +
+      progressHtml +
       qs
         .map((q, i) => {
           const on = solveFlags.has(q.qid);
+          if (omrOnly)
+            return `
+    <div class="omr-q omr-only${on ? ' flagged' : ''}" id="qwrap_${q.qid}">
+      <div class="qnum-row">
+        <div class="qnum">${i + 1}번</div>
+        ${q.type === 'mc' ? omrChoicesHtml(q, 'ans_' + q.qid, '', true) : `<input type="text" id="ans_${q.qid}" placeholder="정답 입력">`}
+        <button type="button" class="flag-btn${on ? ' on' : ''}" id="flag_${q.qid}"
+          title="나중에 다시 볼 문제로 표시" onclick="toggleSolveFlag('${q.qid}')">${on ? '★' : '☆'}</button>
+      </div>
+    </div>`;
           return `
     <div class="omr-q${on ? ' flagged' : ''}" id="qwrap_${q.qid}">
       <div class="qnum-row">
@@ -16558,6 +16588,7 @@ function renderFirebaseGuide() {
     <li>문제 등록 방법: 직접 입력, <b>PDF 문제 추출</b>(문제지·정답지를 올리면 원본 문번 순서로 정렬, 저장 전 모든 칸 수정 가능), 학생 관리의 학생 목록은 이름·학교·전화번호 검색, 수업별, 미제출자만 보기로 좁혀 볼 수 있습니다. 문제은행에서 체크한 문제는 <b>선택 삭제</b> 버튼으로 한 번에 지울 수 있습니다(과제·시험·오답노트에서도 함께 제외되며 되돌릴 수 없음). <b>과제·시험 원본 PDF</b>는 10MB를 넘으면 등록 시 자동으로 압축해 올립니다(압축본은 글자 선택·검색이 안 될 수 있음). <b>AI 문제 생성</b>(참고 자료 최대 10개·합계 100MB, 3MB가 넘는 PDF는 Gemini 파일 저장소에 올려서 처리하므로 큰 PDF도 가능), <b>문제 JSON 가져오기</b>(문제은행 맨 위 카드의 <b>Claude용 안내문 복사</b> → Claude에게 붙여넣기). 보기 표·복수 정답·이미지 붙여넣기(Ctrl+V)를 지원합니다. <b>그림 정밀 자르기</b>는 AI를 한 번 더 부르니 한도를 아끼려면 평소엔 꺼 두세요.</li>
     <li><b>모든 문제에는 고유 번호(#1, #2…)</b>가 붙습니다(기존 문제는 관리자가 접속하면 등록 순으로 자동 부여, 삭제해도 번호는 안 바뀜). 문제은행 검색창에 <code>#번호</code>를 넣거나 <b>문제 번호순</b> 정렬로 찾습니다.</li>
     <li><b>AI 변형 문제</b>(문제 메뉴의 관리 탭)에서 학생별 변형 문제를 모아 보고, 변형 문제에 표시된 <b>원본 번호</b>와 <b>원본 보기</b>로 어느 문제의 변형인지 확인합니다. 문제은행 추가·삭제·인쇄도 여기서 합니다.</li>
+    <li><b>OMR 답만 체크 과제</b>: 과제·시험 등록 화면의 <b>OMR 답만 체크</b>를 켜면 학생 풀이 화면에 문제·보기가 보이지 않고 번호(①~⑤)와 답 입력칸만 나옵니다. 문제는 원본 PDF(학생 과제 목록의 '📄 PDF')로 주고, 정답·해설·채점·오답노트는 문제은행의 문항으로 그대로 동작합니다. PDF의 문항 번호와 문제은행 번호가 같아야 합니다. 제출 뒤 해설 화면과 오답노트에는 문제가 보입니다. 복제하면 PDF가 따라가지 않으므로 이 설정도 꺼진 채로 복제됩니다.</li>
     <li><b>과제·시험 인쇄의 문제지</b>(개별 인쇄·주차 묶음 인쇄 모두): 인쇄 창의 <b>문제지 출처</b>에서 <b>원본 PDF 우선</b>(기본)과 <b>항상 문제은행에서 만든 문제지</b> 중 고를 수 있습니다. 원본 PDF 우선이면 원본 PDF가 올라온 과제·시험은 <b>원본 PDF 그대로</b>(쪽마다 A4 한 장) 나오고, 없으면 등록된 문항으로 만든 문제지가 나옵니다. 원본을 불러오지 못하면 안내 후 만든 문제지로 대신합니다. 인쇄 창을 여는 순간 원본 PDF를 미리 읽기 시작하고 한 번 읽은 PDF는 기억해 두므로, 인쇄 버튼을 누를 때는 대부분 바로 열립니다. OMR·해설지와 양면 인쇄 맞춤도 같이 쓸 수 있습니다.</li>
     <li><b>인쇄</b>: 문제은행에서 선택 → 인쇄하기 → 문제 / 빠른 정답 / 해설 선택. 오답노트 인쇄는 학생 상세에서 <b>복습 필요만</b> 또는 <b>전체</b>를 뽑습니다. <b>주차 묶음 인쇄</b>(수업 · 주차 탭)는 표지·문제지·정답·<b>해설지(선택)</b>를 한 번에 뽑습니다. <b>양면 인쇄 맞춤</b>(기본 켜짐)을 쓰면 표지·문제지·OMR·해설지가 각각 앞면에서 시작하도록, 홀수 쪽에서 끝나는 항목 뒤에 빈 면이 자동으로 들어갑니다.</li>
   </ul>
