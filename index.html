@@ -8933,8 +8933,9 @@ function submitCount(t) {
 }
 function pdfCell(t) {
   if (!t.pdfName) return '<span style="color:#8993AA;">없음</span>';
-  if (!t.pdfUrl) return esc(t.pdfName) + ' <span style="color:#8993AA; font-size:11px;">(업로드 대기)</span>';
-  return `<a href="${t.pdfUrl}" download="${esc(t.pdfName)}" target="_blank">${esc(t.pdfName)}</a>`;
+  /* 파일 이름이 길어 칸을 많이 차지하므로 짧은 라벨로 보이고, 전체 이름은 마우스를 올리면 나온다 */
+  if (!t.pdfUrl) return `<span title="${esc(t.pdfName)}">PDF</span> <span style="color:#8993AA; font-size:11px;">(업로드 대기)</span>`;
+  return `<a href="${t.pdfUrl}" download="${esc(t.pdfName)}" target="_blank" title="${esc(t.pdfName)}">📄 PDF</a>`;
 }
 /* 학생 화면용 PDF 칸 — 시작 전이면 링크 대신 안내 문구 */
 function studentPdfCell(t) {
