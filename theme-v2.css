@@ -1017,3 +1017,22 @@ body.on-login::after{width:340px; height:340px; right:-110px; top:-120px; backgr
   .omr-q.omr-only .omr-nums{gap:4px;}
   .omr-q.omr-only .flag-btn{padding:6px 8px;}
 }
+
+/* ===== 수업 설정 화면: 휴대폰에서 칸이 밖으로 벗어나지 않게 ===== */
+.class-row > div:first-child{min-width:0; flex:1 1 auto;}
+.class-row .cr-meta{overflow-wrap:anywhere;}
+.class-row > div:last-child{flex:0 0 auto; flex-wrap:nowrap;}
+.class-row .btn{white-space:nowrap; word-break:keep-all;}
+.ov-note .btn{white-space:nowrap; flex:0 0 auto;}
+@media (max-width:640px){
+  #tab-a-schedule table.schedule-table{display:block; width:100%; border:0;}
+  #tab-a-schedule table.schedule-table tbody{display:block;}
+  #tab-a-schedule table.schedule-table > tr:first-child,
+  #tab-a-schedule table.schedule-table > tbody:first-child > tr:first-child:has(th){display:none;}
+  #tab-a-schedule #schedule-table tr{display:flex; flex-wrap:wrap; align-items:center; gap:4px 10px; padding:10px 2px; border-bottom:1px solid var(--paper-line);}
+  #tab-a-schedule #schedule-table td{display:block; padding:0; border:0; text-align:left; font-size:13.5px; min-width:0; overflow-wrap:anywhere;}
+  #tab-a-schedule #schedule-table td:first-child{font-weight:800;}
+  #tab-a-schedule #schedule-table td.row-actions{margin-left:auto; display:flex; gap:6px; flex:0 0 auto;}
+  #tab-a-schedule #schedule-table td.empty-hint{width:100%; text-align:center;}
+  #week-tabs{flex-wrap:wrap;}
+}
