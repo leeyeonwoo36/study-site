@@ -9133,9 +9133,11 @@ function startQuietPreview() {
   setPreviewBanner(null);
   ensureQuietExitBtn(); // 버튼 보장
   switchSite('student');
+  if (window.dailyShowGate) dailyShowGate();
 }
 
 function exitQuietPreview() {
+  if (window.dailyHideGate) dailyHideGate();
   document.body.classList.remove('quiet-preview');
   loadPreviewWrongNote(null);
   previewingStudent = false;
@@ -9156,6 +9158,7 @@ function startAdminPreview() {
   document.body.classList.add('previewing');
   setPreviewBanner('관리자 전체 보기 (배정 무관 · 모든 과제·시험·일정 표시)');
   switchSite('student');
+  if (window.dailyShowGate) dailyShowGate();
 }
 
 function startStudentPreview() {
@@ -9172,10 +9175,12 @@ function startStudentPreview() {
   setPreviewBanner(`"${s.name}" 학생 화면 미리보기 중 (관리자 세션 유지됨)`);
   loadPreviewWrongNote(uid);
   switchSite('student');
+  if (window.dailyShowGate) dailyShowGate();
 }
 
 function exitStudentPreview() {
   closeAllModals();
+  if (window.dailyHideGate) dailyHideGate();
   loadPreviewWrongNote(null);
   previewingStudent = false;
   adminViewAll = false;
@@ -16973,6 +16978,8 @@ function handleBackStep() {
   // 1) 역할 선택 화면은 반드시 골라야 하므로 뒤로가기로 넘어가지 못한다
   const gate = $('role-gate');
   if (gate && !gate.hidden) return true;
+  const dg = $('daily-gate');
+  if (dg && !dg.hidden) return true;
   // 2) 열린 창이 있으면 가장 위의 창부터 닫는다 (풀이 화면은 나가기 확인)
   const open = [...document.querySelectorAll('.modal-bg.show')];
   if (open.length) {
@@ -16983,16 +16990,16 @@ function handleBackStep() {
     else closeModal(top.id);
     return true;
   }
+  // 3-1) 주간지 화면: 지난 주간지 목록이면 오늘 주간지로, 아니면 메인으로
+  if (currentStudent && $('shell-daily') && $('shell-daily').style.display !== 'none') {
+    if (DAILY.view === 'list') dailyOpenSheet(dToday());
+    else closeDaily();
+    return true;
+  }
   // 3) 미리보기 중이면 관리자 화면으로
   if (previewingStudent) {
     if (document.body.classList.contains('quiet-preview')) exitQuietPreview();
     else exitStudentPreview();
-    return true;
-  }
-  // 3-1) 주간지 화면: 지난 주간지 목록이면 오늘 주간지로, 아니면 메인으로
-  if (currentStudent && !currentUserIsAdmin && $('shell-daily') && $('shell-daily').style.display !== 'none') {
-    if (DAILY.view === 'list') dailyOpenSheet(dToday());
-    else closeDaily();
     return true;
   }
   // 4) 홈이 아닌 탭이면 홈 탭으로

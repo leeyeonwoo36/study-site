@@ -107,12 +107,12 @@ function openDaily(push) {
   DAILY.view = 'sheet';
   DAILY.date = dToday();
   switchSite('daily');
-  if (push !== false) dSetUrl('/daily');
+  if (push !== false && !currentUserIsAdmin) dSetUrl('/daily');
   window.scrollTo(0, 0);
 }
 function closeDaily() {
   switchSite('student');
-  dSetUrl('/');
+  if (!currentUserIsAdmin) dSetUrl('/');
   renderDailyCard();
 }
 function dailyOpenSheet(date) {
@@ -164,7 +164,12 @@ function dailyAfterLogin() {
   try {
     done = sessionStorage.getItem('dgDone') === dToday();
   } catch (e) {}
-  if (done || !dIsWeekday(dToday())) return;
+  if (done) return;
+  dailyShowGate();
+}
+/* 선택 화면 띄우기 (월~금만). 관리자의 '학생 화면 보기'에서도 처음 로그인한 학생처럼 이걸 쓴다 */
+function dailyShowGate() {
+  if (!dIsWeekday(dToday())) return;
   const g = $('daily-gate');
   if (!g) return;
   $('dg-date').textContent = '오늘은 ' + dLabel(dToday()) + '입니다';
