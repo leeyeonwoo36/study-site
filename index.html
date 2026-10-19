@@ -1090,10 +1090,10 @@ body.quiet-preview .sidebar{ padding-top:22px; }
 
       <!-- 문제 등록 -->
       <div class="tabpanel" id="tab-a-daily">
-        <div class="page-head"><div><h1>주간지 관리</h1><p>정답·해설을 JSON으로 등록하면, 학생이 <b>/daily</b>에서 당일 주간지를 제출하고 바로 정답·해설을 봅니다.</p></div></div>
+        <div class="page-head"><div><h1>주간지 관리</h1><p>문제·정답·해설을 JSON으로 등록하면, 학생이 <b>/daily</b>에서 당일 주간지를 제출하고 바로 정답·해설을 봅니다. 문제를 학생 화면에 보일지는 주간지마다 고릅니다.</p></div></div>
         <div class="card">
           <h3>주간지 등록 (JSON)</h3>
-          <p class="note">날짜마다 정답·해설을 한 번에 올립니다. 먼저 <b>Claude용 안내문 복사</b>로 규격을 Claude에게 알려 주세요. 같은 날짜를 다시 올리면 덮어쓰고, 학생 제출 기록은 그대로 남습니다.</p>
+          <p class="note">날짜마다 문제(선택)·정답·해설을 한 번에 올립니다. 먼저 <b>Claude용 안내문 복사</b>로 규격을 Claude에게 알려 주세요. 같은 날짜를 다시 올리면 덮어쓰고, 학생 제출 기록은 그대로 남습니다.</p>
           <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:10px;">
             <button class="btn secondary" onclick="dailyCopySpec()">Claude용 안내문 복사</button>
             <label class="btn secondary" style="cursor:pointer; margin:0;">JSON 파일 선택<input type="file" accept=".json,application/json,text/plain" style="display:none" onchange="dailyPickFile(this)"></label>
@@ -3646,7 +3646,6 @@ async function routeAfterAuth(user) {
   if (isAdminUid(user.uid)) {
     currentUserIsAdmin = true;
     currentStudent = null;
-    if (typeof DAILY !== 'undefined') { DAILY.direct = false; dSetUrl('/', true); }
     switchSite('admin');
     startSubscriptions(true, user.uid);
     if (pendingRoleChoice) {
@@ -16660,7 +16659,8 @@ function renderFirebaseGuide() {
     <li><b>모든 문제에는 고유 번호(#1, #2…)</b>가 붙습니다(기존 문제는 관리자가 접속하면 등록 순으로 자동 부여, 삭제해도 번호는 안 바뀜). 문제은행 검색창에 <code>#번호</code>를 넣거나 <b>문제 번호순</b> 정렬로 찾습니다.</li>
     <li><b>AI 변형 문제</b>(문제 메뉴의 관리 탭)에서 학생별 변형 문제를 모아 보고, 변형 문제에 표시된 <b>원본 번호</b>와 <b>원본 보기</b>로 어느 문제의 변형인지 확인합니다. 문제은행 추가·삭제·인쇄도 여기서 합니다.</li>
     <li><b>OMR 답만 체크 과제</b>: 과제·시험 등록 화면의 <b>OMR 답만 체크</b>를 켜면 학생 풀이 화면에 문제·보기가 보이지 않고 번호(①~⑤)와 답 입력칸만 나옵니다. 문제는 원본 PDF(학생 과제 목록의 '📄 PDF')로 주고, 정답·해설·채점·오답노트는 문제은행의 문항으로 그대로 동작합니다. PDF의 문항 번호와 문제은행 번호가 같아야 합니다. 제출 뒤 해설 화면과 오답노트에는 문제가 보입니다. 복제하면 PDF가 따라가지 않으므로 이 설정도 꺼진 채로 복제됩니다.</li>
-    <li><b>주간지 제출</b>(만들기 · 주간지 관리): 정답·해설을 JSON으로 등록하면(<b>Claude용 안내문 복사</b> 참고) 학생은 월~금에 로그인할 때 <b>메인 / 주간지 제출</b>을 고르고, 주소 <b>/daily</b>로도 바로 들어옵니다. 주간지는 <b>당일 제출이 원칙</b>이라 지난 날짜는 '지난 주간지 보기'에서만 제출하며 <b>지연 제출</b>로 기록됩니다. 문제 본문은 올리지 않고 학생이 종이·PDF로 풉니다. 제출하면 바로 정답·해설이 열리고, 제출은 한 번만 가능합니다. 주간지 화면은 메인과 다른 인디고 색입니다. 같은 날짜를 다시 등록하면 덮어쓰며, 이름이 '테스트01'·'테스트02'인 계정은 미제출로 세지 않습니다. 새 컬렉션 규칙(dailies · dailyKeys · dailySubs)은 아래 규칙 전문에 들어 있습니다.</li>
+    <li><b>주간지 제출</b>(만들기 · 주간지 관리): 정답·해설을 JSON으로 등록하면(<b>Claude용 안내문 복사</b> 참고) 학생은 월~금에 로그인할 때 <b>메인 / 주간지 제출</b>을 고르고, 주소 <b>/daily</b>로도 바로 들어옵니다. 주간지는 <b>당일 제출이 원칙</b>이라 지난 날짜는 '지난 주간지 보기'에서만 제출하며 <b>지연 제출</b>로 기록됩니다. 문제 본문(text·passage·image·보기 글)은 선택으로 함께 올릴 수 있고, 주간지마다 <b>학생 화면에 문제 보이기</b>를 켜고 끌 수 있습니다(끄면 번호·답 체크만 보여 종이·PDF로 풉니다). 제출하면 바로 정답·해설이 열리고, 제출은 한 번만 가능합니다. 주간지 화면은 메인과 다른 인디고 색입니다. 같은 날짜를 다시 등록하면 덮어쓰며, 이름이 '테스트01'·'테스트02'인 계정은 미제출로 세지 않습니다. 새 컬렉션 규칙(dailies · dailyKeys · dailySubs)은 아래 규칙 전문에 들어 있습니다.</li>
+    <li><b>탭별 주소</b>: 화면마다 주소가 따로 있어 새로고침해도 그 탭이 유지되고, 링크를 보내면 바로 그 탭이 열립니다(로그인 후). 학생은 <code>/</code> 메인, <code>/hw</code> 과제, <code>/exam</code> 시험, <code>/wrong</code> 오답노트, <code>/video</code> 영상, <code>/me</code> 내 정보, <code>/daily</code> 주간지이고, 관리자는 <code>/admin/탭이름</code>(예: <code>/admin/grading</code> 채점 확인, <code>/admin/daily</code> 주간지 관리, <code>/admin/schedule</code> 수업·주차)입니다. 브라우저 뒤로가기는 기존처럼 화면 안에서 한 단계씩 돌아갑니다.</li>
     <li><b>과제·시험 인쇄의 문제지</b>(개별 인쇄·주차 묶음 인쇄 모두): 인쇄 창의 <b>문제지 출처</b>에서 <b>원본 PDF 우선</b>(기본)과 <b>항상 문제은행에서 만든 문제지</b> 중 고를 수 있습니다. 원본 PDF 우선이면 원본 PDF가 올라온 과제·시험은 <b>원본 PDF 그대로</b>(쪽마다 A4 한 장) 나오고, 없으면 등록된 문항으로 만든 문제지가 나옵니다. 원본을 불러오지 못하면 안내 후 만든 문제지로 대신합니다. 인쇄 창을 여는 순간 원본 PDF를 미리 읽기 시작하고 한 번 읽은 PDF는 기억해 두므로, 인쇄 버튼을 누를 때는 대부분 바로 열립니다. OMR·해설지와 양면 인쇄 맞춤도 같이 쓸 수 있습니다.</li>
     <li><b>인쇄</b>: 문제은행에서 선택 → 인쇄하기 → 문제 / 빠른 정답 / 해설 선택. 오답노트 인쇄는 학생 상세에서 <b>복습 필요만</b> 또는 <b>전체</b>를 뽑습니다. <b>주차 묶음 인쇄</b>(수업 · 주차 탭)는 표지·문제지·정답·<b>해설지(선택)</b>를 한 번에 뽑습니다. <b>양면 인쇄 맞춤</b>(기본 켜짐)을 쓰면 표지·문제지·OMR·해설지가 각각 앞면에서 시작하도록, 홀수 쪽에서 끝나는 항목 뒤에 빈 면이 자동으로 들어갑니다.</li>
   </ul>
@@ -16989,6 +16989,12 @@ function handleBackStep() {
     else exitStudentPreview();
     return true;
   }
+  // 3-1) 주간지 화면: 지난 주간지 목록이면 오늘 주간지로, 아니면 메인으로
+  if (currentStudent && !currentUserIsAdmin && $('shell-daily') && $('shell-daily').style.display !== 'none') {
+    if (DAILY.view === 'list') dailyOpenSheet(dToday());
+    else closeDaily();
+    return true;
+  }
   // 4) 홈이 아닌 탭이면 홈 탭으로
   if (currentUserIsAdmin && $('shell-admin').style.display !== 'none') {
     const act = document.querySelector('#shell-admin .tabpanel.active');
@@ -17018,7 +17024,7 @@ function handleBackStep() {
 (function initPwaAndA11y() {
   // 서비스 워커: https 또는 localhost에서만 (파일로 열었을 때는 건너뜀)
   if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
-    window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+    window.addEventListener('load', () => navigator.serviceWorker.register('/sw.js').catch(() => {}));
   }
   const standalone = () => window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
   window.__installEvt = null;
@@ -17199,6 +17205,7 @@ onAuthStateChanged(auth, async user => {
 console.log('✅ Firebase 연결됨');
 </script>
 
-<script src="daily.js"></script>
+<script src="/routes.js"></script>
+<script src="/daily.js"></script>
 </body>
 </html>

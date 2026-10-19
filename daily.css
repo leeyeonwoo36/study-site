@@ -108,3 +108,25 @@ body.dg-open .app-shell{visibility:hidden;}
 .dly-ad-in{padding:4px 14px 14px; overflow-x:auto;}
 .dly-miss{font-size:13px; color:var(--ink-soft); margin:8px 0 0;}
 @media (max-width:420px){ .dly-q{padding:7px 9px; gap:7px;} .dly-n{flex-basis:40px; font-size:14px;} .dly-opts{gap:4px;} }
+
+/* 문제 본문이 있는 주간지 */
+.dly-q.full{flex-direction:column; align-items:stretch; gap:8px; padding:14px 14px 12px;}
+.dly-q.full .dly-n{flex:none; display:flex; align-items:baseline; gap:8px;}
+.dly-pass{padding:10px 12px; border-radius:12px; background:var(--soft); border:1px solid var(--border); font-size:13.5px; line-height:1.75; color:var(--ink-soft);}
+.dly-text{font-size:15.5px; line-height:1.7; font-weight:600; overflow-wrap:anywhere;}
+.dly-img{max-width:100%; border-radius:10px; border:1px solid var(--border);}
+.dly-ol{display:flex; flex-direction:column; gap:6px;}
+.dly-o{display:flex; align-items:flex-start; gap:10px; width:100%; text-align:left; padding:10px 12px; border:1.5px solid var(--border); border-radius:12px; background:var(--card); color:var(--ink); font:inherit; font-size:14.5px; line-height:1.55; cursor:pointer;}
+.dly-o i{font-style:normal; font-weight:800; flex:0 0 auto; color:var(--brand);}
+.dly-o span{min-width:0; overflow-wrap:anywhere;}
+.dly-o.on{background:var(--brand-soft); border-color:var(--brand);}
+.dly-o.on i{color:var(--brand-deep);}
+.dly-rq{margin:6px 0 4px; display:flex; flex-direction:column; gap:6px;}
+.dly-rq .dly-text{font-size:14.5px;}
+.dly-rc{display:flex; flex-direction:column; gap:3px; font-size:13.5px; color:var(--ink-soft);}
+.dly-rc i{font-style:normal; font-weight:800;}
+.dly-rc .ans{color:var(--good); font-weight:700;}
+.dly-rc .mine:not(.ans){color:var(--accent); text-decoration:line-through;}
+.dly-tg{display:flex; align-items:center; gap:6px; flex-wrap:wrap; font-size:13.5px; font-weight:700; margin:10px 0 0;}
+.dly-tg input{width:auto;}
+.dly-tg small{font-weight:500; color:var(--muted);}

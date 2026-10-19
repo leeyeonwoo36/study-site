@@ -1,6 +1,6 @@
 /* 앱 셸 캐시: 오프라인에서도 화면이 열리게 한다. 네트워크가 되면 항상 최신본을 우선 사용(network-first). */
 const CACHE = 'mdfh-shell-v1';
-const SHELL = ['./', 'index.html', 'theme-v2.css', 'daily.css', 'daily.js', 'manifest.webmanifest', 'icon-192.png'];
+const SHELL = ['./', 'index.html', 'theme-v2.css', 'daily.css', 'daily.js', 'routes.js', 'manifest.webmanifest', 'icon-192.png'];
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL).catch(() => {})).then(() => self.skipWaiting()));
 });
