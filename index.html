@@ -688,6 +688,7 @@ body.quiet-preview .sidebar{ padding-top:22px; }
   .wc-row:last-child{border-bottom:none;}
 </style>
 <link rel="stylesheet" href="theme-v2.css">
+<link rel="stylesheet" href="daily.css">
 </head>
 <body>
 <body class="booting">
@@ -783,6 +784,7 @@ body.quiet-preview .sidebar{ padding-top:22px; }
             <button class="admin-nav" data-tab="a-hw" onclick="setAdminTab('a-hw')"><svg class="ni" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="3.5" width="14" height="17" rx="2.5"/><path d="M9 8.5h6M9 12.5h6M9 16.5h3.5"/></svg><span>과제 관리</span></button>
             <button class="admin-nav" data-tab="a-exam" onclick="setAdminTab('a-exam')"><svg class="ni" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5 4 7v5c0 4.2 3.2 7.3 8 8.5 4.8-1.2 8-4.3 8-8.5V7z"/><path d="m9 12 2.2 2.2L15.5 10"/></svg><span>시험 관리</span></button>
             <button class="admin-nav" data-tab="a-video" onclick="setAdminTab('a-video')"><svg class="ni" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="5.5" width="17" height="13" rx="3"/><path d="m10.5 9.5 4 2.5-4 2.5z"/></svg><span>동영상 관리</span></button>
+            <button class="admin-nav" data-tab="a-daily" onclick="setAdminTab('a-daily')"><svg class="ni" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="3.5" width="14" height="17" rx="2.5"/><path d="M9 8h6M9 12h6M9 16h3"/><path d="m15.5 15.5 1.2 1.2 2.3-2.5"/></svg><span>주간지 관리</span></button>
           </div>
         </div>
 
@@ -1087,6 +1089,28 @@ body.quiet-preview .sidebar{ padding-top:22px; }
 </div>
 
       <!-- 문제 등록 -->
+      <div class="tabpanel" id="tab-a-daily">
+        <div class="page-head"><div><h1>주간지 관리</h1><p>정답·해설을 JSON으로 등록하면, 학생이 <b>/daily</b>에서 당일 주간지를 제출하고 바로 정답·해설을 봅니다.</p></div></div>
+        <div class="card">
+          <h3>주간지 등록 (JSON)</h3>
+          <p class="note">날짜마다 정답·해설을 한 번에 올립니다. 먼저 <b>Claude용 안내문 복사</b>로 규격을 Claude에게 알려 주세요. 같은 날짜를 다시 올리면 덮어쓰고, 학생 제출 기록은 그대로 남습니다.</p>
+          <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:10px;">
+            <button class="btn secondary" onclick="dailyCopySpec()">Claude용 안내문 복사</button>
+            <label class="btn secondary" style="cursor:pointer; margin:0;">JSON 파일 선택<input type="file" accept=".json,application/json,text/plain" style="display:none" onchange="dailyPickFile(this)"></label>
+          </div>
+          <textarea id="daily-json" rows="8" placeholder='{"date":"2026-10-19","title":"10월 3주차 월요일","questions":[{"n":1,"type":"mc","choices":5,"answer":"3","explain":"..."}]}' style="font-family:ui-monospace,Menlo,monospace; font-size:12.5px;"></textarea>
+          <div style="display:flex; gap:10px; align-items:center; margin-top:10px; flex-wrap:wrap;">
+            <button class="btn" onclick="dailyRegister()">검사하고 등록</button>
+            <span id="daily-msg" style="font-size:13px; font-weight:600;"></span>
+          </div>
+        </div>
+        <div class="card">
+          <h3>등록된 주간지 · 제출 현황</h3>
+          <p class="note">이름이 '테스트01'·'테스트02'인 계정은 미제출로 세지 않습니다. 월~금 외 날짜도 등록은 되지만 학생 선택 화면은 평일에만 뜹니다.</p>
+          <div id="daily-admin-list"></div>
+        </div>
+      </div>
+
       <div class="tabpanel" id="tab-a-questions">
         <div class="page-head"><div><h1>문제 등록</h1><p>물음과 &lt;보기&gt;를 따로 등록하고, 객관식(5지선다)·단답형 문제와 해설을 관리합니다.</p></div></div>
 
@@ -1474,6 +1498,17 @@ body.quiet-preview .sidebar{ padding-top:22px; }
 </div>
 
 <!-- ============ 학생 사이트 ============ -->
+<div class="app-shell" id="shell-daily">
+  <div class="dly-wrap">
+    <header class="dly-top">
+      <button class="btn small ghost" onclick="closeDaily()">← 메인</button>
+      <div class="dly-top-t"><b>주간지 제출</b><span id="dly-top-sub"></span></div>
+      <div id="dly-top-btn"></div>
+    </header>
+    <main id="daily-body" class="dly-main"></main>
+  </div>
+</div>
+
 <div class="app-shell" id="shell-student">
   <div class="layout">
     <div class="sidebar">
@@ -1493,6 +1528,7 @@ body.quiet-preview .sidebar{ padding-top:22px; }
 
            <div class="tabpanel active" id="tab-t-main">
         <div class="page-head"><div><h1 id="stu-greeting">메인</h1><p>오늘 할 일과 나의 학습 현황을 한눈에 확인하세요.</p></div></div>
+        <div id="stu-daily-card"></div>
         <div id="stu-pending"></div>
         <div id="stu-urgent"></div>
         <div id="stu-notice-area"></div>
@@ -1626,6 +1662,18 @@ body.quiet-preview .sidebar{ padding-top:22px; }
 </div>
 
 <!-- ============ 모달 ============ -->
+<div id="daily-gate" role="dialog" aria-modal="true" aria-labelledby="dg-t" hidden>
+  <div class="dg-inner">
+    <div class="dg-logo">명덕외고 국제정치 스터디</div>
+    <h2 id="dg-t">어디로 들어갈까요?</h2>
+    <p class="dg-sub" id="dg-date"></p>
+    <div class="dg-pick">
+      <button type="button" class="dg-card" onclick="dailyGate('main')"><div class="dg-t">메인</div><div class="dg-d">과제·시험·일정 등 평소 화면</div></button>
+      <button type="button" class="dg-card dg-daily" onclick="dailyGate('daily')"><div class="dg-t">📝 주간지 제출</div><div class="dg-d">오늘 주간지는 오늘 제출해요</div></button>
+    </div>
+  </div>
+</div>
+
 <div id="role-gate" role="dialog" aria-modal="true" aria-labelledby="role-gate-t" hidden>
   <div class="rg-inner">
     <div class="rg-logo">명덕외고 국제정치 스터디</div>
@@ -2381,10 +2429,12 @@ function switchSite(site) {
   const shell = $('shell-' + site);
   shell.style.display = site === 'login' ? 'block' : 'flex';
   document.body.classList.toggle('on-login', site === 'login');
+  document.body.classList.toggle('on-daily', site === 'daily');
   document.querySelectorAll('.site-switch button').forEach(b => b.classList.remove('active'));
   const sw = $('switch-' + site);
   if (sw) sw.classList.add('active');
   if (site === 'student') renderStudentSite();
+  if (site === 'daily') renderDailyView();
   if (site === 'admin') syncNavSects();
 }
 /* 대분류 펼치기/접기 — 여러 개를 동시에 열어둘 수 있다 */
@@ -2428,6 +2478,7 @@ function setAdminTab(id) {
   }
   if (id === 'a-attendance') renderAttendance();
   if (id === 'a-video') renderVideos();
+  if (id === 'a-daily') renderDailyAdmin();
   if (id === 'a-notice') renderNotices();
   if (id === 'a-preview') renderPreviewStudentSelect();
   if (id === 'a-bank') renderBank();
@@ -3086,6 +3137,7 @@ function startSubscriptions(isAdmin, ownerUid) {
     }
   };
 
+  if (window.dailyOnSubs) window.dailyOnSubs(sub, isAdmin, ownerUid);
   if (isAdmin) {
     // 관리자만 students 컬렉션 전체를 읽을 수 있음
     sub('answerKeys', snap => {
@@ -3494,6 +3546,7 @@ function stopSubscriptions() {
   cloudDrafts = {};
   variantListOpen = false;
   draftQids = { hw: [], exam: [] };
+  if (window.dailyReset) window.dailyReset();
 }
 
 /* =========================================================
@@ -3515,6 +3568,7 @@ setTimeout(() => {
 /* 세션이 끝나면 열려 있던 모달·풀이 화면·카메라·미리보기를 전부 닫고 로그인 화면 상태로 되돌린다 */
 function resetUiForLogin() {
   try { hideRoleGate(); } catch (e) {}
+  try { if (window.dailyHideGate) dailyHideGate(); } catch (e) {}
   try {
     closeAllModals();
   } catch (e) {}
@@ -3592,6 +3646,7 @@ async function routeAfterAuth(user) {
   if (isAdminUid(user.uid)) {
     currentUserIsAdmin = true;
     currentStudent = null;
+    if (typeof DAILY !== 'undefined') { DAILY.direct = false; dSetUrl('/', true); }
     switchSite('admin');
     startSubscriptions(true, user.uid);
     if (pendingRoleChoice) {
@@ -3620,6 +3675,7 @@ async function routeAfterAuth(user) {
   startSubscriptions(false, user.uid);
   switchSite('student');
   if (data.mustChangePw === true) setTimeout(showForcePwModal, 300);
+  else if (window.dailyAfterLogin) dailyAfterLogin();
   return true;
 }
 
@@ -11722,6 +11778,7 @@ function renderStudentSite() {
   if (!s) return;
   $('stu-name').textContent = adminViewAll ? '관리자 (전체보기)' : s.name + ' 학생';
   $('stu-sub').textContent = adminViewAll ? '모든 항목 표시 중' : (s.school || '') + ' · ' + (s.grade || '');
+  if (window.renderDailyCard) renderDailyCard();
   renderStudentNotices();
   renderStudentDashboard(s);
   renderStudentSchedule();
@@ -16603,6 +16660,7 @@ function renderFirebaseGuide() {
     <li><b>모든 문제에는 고유 번호(#1, #2…)</b>가 붙습니다(기존 문제는 관리자가 접속하면 등록 순으로 자동 부여, 삭제해도 번호는 안 바뀜). 문제은행 검색창에 <code>#번호</code>를 넣거나 <b>문제 번호순</b> 정렬로 찾습니다.</li>
     <li><b>AI 변형 문제</b>(문제 메뉴의 관리 탭)에서 학생별 변형 문제를 모아 보고, 변형 문제에 표시된 <b>원본 번호</b>와 <b>원본 보기</b>로 어느 문제의 변형인지 확인합니다. 문제은행 추가·삭제·인쇄도 여기서 합니다.</li>
     <li><b>OMR 답만 체크 과제</b>: 과제·시험 등록 화면의 <b>OMR 답만 체크</b>를 켜면 학생 풀이 화면에 문제·보기가 보이지 않고 번호(①~⑤)와 답 입력칸만 나옵니다. 문제는 원본 PDF(학생 과제 목록의 '📄 PDF')로 주고, 정답·해설·채점·오답노트는 문제은행의 문항으로 그대로 동작합니다. PDF의 문항 번호와 문제은행 번호가 같아야 합니다. 제출 뒤 해설 화면과 오답노트에는 문제가 보입니다. 복제하면 PDF가 따라가지 않으므로 이 설정도 꺼진 채로 복제됩니다.</li>
+    <li><b>주간지 제출</b>(만들기 · 주간지 관리): 정답·해설을 JSON으로 등록하면(<b>Claude용 안내문 복사</b> 참고) 학생은 월~금에 로그인할 때 <b>메인 / 주간지 제출</b>을 고르고, 주소 <b>/daily</b>로도 바로 들어옵니다. 주간지는 <b>당일 제출이 원칙</b>이라 지난 날짜는 '지난 주간지 보기'에서만 제출하며 <b>지연 제출</b>로 기록됩니다. 문제 본문은 올리지 않고 학생이 종이·PDF로 풉니다. 제출하면 바로 정답·해설이 열리고, 제출은 한 번만 가능합니다. 주간지 화면은 메인과 다른 인디고 색입니다. 같은 날짜를 다시 등록하면 덮어쓰며, 이름이 '테스트01'·'테스트02'인 계정은 미제출로 세지 않습니다. 새 컬렉션 규칙(dailies · dailyKeys · dailySubs)은 아래 규칙 전문에 들어 있습니다.</li>
     <li><b>과제·시험 인쇄의 문제지</b>(개별 인쇄·주차 묶음 인쇄 모두): 인쇄 창의 <b>문제지 출처</b>에서 <b>원본 PDF 우선</b>(기본)과 <b>항상 문제은행에서 만든 문제지</b> 중 고를 수 있습니다. 원본 PDF 우선이면 원본 PDF가 올라온 과제·시험은 <b>원본 PDF 그대로</b>(쪽마다 A4 한 장) 나오고, 없으면 등록된 문항으로 만든 문제지가 나옵니다. 원본을 불러오지 못하면 안내 후 만든 문제지로 대신합니다. 인쇄 창을 여는 순간 원본 PDF를 미리 읽기 시작하고 한 번 읽은 PDF는 기억해 두므로, 인쇄 버튼을 누를 때는 대부분 바로 열립니다. OMR·해설지와 양면 인쇄 맞춤도 같이 쓸 수 있습니다.</li>
     <li><b>인쇄</b>: 문제은행에서 선택 → 인쇄하기 → 문제 / 빠른 정답 / 해설 선택. 오답노트 인쇄는 학생 상세에서 <b>복습 필요만</b> 또는 <b>전체</b>를 뽑습니다. <b>주차 묶음 인쇄</b>(수업 · 주차 탭)는 표지·문제지·정답·<b>해설지(선택)</b>를 한 번에 뽑습니다. <b>양면 인쇄 맞춤</b>(기본 켜짐)을 쓰면 표지·문제지·OMR·해설지가 각각 앞면에서 시작하도록, 홀수 쪽에서 끝나는 항목 뒤에 빈 면이 자동으로 들어갑니다.</li>
   </ul>
@@ -16701,6 +16759,28 @@ service cloud.firestore {
         &amp;&amp; d.submittedAt is number
         &amp;&amp; d.submittedAt &gt; request.time.toMillis() - 120000
         &amp;&amp; d.submittedAt &lt; request.time.toMillis() + 120000;
+    }
+
+    // ───────── 주간지 (정답은 제출한 뒤에만 학생에게 열림) ─────────
+    match /dailies/{id}     { allow read: if isAdmin() || isApproved(); allow write: if isAdmin(); }
+    match /dailyKeys/{id} {
+      allow list, write: if isAdmin();
+      allow get: if isAdmin() || (isApproved()
+        &amp;&amp; exists(/databases/$(database)/documents/dailySubs/$(id + '|' + request.auth.uid)));
+    }
+    match /dailySubs/{sid} {
+      allow get, list: if isAdmin() || ownedBy('studentUid');
+      allow create: if isAdmin() || (isApproved()
+        &amp;&amp; request.resource.data.keys().hasOnly(['studentUid','date','answers','total','late','submittedAt'])
+        &amp;&amp; request.resource.data.studentUid == request.auth.uid
+        &amp;&amp; sid == request.resource.data.date + '|' + request.auth.uid
+        &amp;&amp; request.resource.data.answers is map
+        &amp;&amp; request.resource.data.late is bool
+        &amp;&amp; request.resource.data.total is int
+        &amp;&amp; request.resource.data.submittedAt is number
+        &amp;&amp; request.resource.data.submittedAt &gt; request.time.toMillis() - 120000
+        &amp;&amp; request.resource.data.submittedAt &lt; request.time.toMillis() + 120000);
+      allow update, delete: if isAdmin();
     }
 
     // ───────── 학생 인적사항 ─────────
@@ -17119,5 +17199,6 @@ onAuthStateChanged(auth, async user => {
 console.log('✅ Firebase 연결됨');
 </script>
 
+<script src="daily.js"></script>
 </body>
 </html>

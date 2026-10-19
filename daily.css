@@ -1,0 +1,110 @@
+/* 주간지 제출 화면 — 인디고 테마 (본 사이트의 초록과 구분) */
+body.on-daily{
+  --brand:#3F4FB5; --brand-deep:#2C3989; --brand-soft:#E8EBFA;
+  --paper:#F4F5FB; --paper-line:#E7E9F5; --border:#DEE2F3; --soft:#F5F6FD;
+  --accent:#E0803A; --accent-soft:#FDEFE2;
+  --good:#2F9168; --good-soft:#E2F4EB;
+  background:var(--paper);
+}
+:root[data-theme="dark"] body.on-daily{
+  --brand:#7F8DEA; --brand-deep:#5A68C8; --brand-soft:#242A4C;
+  --paper:#0F1221; --paper-line:#1A1E35; --card:#171B30; --border:#2A3055; --soft:#1D2240;
+  --accent:#E79A5C; --accent-soft:#3A2A1C;
+  background:var(--paper);
+}
+body.on-daily .btn:not(.secondary):not(.ghost):not(.danger){background:var(--brand); color:#fff;}
+body.on-daily ::selection{background:var(--brand); color:#fff;}
+
+#shell-daily{display:none; min-height:100vh; justify-content:center;}
+.dly-wrap{width:100%; max-width:720px; min-width:0; display:flex; flex-direction:column;}
+.dly-top{position:sticky; top:0; z-index:20; display:flex; align-items:center; gap:10px; padding:10px 14px; background:var(--card); border-bottom:1px solid var(--border);}
+.dly-top-t{flex:1; min-width:0; display:flex; flex-direction:column; line-height:1.25;}
+.dly-top-t b{font-size:16px; color:var(--brand); font-weight:800;}
+.dly-top-t span{font-size:12px; color:var(--muted);}
+.dly-main{padding:18px 14px 110px; flex:1;}
+.dly-h{font-size:20px; margin:4px 0 6px;}
+.dly-sub{font-size:13.5px; color:var(--ink-soft); margin:0 0 14px;}
+.dly-head{margin-bottom:12px;}
+.dly-date{font-size:12.5px; font-weight:700; color:var(--brand); letter-spacing:.01em;}
+.dly-head h2{font-size:22px; margin:2px 0 0;}
+.dly-note{padding:11px 14px; border-radius:12px; background:var(--brand-soft); color:var(--ink-soft); font-size:13.5px; margin:0 0 12px; line-height:1.6;}
+.dly-note.late{background:var(--accent-soft); color:var(--ink);}
+.dly-qs{display:flex; flex-direction:column; gap:8px;}
+.dly-q{display:flex; align-items:center; gap:10px; padding:8px 12px; background:var(--card); border:1px solid var(--border); border-radius:16px;}
+.dly-n{flex:0 0 46px; font-weight:800; font-size:15px; white-space:nowrap;}
+.dly-n small{display:block; font-size:10.5px; font-weight:700; color:var(--accent);}
+.dly-opts{display:flex; gap:6px; flex:1; min-width:0;}
+.dly-b{flex:1 1 0; min-width:0; max-width:52px; aspect-ratio:1; border-radius:50%; border:1.5px solid var(--border); background:var(--card); color:var(--ink); font:inherit; font-size:clamp(16px,4.6vw,20px); font-weight:700; cursor:pointer; padding:0; transition:background .1s,border-color .1s,transform .08s;}
+.dly-b:active{transform:scale(.94);}
+.dly-b.on{background:var(--brand); border-color:var(--brand); color:#fff; box-shadow:0 0 0 3px rgba(63,79,181,.18);}
+.dly-short{flex:1; min-width:0; padding:11px 13px; border-radius:12px; font-size:15px;}
+.dly-bar{position:fixed; left:50%; transform:translateX(-50%); bottom:0; width:100%; max-width:720px; display:flex; align-items:center; justify-content:space-between; gap:12px; padding:12px 16px calc(12px + env(safe-area-inset-bottom)); background:var(--card); border-top:1px solid var(--border); z-index:25;}
+.dly-bar span{font-size:13.5px; font-weight:700; color:var(--ink-soft);}
+.dly-empty,.dly-done{text-align:center; padding:48px 12px; color:var(--ink-soft);}
+.dly-empty h2{margin:6px 0;}
+.dly-ico{font-size:22px;}
+.dly-ico.big{font-size:44px; margin-bottom:6px;}
+.dly-tag{display:inline-block; padding:2px 9px; border-radius:99px; font-size:11.5px; font-weight:800; vertical-align:middle; margin-left:4px;}
+.dly-tag.ok{background:var(--good-soft); color:var(--good);}
+.dly-tag.todo{background:var(--accent-soft); color:var(--accent);}
+.dly-tag.late{background:var(--accent-soft); color:var(--accent);}
+.dly-list{display:flex; flex-direction:column; gap:8px;}
+.dly-row{display:flex; align-items:center; justify-content:space-between; gap:10px; padding:14px 16px; border:1px solid var(--border); border-radius:14px; background:var(--card); font:inherit; color:var(--ink); text-align:left; cursor:pointer;}
+.dly-row:hover{border-color:var(--brand); background:var(--brand-soft);}
+.dly-row div{display:flex; flex-direction:column; min-width:0;}
+.dly-row span:not(.dly-tag){font-size:12.5px; color:var(--muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+.dly-score{display:flex; align-items:center; justify-content:space-between; padding:18px 20px; border-radius:18px; background:var(--brand); color:#fff; margin-bottom:12px;}
+.dly-sc-n{font-size:40px; font-weight:900; line-height:1;}
+.dly-sc-t{font-size:18px; opacity:.85;}
+.dly-sc-r{text-align:right; display:flex; flex-direction:column; gap:4px; align-items:flex-end;}
+.dly-sc-r small{opacity:.9; font-size:13px;}
+.dly-score .dly-tag{background:rgba(255,255,255,.2); color:#fff;}
+.dly-rs{display:flex; flex-direction:column; gap:8px;}
+.dly-r{padding:11px 14px; border-radius:14px; border:1px solid var(--border); background:var(--card); border-left:4px solid var(--good);}
+.dly-r.bad{border-left-color:var(--accent);}
+.dly-rh{display:flex; justify-content:space-between; align-items:center;}
+.dly-mark{font-size:12px; font-weight:800; color:var(--good);}
+.dly-r.bad .dly-mark{color:var(--accent);}
+.dly-ans{display:flex; gap:16px; flex-wrap:wrap; font-size:14px; margin-top:4px; color:var(--ink-soft);}
+.dly-ans b{color:var(--ink);}
+.dly-exp{margin-top:6px; font-size:13.5px; line-height:1.7;}
+.dly-exp summary{cursor:pointer; font-weight:700; color:var(--brand);}
+.dly-exp div{padding:6px 2px 2px; color:var(--ink);}
+.dly-after{display:flex; gap:8px; justify-content:center; margin-top:18px; flex-wrap:wrap;}
+
+/* 메인 위 카드 */
+.dly-card{display:flex; align-items:center; gap:12px; padding:14px 16px; margin:0 0 14px; border-radius:16px; cursor:pointer; background:linear-gradient(120deg,#3F4FB5,#5A6BD6); color:#fff; box-shadow:0 4px 14px rgba(63,79,181,.28);}
+.dly-card .dly-ico{font-size:26px;}
+.dly-txt{flex:1; min-width:0; display:flex; flex-direction:column; gap:2px;}
+.dly-txt b{font-size:15.5px;}
+.dly-txt span{font-size:12.5px; opacity:.92;}
+.dly-card .dly-tag{background:rgba(255,255,255,.22); color:#fff;}
+.dly-go{font-weight:800; font-size:13px; white-space:nowrap;}
+
+/* 로그인 직후 선택 */
+#daily-gate{position:fixed; inset:0; z-index:9998; background:var(--paper); display:flex; align-items:center; justify-content:center; padding:28px 20px; overflow:auto;}
+#daily-gate[hidden]{display:none;}
+body.dg-open{overflow:hidden;}
+body.dg-open .app-shell{visibility:hidden;}
+.dg-inner{width:100%; max-width:520px; text-align:center;}
+.dg-logo{font-size:13px; font-weight:700; color:var(--brand); margin-bottom:12px;}
+#daily-gate h2{font-size:26px; margin:0 0 6px;}
+.dg-sub{color:var(--ink-soft); font-size:14px; margin:0 0 22px;}
+.dg-pick{display:flex; flex-direction:column; gap:12px;}
+.dg-card{width:100%; text-align:left; padding:22px 20px; border:1.5px solid var(--border); border-radius:16px; background:var(--card); cursor:pointer; font:inherit; color:var(--ink); transition:transform .1s,border-color .1s;}
+.dg-card:hover,.dg-card:focus-visible{border-color:var(--brand); transform:translateY(-1px);}
+.dg-t{font-size:18px; font-weight:800; margin-bottom:4px;}
+.dg-d{font-size:13px; color:var(--ink-soft);}
+.dg-daily{background:linear-gradient(120deg,#3F4FB5,#5A6BD6); border-color:transparent; color:#fff;}
+.dg-daily .dg-d{color:rgba(255,255,255,.88);}
+#daily-gate{--brand:#3F4FB5; --paper:#F4F5FB; --card:#fff; --border:#DEE2F3; --ink:#16201D; --ink-soft:#52605B;}
+:root[data-theme="dark"] #daily-gate{--brand:#8D9AF0; --paper:#0F1221; --card:#171B30; --border:#2A3055; --ink:#E8EAF6; --ink-soft:#B4B9D6;}
+
+/* 관리자 */
+.dly-ad{border:1px solid var(--border); border-radius:12px; margin-bottom:8px; background:var(--card);}
+.dly-ad summary{display:flex; align-items:center; gap:8px; flex-wrap:wrap; padding:11px 14px; cursor:pointer; list-style:none;}
+.dly-ad summary::-webkit-details-marker{display:none;}
+.dly-ad summary span:not(.badge){color:var(--ink-soft); font-size:13px;}
+.dly-ad-in{padding:4px 14px 14px; overflow-x:auto;}
+.dly-miss{font-size:13px; color:var(--ink-soft); margin:8px 0 0;}
+@media (max-width:420px){ .dly-q{padding:7px 9px; gap:7px;} .dly-n{flex-basis:40px; font-size:14px;} .dly-opts{gap:4px;} }
