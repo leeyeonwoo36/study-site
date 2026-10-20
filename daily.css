@@ -161,3 +161,9 @@ body.dg-open .app-shell{visibility:hidden;}
 .dly-paste:focus{border-color:var(--brand); background:var(--brand-soft); color:var(--ink);}
 .dly-pv{margin-top:10px; display:flex; gap:12px; align-items:flex-start; flex-wrap:wrap;}
 .dly-pv img{max-width:min(100%,360px); border:1px solid var(--border); border-radius:10px;}
+
+/* 필기(펜) */
+.dly-inkwrap{position:relative;}
+#dly-ink-host{position:sticky; top:55px; z-index:15; background:var(--bg,#fff); padding-bottom:2px;}
+#dly-ink-host .ink-bar{margin:0 0 10px;}
+#daily-body.ink-on .dly-q button,#daily-body.ink-on .dly-q input{pointer-events:none;}

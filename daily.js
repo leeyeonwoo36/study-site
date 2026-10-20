@@ -218,6 +218,15 @@ function renderDailyView() {
   const sh = DAILY.view === 'list' ? null : dResolve(DAILY.date || t);
   box.innerHTML = DAILY.view === 'list' ? dailyListHtml() : dailySheetHtml(DAILY.date || t);
   if (sh) dailyProg(sh.date);
+  dailyInkMount(sh && !dMySub(sh.date) ? sh : null);
+}
+/* 필기(펜): 풀이 화면과 같은 도구를 쓴다. 제출 전 문제지 전체 위에 덮어 쓰고, 이 기기에만 임시 저장된다 */
+function dailyInkMount(sh) {
+  if (!sh || !$('qwrap_dpage') || typeof inkInit !== 'function') {
+    if (typeof INK !== 'undefined' && INK.bodyId === 'daily-body') INK.on = false;
+    return;
+  }
+  inkInit('daily_' + sh.date, { body: 'daily-body', host: 'dly-ink-host', wrap: '.dly-inkwrap', keep: true });
 }
 /* 날짜(YYYY-MM-DD)만 오면 그날 주간지 중 아직 안 낸 것(없으면 첫 번째), id가 오면 그 주간지 */
 function dResolve(key) {
@@ -328,8 +337,9 @@ function dailyFormHtml(sh, isToday) {
   const note = isToday
     ? '답을 고르고 <b>제출</b>을 누르세요. 제출하면 정답과 해설이 바로 열려요. 제출 후에는 고칠 수 없어요.'
     : `<b>지난 주간지</b>예요. 지금 제출하면 <b>'지연 제출'</b>로 기록돼요.`;
-  return `<div class="dly-note${isToday ? '' : ' late'}">${note}</div>
-    <div class="dly-qs">${rows}</div>
+  return `<div id="dly-ink-host"></div>
+    <div class="dly-inkwrap" id="qwrap_dpage"><div class="dly-note${isToday ? '' : ' late'}">${note}</div>
+    <div class="dly-qs">${rows}</div></div>
     <div class="dly-bar"><span id="dly-prog"></span><button class="btn" onclick="dailySubmit('${sh.date}')">제출하기</button></div>`;
 }
 function dailyProg(date) {
@@ -388,6 +398,7 @@ async function dailySubmit(date) {
       submittedAt: Date.now()
     });
     delete DAILY.draft[date];
+    try { inkClearStored('daily_' + date); if (INK.bodyId === 'daily-body') { INK.on = false; INK.key = null; } } catch (e) {}
     dailyLoadKey(date, true);
   } catch (e) {
     console.error('주간지 제출 실패:', e);
