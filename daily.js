@@ -4,14 +4,19 @@
    - dailyKeys/{날짜}      정답·해설. 관리자 전용, 학생은 제출한 뒤에만 읽음
    - dailySubs/{날짜|uid}  학생 제출 (당일이면 late=false, 지난 주간지면 late=true)
    ========================================================= */
-const DAILY = { sheets: [], subs: {}, keys: {}, keyState: {}, view: 'sheet', date: null, draft: {}, direct: false };
+const DAILY = { sel: new Set(), sheets: [], subs: {}, keys: {}, keyState: {}, view: 'sheet', date: null, draft: {}, direct: false };
 const CIRCS = ['①', '②', '③', '④', '⑤', '⑥', '⑦', '⑧', '⑨'];
 const DOWK = ['일', '월', '화', '수', '목', '금', '토'];
 const dToday = () => new Date(Date.now() + 9 * 3600e3).toISOString().slice(0, 10);
-const dDow = ds => new Date(ds + 'T00:00:00Z').getUTCDay();
+const dayOf = id => String(id).slice(0, 10); // 주간지 id('2026-10-20' 또는 '2026-10-20_chart') → 날짜
+const dKind = id => (String(id).endsWith('_chart') ? 'chart' : 'normal');
+const dKindName = k => (k === 'chart' ? '도표 주간지' : '일반 주간지');
+const dKindTag = k => `<span class="dly-kind ${k === 'chart' ? 'chart' : 'normal'}">${k === 'chart' ? '도표' : '일반'}</span>`;
+const dId = (day, kind) => (kind === 'chart' ? day + '_chart' : day);
+const dDow = ds => new Date(dayOf(ds) + 'T00:00:00Z').getUTCDay();
 const dIsWeekday = ds => dDow(ds) >= 1 && dDow(ds) <= 5;
 const dLabel = ds => {
-  const p = String(ds).split('-');
+  const p = dayOf(ds).split('-');
   return +p[1] + '월 ' + +p[2] + '일 (' + DOWK[dDow(ds)] + ')';
 };
 const dSheet = ds => DAILY.sheets.find(s => s.date === ds);
@@ -28,7 +33,9 @@ function dSetUrl(path, replace) {
 window.dailyOnSubs = function (sub, isAdmin, ownerUid) {
   const { db, collection, query, where } = window.fb;
   sub('dailies', snap => {
-    DAILY.sheets = snap.docs.map(d => ({ ...d.data(), date: d.id })).sort((a, b) => (a.date < b.date ? 1 : -1));
+    DAILY.sheets = snap.docs
+      .map(d => ({ ...d.data(), date: d.id, day: dayOf(d.id), kind: dKind(d.id) }))
+      .sort((a, b) => (a.day < b.day ? 1 : a.day > b.day ? -1 : a.kind === b.kind ? 0 : a.kind === 'normal' ? -1 : 1)); // 날짜 내림차순, 같은 날은 일반 → 도표
     dailyRender();
   });
   const subRef = isAdmin ? collection(db, 'dailySubs') : query(collection(db, 'dailySubs'), where('studentUid', '==', ownerUid));
@@ -135,14 +142,15 @@ function renderDailyCard() {
     box.innerHTML = '';
     return;
   }
-  const t = dToday(),
-    sh = dSheet(t),
-    sub = dMySub(t);
-  const missed = DAILY.sheets.filter(s => s.date < t && !dMySub(s.date)).length;
+  const t = dToday();
+  const today = DAILY.sheets.filter(x => x.day === t);
+  const done = today.filter(x => dMySub(x.date)).length;
+  const missed = DAILY.sheets.filter(x => x.day < t && !dMySub(x.date)).length;
   let msg, tag;
-  if (sh) {
-    msg = sub ? '오늘 주간지를 제출했어요' : '오늘 주간지가 올라왔어요';
-    tag = sub ? '<span class="dly-tag ok">제출 완료</span>' : '<span class="dly-tag todo">미제출</span>';
+  if (today.length) {
+    const kinds = today.map(x => (x.kind === 'chart' ? '도표' : '일반')).join('·');
+    msg = done === today.length ? `오늘 주간지를 모두 제출했어요 (${kinds})` : `오늘 주간지가 올라왔어요 (${kinds})`;
+    tag = done === today.length ? '<span class="dly-tag ok">제출 완료</span>' : `<span class="dly-tag todo">미제출 ${today.length - done}</span>`;
   } else {
     msg = dIsWeekday(t) ? '오늘 주간지는 아직 등록되지 않았어요' : '주말에는 주간지가 없어요';
     tag = '';
@@ -207,18 +215,26 @@ function renderDailyView() {
     DAILY.view === 'list'
       ? `<button class="btn small" onclick="dailyOpenSheet('${t}')">오늘 주간지</button>`
       : `<button class="btn small secondary" onclick="dailyShowList()">지난 주간지 보기</button>`;
+  const sh = DAILY.view === 'list' ? null : dResolve(DAILY.date || t);
   box.innerHTML = DAILY.view === 'list' ? dailyListHtml() : dailySheetHtml(DAILY.date || t);
-  if (DAILY.view !== 'list') dailyProg(DAILY.date || t);
+  if (sh) dailyProg(sh.date);
+}
+/* 날짜(YYYY-MM-DD)만 오면 그날 주간지 중 아직 안 낸 것(없으면 첫 번째), id가 오면 그 주간지 */
+function dResolve(key) {
+  if (!key) return null;
+  if (String(key).length > 10 || dSheet(key)) return dSheet(key) || null;
+  const list = DAILY.sheets.filter(x => x.day === key).sort((a, b) => (a.kind === b.kind ? 0 : a.kind === 'normal' ? -1 : 1));
+  return list.find(x => !dMySub(x.date)) || list[0] || null;
 }
 function dailyListHtml() {
   const t = dToday();
-  const past = DAILY.sheets.filter(s => s.date < t);
+  const past = DAILY.sheets.filter(s => s.day < t);
   const rows = past
     .map(s => {
       const sub = dMySub(s.date);
       const tag = sub ? (sub.late ? '<span class="dly-tag late">지연 제출</span>' : '<span class="dly-tag ok">당일 제출</span>') : '<span class="dly-tag todo">미제출</span>';
       return `<button class="dly-row" onclick="dailyOpenSheet('${s.date}')">
-        <div><b>${dLabel(s.date)}</b><span>${dEsc(s.title || '주간지')} · ${(s.items || []).length}문항</span></div>${tag}</button>`;
+        <div><b>${dLabel(s.day)} ${dKindTag(s.kind)}</b><span>${dEsc(s.title || '주간지')} · ${(s.items || []).length}문항</span></div>${tag}</button>`;
     })
     .join('');
   const miss = past.filter(s => !dMySub(s.date)).length;
@@ -227,25 +243,49 @@ function dailyListHtml() {
     <div class="dly-list">${rows}</div>`;
 }
 function dailySheetHtml(date) {
-  const sh = dSheet(date);
   const t = dToday();
-  if (!sh || date > t) {
-    return `<div class="dly-empty"><div class="dly-ico big">📝</div><h2>${dLabel(date)}</h2>
-      <p>${date === t ? (dIsWeekday(t) ? '오늘 주간지가 아직 등록되지 않았어요.' : '주말에는 주간지가 없어요.') : '이 날짜의 주간지가 없어요.'}</p>
+  const sh = dResolve(date);
+  if (!sh || sh.day > t) {
+    const day = dayOf(date);
+    return `<div class="dly-empty"><div class="dly-ico big">📝</div><h2>${dLabel(day)}</h2>
+      <p>${day === t ? (dIsWeekday(t) ? '오늘 주간지가 아직 등록되지 않았어요.' : '주말에는 주간지가 없어요.') : '이 날짜의 주간지가 없어요.'}</p>
       <button class="btn secondary" onclick="dailyShowList()">지난 주간지 보기</button></div>`;
   }
-  const sub = dMySub(date);
-  const head = `<div class="dly-head"><div class="dly-date">${dLabel(date)}${date === t ? ' · 오늘' : ''}</div><h2>${dEsc(sh.title || '주간지')}</h2></div>`;
-  return sub ? head + dailyResultHtml(sh, sub) : head + dailyFormHtml(sh, date === t);
+  const sub = dMySub(sh.date);
+  /* 같은 날 주간지가 둘 이상이면(일반 · 도표) 위에서 골라 연다 */
+  const same = DAILY.sheets.filter(x => x.day === sh.day).sort((a, b) => (a.kind === b.kind ? 0 : a.kind === 'normal' ? -1 : 1));
+  const seg =
+    same.length > 1
+      ? `<div class="dly-seg">${same
+          .map(x => `<button class="${x.date === sh.date ? 'on' : ''}" onclick="dailyOpenSheet('${x.date}')">${dKindName(x.kind)}${dMySub(x.date) ? ' ✓' : ''}</button>`)
+          .join('')}</div>`
+      : '';
+  const head = `${seg}<div class="dly-head"><div class="dly-date">${dLabel(sh.day)}${sh.day === t ? ' · 오늘' : ''} ${dKindTag(sh.kind)}</div><h2>${dEsc(sh.title || '주간지')}</h2></div>`;
+  return sub ? head + dailyResultHtml(sh, sub) : head + dailyFormHtml(sh, sh.day === t);
 }
 
 /* 문제 본문(지문·그림·문제) */
+function dTablesHtml(it) {
+  return (it.tables || [])
+    .map(tb => {
+      const rows = tb.rows || [];
+      const head = tb.header === false ? [] : rows.slice(0, 1);
+      const body = tb.header === false ? rows : rows.slice(1);
+      const cell = (t, c) => `<${t}>${dEsc(c).replace(/\n/g, '<br>')}</${t}>`;
+      return `<div class="dly-tw">${tb.title ? `<div class="dly-tcap">${dEsc(tb.title)}</div>` : ''}<div class="dly-ts"><table class="dly-tbl">${
+        head.length ? `<thead><tr>${head[0].c.map(c => cell('th', c)).join('')}</tr></thead>` : ''
+      }<tbody>${body.map(r => `<tr>${r.c.map(c => cell('td', c)).join('')}</tr>`).join('')}</tbody></table></div>${tb.note ? `<div class="dly-tnote">${dEsc(tb.note)}</div>` : ''}</div>`;
+    })
+    .join('');
+}
+const dHasBody = it => !!(it.text || it.passage || it.image || (it.tables || []).length);
 function dQBody(it) {
   const img = it.image && /^https:\/\//.test(it.image) ? `<img class="dly-img" src="${dEsc(it.image)}" alt="" loading="lazy">` : '';
   return (
     (it.passage ? `<div class="dly-pass">${dEsc(it.passage).replace(/\n/g, '<br>')}</div>` : '') +
     img +
-    `<div class="dly-text">${dEsc(it.text || '').replace(/\n/g, '<br>')}</div>`
+    dTablesHtml(it) +
+    (it.text ? `<div class="dly-text">${dEsc(it.text).replace(/\n/g, '<br>')}</div>` : '')
   );
 }
 
@@ -256,7 +296,7 @@ function dailyFormHtml(sh, isToday) {
   const rows = items
     .map(it => {
       const cur = d[it.n] || '';
-      const full = !!(sh.showQ && it.text);
+      const full = !!(sh.showQ && dHasBody(it));
       const sel = cur.split(',');
       const fn = `dailyPick('${sh.date}',${it.n},`;
       let inp;
@@ -330,7 +370,7 @@ async function dailySubmit(date) {
   const d = DAILY.draft[date] || {};
   const items = sh.items || [];
   const blank = items.filter(it => String(d[it.n] || '').trim() === '').length;
-  const late = date !== dToday();
+  const late = dayOf(date) !== dToday();
   const msg = (blank ? `답하지 않은 문항이 ${blank}개 있어요. ` : '') + (late ? "지난 주간지는 '지연 제출'로 기록돼요. " : '') + '제출하면 고칠 수 없어요. 제출할까요?';
   if (!confirm(msg)) return;
   const answers = {};
@@ -400,7 +440,7 @@ function dailyResultHtml(sh, sub) {
       const good = dCorrect(it, mine, k.a);
       if (good) ok++;
       const show = v => (v == null || v === '' ? '<i>무응답</i>' : dEsc(String(v).replace(/,/g, ', ')));
-      const qv = sh.showQ && it.text ? `<div class="dly-rq">${dQBody(it)}${dResChoices(it, mine, k.a)}</div>` : '';
+      const qv = sh.showQ && dHasBody(it) ? `<div class="dly-rq">${dQBody(it)}${dResChoices(it, mine, k.a)}</div>` : '';
       return `<div class="dly-r ${good ? 'good' : 'bad'}">
         <div class="dly-rh"><b>${it.n}번</b><span class="dly-mark">${good ? '정답' : '오답'}</span></div>${qv}
         <div class="dly-ans"><span>내 답 <b>${show(mine)}</b></span>${good ? '' : `<span>정답 <b>${show(String(k.a == null ? '' : k.a).replace(/\|/g, ' 또는 '))}</b></span>`}</div>
@@ -421,6 +461,7 @@ const DAILY_SPEC = `주간지 문제·정답·해설을 아래 JSON 규격으로
 규칙
 - 주간지 한 장(하루치)이 JSON 하나입니다. 여러 날짜를 한꺼번에 만들 때는 맨 바깥을 {"sheets":[ ... ]} 로 묶어 주세요.
 - "date": 주간지 날짜(YYYY-MM-DD, 월~금). 학생은 이 날짜에 당일 제출해야 하고, 그 뒤에는 '지연 제출'이 됩니다.
+- "kind": 주간지 종류. "normal"(일반 주간지, 생략하면 이 값) 또는 "chart"(도표 주간지). 같은 날짜에 일반 주간지와 도표 주간지를 각각 하나씩 둘 수 있습니다.
 - "title": 주간지 제목(예: 10월 3주차 월요일).
 - "questions": 문항 목록. 각 문항에
   · "n": 문항 번호(1부터)
@@ -429,6 +470,7 @@ const DAILY_SPEC = `주간지 문제·정답·해설을 아래 JSON 규격으로
   · "answer": 정답. mc는 "3", multi는 "1,3", short는 "비국가 행위자" (인정할 답이 여럿이면 "NGO|비정부기구"처럼 | 로 구분)
   · "explain": 해설(문장으로, 줄바꿈은 \\n)
   · 문제를 홈페이지에서도 보여 주려면 "text"(문제 문장), 필요하면 "passage"(지문), "image"(https 그림 주소)도 넣습니다.
+  · 표(도표)는 "table": [["구분","A국","B국"],["GDP","10","20"]] 처럼 줄마다 칸을 배열로 넣습니다(첫 줄은 머리글). 제목·주석이 필요하면 "table": {"title":"표 제목","rows":[[...],[...]],"note":"자료: ..."}, 표가 여러 개면 "tables": [ ... ] 로 넣고, 머리글이 없으면 "header": false.
 - 문제 본문(text 등)은 선택입니다. 넣어 두면 관리자가 주간지마다 '학생 화면에 문제 보이기'를 켜고 끌 수 있습니다. 맨 위에 "showQuestions": true/false 를 넣으면 등록할 때의 기본값이 됩니다.
 
 예시
@@ -437,7 +479,7 @@ const DAILY_SPEC = `주간지 문제·정답·해설을 아래 JSON 규격으로
   "title": "10월 3주차 월요일",
   "questions": [
     {"n":1,"type":"mc","text":"다음 중 비국가 행위자가 아닌 것은?","choices":["국제연합","다국적 기업","NGO","테러 조직","국제 사면 위원회"],"answer":"1","explain":"국제연합은 정부 간 국제기구입니다."},
-    {"n":2,"type":"multi","choices":5,"answer":"1,4","explain":"..."},
+    {"n":2,"type":"multi","text":"표에 대한 설명으로 옳은 것을 모두 고르시오.","table":{"title":"국가별 GDP","rows":[["국가","GDP"],["A국","10"],["B국","20"]],"note":"단위: 조 원"},"choices":["A국이 더 크다","B국이 더 크다","같다","알 수 없다","단위는 원이다"],"answer":"2,4","explain":"..."},
     {"n":3,"type":"short","answer":"비국가 행위자|비국가행위자","explain":"..."}
   ]
 }`;
@@ -477,8 +519,12 @@ function dailyParse(text) {
   list.forEach((s, si) => {
     const tag = list.length > 1 ? `${si + 1}번째 주간지: ` : '';
     if (!s || typeof s !== 'object') throw new Error(tag + '주간지 형식이 아닙니다.');
-    const date = String(s.date || '').trim();
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || isNaN(new Date(date + 'T00:00:00Z'))) throw new Error(tag + '"date"는 2026-10-19 같은 날짜여야 합니다.');
+    const day = String(s.date || '').trim();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(day) || isNaN(new Date(day + 'T00:00:00Z'))) throw new Error(tag + '"date"는 2026-10-19 같은 날짜여야 합니다.');
+    const kRaw = String(s.kind || s.category || 'normal').trim().toLowerCase();
+    const kind = ['chart', '도표', 'table', 'graph'].includes(kRaw) ? 'chart' : ['normal', '일반', 'general', ''].includes(kRaw) ? 'normal' : null;
+    if (!kind) throw new Error(tag + '"kind"는 normal(일반) 또는 chart(도표)여야 합니다.');
+    const date = dId(day, kind);
     const qs = Array.isArray(s.questions) ? s.questions : null;
     if (!qs || !qs.length) throw new Error(tag + '"questions"가 비어 있습니다.');
     const items = [],
@@ -497,6 +543,20 @@ function dailyParse(text) {
         if (!/^https:\/\//.test(String(q.image))) throw new Error(`${tag}${n}번: "image"는 https:// 주소여야 합니다.`);
         it.image = String(q.image).trim();
       }
+      const tbs = (Array.isArray(q.tables) ? q.tables : []).concat(q.table ? [q.table] : []);
+      if (tbs.length) {
+        it.tables = tbs.map((tb, ti) => {
+          const rowsRaw = Array.isArray(tb) ? tb : tb && Array.isArray(tb.rows) ? tb.rows : null;
+          if (!rowsRaw || !rowsRaw.length || rowsRaw.some(r => !Array.isArray(r) || !r.length)) throw new Error(`${tag}${n}번: 표(table)는 [[칸,칸],[칸,칸]] 형태의 줄 배열이어야 합니다.`);
+          const o = { rows: rowsRaw.map(r => ({ c: r.map(c => String(c == null ? '' : c)) })) };
+          if (!Array.isArray(tb)) {
+            if (tb.title) o.title = String(tb.title);
+            if (tb.note) o.note = String(tb.note);
+            if (tb.header === false) o.header = false;
+          }
+          return o;
+        });
+      }
       if (type !== 'short') {
         const labs = Array.isArray(q.choices) ? q.choices.map(x => String(x == null ? '' : x).trim()) : null;
         if (labs) it.labels = labs;
@@ -511,11 +571,11 @@ function dailyParse(text) {
       answers[n] = { a: type === 'short' ? a : dNorm(a), e: String(q.explain || q.explanation || '').trim() };
     });
     items.sort((x, y) => x.n - y.n);
-    const hasText = items.some(x => x.text);
-    out.push({ date, title: String(s.title || '').trim() || '주간지', items, answers, hasText, showQ: typeof s.showQuestions === 'boolean' ? s.showQuestions : null });
+    const hasText = items.some(dHasBody);
+    out.push({ date, day, kind, title: String(s.title || '').trim() || '주간지', items, answers, hasText, showQ: typeof s.showQuestions === 'boolean' ? s.showQuestions : null });
   });
   const dup = out.map(o => o.date).filter((d, i, a) => a.indexOf(d) !== i);
-  if (dup.length) throw new Error('같은 날짜가 두 번 있습니다: ' + [...new Set(dup)].join(', '));
+  if (dup.length) throw new Error('같은 날짜·같은 종류가 두 번 있습니다: ' + [...new Set(dup)].join(', '));
   return out;
 }
 async function dailyRegister() {
@@ -526,9 +586,9 @@ async function dailyRegister() {
     dailyMsg(e.message, true);
     return;
   }
-  const weekend = sheets.filter(s => !dIsWeekday(s.date)).map(s => dLabel(s.date));
-  const exists = sheets.filter(s => dSheet(s.date)).map(s => dLabel(s.date));
-  let ask = `주간지 ${sheets.length}개를 등록합니다.\n` + sheets.map(s => `· ${dLabel(s.date)} ${s.title} (${s.items.length}문항${s.hasText ? ', 문제 본문 포함' : ''})`).join('\n');
+  const weekend = sheets.filter(s => !dIsWeekday(s.day)).map(s => dLabel(s.day));
+  const exists = sheets.filter(s => dSheet(s.date)).map(s => dLabel(s.day) + ' ' + dKindName(s.kind));
+  let ask = `주간지 ${sheets.length}개를 등록합니다.\n` + sheets.map(s => `· ${dLabel(s.day)} [${dKindName(s.kind)}] ${s.title} (${s.items.length}문항${s.hasText ? ', 문제 본문 포함' : ''})`).join('\n');
   if (weekend.length) ask += `\n\n⚠️ 주말 날짜가 있습니다: ${weekend.join(', ')}`;
   if (exists.length) ask += `\n\n⚠️ 이미 등록된 날짜는 덮어씁니다(학생 제출 기록은 그대로): ${exists.join(', ')}`;
   if (!confirm(ask + '\n\n진행할까요?')) return;
@@ -537,8 +597,8 @@ async function dailyRegister() {
     for (const s of sheets) {
       const old = dSheet(s.date);
       const showQ = s.showQ !== null ? s.showQ : old && typeof old.showQ === 'boolean' ? old.showQ : s.hasText;
-      await setDoc(doc(db, 'dailies', s.date), { date: s.date, title: s.title, items: s.items, count: s.items.length, showQ: !!(showQ && s.hasText), updatedAt: Date.now() });
-      await setDoc(doc(db, 'dailyKeys', s.date), { date: s.date, answers: s.answers, updatedAt: Date.now() });
+      await setDoc(doc(db, 'dailies', s.date), { date: s.day, kind: s.kind, title: s.title, items: s.items, count: s.items.length, showQ: !!(showQ && s.hasText), updatedAt: Date.now() });
+      await setDoc(doc(db, 'dailyKeys', s.date), { date: s.day, kind: s.kind, answers: s.answers, updatedAt: Date.now() });
     }
     dailyMsg(`${sheets.length}개 등록했습니다.`, false);
     $('daily-json').value = '';
@@ -555,8 +615,35 @@ async function dailyToggleQ(date, on) {
     alert('바꾸지 못했습니다: ' + (e.code || e.message));
   }
 }
+function dailySel(id, on) {
+  if (on) DAILY.sel.add(id);
+  else DAILY.sel.delete(id);
+  renderDailyAdmin();
+}
+function dailySelAll(on) {
+  DAILY.sel = new Set(on ? DAILY.sheets.map(x => x.date) : []);
+  renderDailyAdmin();
+}
+async function dailyDeleteSelected() {
+  const ids = [...DAILY.sel].filter(id => dSheet(id));
+  if (!ids.length) return;
+  const lines = ids.map(id => `· ${dLabel(id)} ${dKindName(dKind(id))}`).join('\n');
+  if (!confirm(`주간지 ${ids.length}개를 삭제할까요?\n${lines}\n\n학생 제출 기록과 정답·해설도 함께 지워지며 되돌릴 수 없습니다.`)) return;
+  try {
+    const { db, doc, deleteDoc } = window.fb;
+    for (const id of ids) {
+      await Promise.all(Object.keys(DAILY.subs).filter(k => k.startsWith(id + '|')).map(k => deleteDoc(doc(db, 'dailySubs', k))));
+      await deleteDoc(doc(db, 'dailyKeys', id));
+      await deleteDoc(doc(db, 'dailies', id));
+    }
+    DAILY.sel = new Set();
+    renderDailyAdmin();
+  } catch (e) {
+    alert('삭제하지 못했습니다: ' + (e.code || e.message));
+  }
+}
 async function dailyDelete(date) {
-  if (!confirm(`${dLabel(date)} 주간지를 삭제할까요?\n학생 제출 기록과 정답·해설도 함께 지워지며 되돌릴 수 없습니다.`)) return;
+  if (!confirm(`${dLabel(date)} ${dKindName(dKind(date))}를 삭제할까요?\n학생 제출 기록과 정답·해설도 함께 지워지며 되돌릴 수 없습니다.`)) return;
   try {
     const { db, doc, deleteDoc } = window.fb;
     await Promise.all(Object.keys(DAILY.subs).filter(k => k.startsWith(date + '|')).map(k => deleteDoc(doc(db, 'dailySubs', k))));
@@ -578,7 +665,14 @@ function renderDailyAdmin() {
     const d = new Date(ms + 9 * 3600e3);
     return `${d.getUTCMonth() + 1}/${d.getUTCDate()} ${String(d.getUTCHours()).padStart(2, '0')}:${String(d.getUTCMinutes()).padStart(2, '0')}`;
   };
+  DAILY.sel = new Set([...DAILY.sel].filter(id => dSheet(id)));
+  const bar = DAILY.sheets.length
+    ? `<div class="dly-bulk"><label><input type="checkbox" id="dly-all" ${DAILY.sel.size === DAILY.sheets.length ? 'checked' : ''} onchange="dailySelAll(this.checked)"> 전체 선택</label>
+        <span>${DAILY.sel.size ? `<b>${DAILY.sel.size}개</b> 선택됨` : '삭제할 주간지를 체크하세요'}</span>
+        <button class="btn small danger" ${DAILY.sel.size ? '' : 'disabled'} onclick="dailyDeleteSelected()">선택 삭제</button></div>`
+    : '';
   box.innerHTML =
+    bar +
     DAILY.sheets
       .map(s => {
         const subs = targets.map(st => ({ st, sub: DAILY.subs[s.date + '|' + st.uid] }));
@@ -592,11 +686,11 @@ function renderDailyAdmin() {
           })
           .join('');
         return `<details class="dly-ad" data-d="${s.date}"${open.has(s.date) ? ' open' : ''}>
-        <summary><b>${dLabel(s.date)}</b> <span>${dEsc(s.title || '')}</span><span class="badge">${(s.items || []).length}문항</span>
+        <summary><input type="checkbox" class="dly-ck" ${DAILY.sel.has(s.date) ? 'checked' : ''} onclick="event.stopPropagation()" onchange="dailySel('${s.date}',this.checked)" aria-label="선택"><b>${dLabel(s.day)}</b> ${dKindTag(s.kind)} <span>${dEsc(s.title || '')}</span><span class="badge">${(s.items || []).length}문항</span>
           <span class="badge ${miss.length ? 'warn' : 'good'}">제출 ${done.length}/${targets.length}${late ? ' · 지연 ' + late : ''}</span></summary>
         <div class="dly-ad-in">
           ${done.length ? `<table><tr><th>이름</th><th>점수</th><th>구분</th><th>제출</th></tr>${rows}</table>` : '<p class="empty-hint">아직 제출한 학생이 없습니다.</p>'}
-          <label class="dly-tg"><input type="checkbox" ${s.showQ ? 'checked' : ''} ${(s.items || []).some(x => x.text) ? '' : 'disabled'} onchange="dailyToggleQ('${s.date}',this.checked)"> 학생 화면에 문제 보이기 <small>${(s.items || []).some(x => x.text) ? '(끄면 번호·답 체크만 보임)' : '(문제 본문이 등록되지 않았습니다)'}</small></label>
+          <label class="dly-tg"><input type="checkbox" ${s.showQ ? 'checked' : ''} ${(s.items || []).some(dHasBody) ? '' : 'disabled'} onchange="dailyToggleQ('${s.date}',this.checked)"> 학생 화면에 문제 보이기 <small>${(s.items || []).some(dHasBody) ? '(끄면 번호·답 체크만 보임)' : '(문제 본문이 등록되지 않았습니다)'}</small></label>
           ${miss.length ? `<p class="dly-miss"><b>미제출 ${miss.length}명</b> ${miss.map(x => dEsc(x.st.name)).join(', ')}</p>` : ''}
           <div style="margin-top:8px"><button class="btn small danger" onclick="dailyDelete('${s.date}')">이 주간지 삭제</button></div>
         </div></details>`;

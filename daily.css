@@ -130,3 +130,27 @@ body.dg-open .app-shell{visibility:hidden;}
 .dly-tg{display:flex; align-items:center; gap:6px; flex-wrap:wrap; font-size:13.5px; font-weight:700; margin:10px 0 0;}
 .dly-tg input{width:auto;}
 .dly-tg small{font-weight:500; color:var(--muted);}
+
+/* 일반 / 도표 구분 · 표 · 선택 삭제 */
+.dly-kind{display:inline-block; padding:1px 8px; border-radius:99px; font-size:11px; font-weight:800; vertical-align:middle;}
+.dly-kind.normal{background:var(--brand-soft); color:var(--brand);}
+.dly-kind.chart{background:#E6F4F1; color:#16796B;}
+:root[data-theme="dark"] .dly-kind.chart{background:#173A35; color:#6FD3C0;}
+.dly-seg{display:flex; gap:6px; margin:0 0 12px; padding:4px; background:var(--soft); border:1px solid var(--border); border-radius:14px;}
+.dly-seg button{flex:1; padding:9px 6px; border:0; border-radius:10px; background:transparent; font:inherit; font-size:13.5px; font-weight:700; color:var(--ink-soft); cursor:pointer;}
+.dly-seg button.on{background:var(--brand); color:#fff;}
+.dly-tw{margin:2px 0;}
+.dly-tcap{font-size:13px; font-weight:800; margin-bottom:4px;}
+.dly-ts{overflow-x:auto; border:1px solid var(--border); border-radius:10px; -webkit-overflow-scrolling:touch;}
+.dly-tbl{border-collapse:collapse; width:100%; font-size:13.5px;}
+.dly-tbl th,.dly-tbl td{padding:7px 10px; border-bottom:1px solid var(--border); border-right:1px solid var(--border); text-align:center; white-space:nowrap;}
+.dly-tbl th:last-child,.dly-tbl td:last-child{border-right:0;}
+.dly-tbl tr:last-child td{border-bottom:0;}
+.dly-tbl thead th{background:var(--brand-soft); color:var(--brand-deep); font-weight:800;}
+.dly-tbl td:first-child{font-weight:700; background:var(--soft);}
+.dly-tnote{font-size:12px; color:var(--muted); margin-top:4px;}
+.dly-bulk{display:flex; align-items:center; gap:12px; flex-wrap:wrap; padding:8px 12px; margin-bottom:8px; background:var(--soft); border:1px solid var(--border); border-radius:12px; font-size:13px;}
+.dly-bulk label{display:flex; align-items:center; gap:6px; font-weight:700; margin:0;}
+.dly-bulk input,.dly-ck{width:auto; margin:0;}
+.dly-bulk span{flex:1; color:var(--ink-soft);}
+.dly-ad summary .dly-ck{margin-right:2px;}
