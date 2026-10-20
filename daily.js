@@ -657,6 +657,7 @@ function dailyTargets() {
   return (typeof students !== 'undefined' ? students : []).filter(s => s.approved && !(typeof isTestAcct === 'function' && isTestAcct(s)));
 }
 function renderDailyAdmin() {
+  renderDailyPick();
   const box = $('daily-admin-list');
   if (!box) return;
   const open = new Set([...box.querySelectorAll('details[open]')].map(d => d.dataset.d));
@@ -697,3 +698,109 @@ function renderDailyAdmin() {
       })
       .join('') || '<p class="empty-hint">등록된 주간지가 없습니다. 위에서 JSON을 등록하세요.</p>';
 }
+
+/* =========================================================
+   관리자: 문항 그림 붙여넣기 (주차 → 요일·종류 → 번호 고르고 클립보드에서 붙여넣기)
+   ========================================================= */
+const dMonday = day => {
+  const d = new Date(day + 'T00:00:00Z');
+  d.setUTCDate(d.getUTCDate() - ((d.getUTCDay() + 6) % 7));
+  return d;
+};
+const dWeekKey = day => dMonday(day).toISOString().slice(0, 10);
+const dWeekLabel = key => {
+  const m = new Date(key + 'T00:00:00Z');
+  return `${m.getUTCMonth() + 1}월 ${Math.ceil(m.getUTCDate() / 7)}주차`;
+};
+const dDayName = day => DOWK[dDow(day)] + '요일';
+function renderDailyPick(changed) {
+  const wk = $('dp-week'),
+    sh = $('dp-sheet'),
+    nn = $('dp-n');
+  if (!wk || !sh || !nn) return;
+  const weeks = [...new Set(DAILY.sheets.map(x => dWeekKey(x.day)))].sort().reverse();
+  const prevW = wk.value,
+    prevS = sh.value,
+    prevN = nn.value;
+  wk.innerHTML = weeks.map(k => `<option value="${k}">${dWeekLabel(k)} (${k.slice(5).replace('-', '/')}~)</option>`).join('') || '<option value="">등록된 주간지 없음</option>';
+  if (weeks.includes(prevW)) wk.value = prevW;
+  const inWeek = DAILY.sheets.filter(x => dWeekKey(x.day) === wk.value).sort((a, b) => (a.day < b.day ? -1 : a.day > b.day ? 1 : a.kind === 'normal' ? -1 : 1));
+  sh.innerHTML = inWeek.map(x => `<option value="${x.date}">${dDayName(x.day)} (${x.day.slice(5).replace('-', '/')}) · ${x.kind === 'chart' ? '도표' : '일반'}</option>`).join('');
+  if (changed !== 'week' && inWeek.some(x => x.date === prevS)) sh.value = prevS;
+  const cur = dSheet(sh.value);
+  nn.innerHTML = cur ? (cur.items || []).map(it => `<option value="${it.n}">${it.n}번${it.image ? ' ✓그림' : ''}</option>`).join('') : '';
+  if (changed !== 'week' && changed !== 'sheet' && cur && (cur.items || []).some(it => String(it.n) === prevN)) nn.value = prevN;
+  const it = cur && (cur.items || []).find(x => String(x.n) === nn.value);
+  $('dp-pv').innerHTML = it && it.image
+    ? `<div class="dly-pv"><img src="${dEsc(it.image)}" alt=""><div><button class="btn small danger" onclick="dailyImageClear()">이 문항 그림 지우기</button></div></div>`
+    : '';
+}
+let dpBusy = false;
+async function dailyImagePaste(file) {
+  const msg = $('dp-msg');
+  const id = $('dp-sheet').value,
+    n = +$('dp-n').value;
+  const sh = dSheet(id);
+  if (!sh || !n) {
+    msg.textContent = '먼저 주차·요일·문항을 고르세요.';
+    msg.style.color = 'var(--accent)';
+    return;
+  }
+  const it = (sh.items || []).find(x => x.n === n);
+  if (it && it.image && !confirm(`${dLabel(sh.day)} ${dKindName(sh.kind)} ${n}번에 이미 그림이 있습니다. 새 그림으로 바꿀까요?`)) return;
+  if (dpBusy) return;
+  dpBusy = true;
+  msg.style.color = 'var(--brand)';
+  msg.textContent = '그림을 올리는 중…';
+  try {
+    const f = new File([file], 'daily-' + id + '-' + n + '.png', { type: file.type || 'image/png' });
+    const url = await uploadToCloudinary(f);
+    const hadBody = (sh.items || []).some(dHasBody);
+    const items = (sh.items || []).map(x => (x.n === n ? { ...x, image: url } : x));
+    const { db, doc, updateDoc } = window.fb;
+    const upd = { items };
+    if (!hadBody) upd.showQ = true; // 그림이 처음 생기면 학생 화면에 문제 보이기를 켠다
+    await updateDoc(doc(db, 'dailies', id), upd);
+    msg.textContent = `${dLabel(sh.day)} ${dKindName(sh.kind)} ${n}번에 그림을 넣었습니다.` + (hadBody ? '' : " ('학생 화면에 문제 보이기'를 켰습니다)");
+  } catch (e) {
+    console.error(e);
+    msg.style.color = 'var(--accent)';
+    msg.textContent = '올리지 못했습니다: ' + (e.message || e.code);
+  } finally {
+    dpBusy = false;
+    const b = $('dp-box');
+    if (b) b.textContent = '여기를 클릭한 뒤 Ctrl+V 로 그림을 붙여넣으세요';
+  }
+}
+async function dailyImageClear() {
+  const id = $('dp-sheet').value,
+    n = +$('dp-n').value;
+  const sh = dSheet(id);
+  if (!sh || !confirm(`${n}번 그림을 지울까요?`)) return;
+  const items = (sh.items || []).map(x => {
+    if (x.n !== n) return x;
+    const { image, ...rest } = x;
+    return rest;
+  });
+  try {
+    const { db, doc, updateDoc } = window.fb;
+    await updateDoc(doc(db, 'dailies', id), { items });
+  } catch (e) {
+    alert('지우지 못했습니다: ' + (e.code || e.message));
+  }
+}
+/* 이 탭이 열려 있을 때, 클립보드에 그림이 있으면 어디에 붙여넣어도 받는다 (JSON 글 붙여넣기는 건드리지 않음) */
+document.addEventListener('paste', e => {
+  const tab = $('tab-a-daily');
+  if (!tab || !tab.classList.contains('active')) return;
+  const files = Array.from((e.clipboardData && e.clipboardData.items) || [])
+    .filter(i => i.kind === 'file' && /^image\//.test(i.type))
+    .map(i => i.getAsFile())
+    .filter(Boolean);
+  if (!files.length) {
+    if (e.target && e.target.id === 'dp-box') e.preventDefault(); // 글자는 붙지 않게
+    return;
+  }
+  e.preventDefault();
+  dailyImagePaste(files[0]);
+});

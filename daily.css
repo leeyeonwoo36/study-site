@@ -154,3 +154,10 @@ body.dg-open .app-shell{visibility:hidden;}
 .dly-bulk input,.dly-ck{width:auto; margin:0;}
 .dly-bulk span{flex:1; color:var(--ink-soft);}
 .dly-ad summary .dly-ck{margin-right:2px;}
+
+.dly-pick{display:flex; gap:10px; flex-wrap:wrap; margin-bottom:10px;}
+.dly-pick label{display:flex; flex-direction:column; gap:4px; font-size:12.5px; font-weight:700; flex:1 1 150px; min-width:0; margin:0;}
+.dly-paste{min-height:84px; display:flex; align-items:center; justify-content:center; text-align:center; padding:14px; border:2px dashed var(--border); border-radius:14px; background:var(--soft); color:var(--muted); font-size:14px; cursor:text; outline:none;}
+.dly-paste:focus{border-color:var(--brand); background:var(--brand-soft); color:var(--ink);}
+.dly-pv{margin-top:10px; display:flex; gap:12px; align-items:flex-start; flex-wrap:wrap;}
+.dly-pv img{max-width:min(100%,360px); border:1px solid var(--border); border-radius:10px;}
