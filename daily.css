@@ -167,3 +167,15 @@ body.dg-open .app-shell{visibility:hidden;}
 #dly-ink-host{position:sticky; top:55px; z-index:15; background:var(--bg,#fff); padding-bottom:2px;}
 #dly-ink-host .ink-bar{margin:0 0 10px;}
 #daily-body.ink-on .dly-q button,#daily-body.ink-on .dly-q input{pointer-events:none;}
+
+/* 지난 주간지: 주차 탭 · 요일 탭 */
+.dly-wk{display:flex; gap:6px; overflow-x:auto; padding:2px 0 8px; scrollbar-width:none;}
+.dly-wk::-webkit-scrollbar{display:none;}
+.dly-wk button{flex:0 0 auto; border:1px solid var(--border); background:var(--card); color:var(--ink); border-radius:999px; padding:8px 14px; font-weight:700; font-size:13.5px; font-family:inherit; cursor:pointer; white-space:nowrap;}
+.dly-wk button.on{background:var(--brand); border-color:var(--brand); color:#fff;}
+.dly-wk button i{font-style:normal; margin-left:6px; background:var(--accent,#ef4444); color:#fff; border-radius:999px; padding:0 6px; font-size:11px;}
+.dly-dk{display:grid; grid-template-columns:repeat(5,1fr); gap:6px; margin-bottom:10px;}
+.dly-dk button{display:flex; flex-direction:column; align-items:center; gap:2px; border:1px solid var(--border); background:var(--card); color:var(--ink); border-radius:12px; padding:8px 0; font-weight:800; font-size:15px; font-family:inherit; cursor:pointer;}
+.dly-dk button small{font-size:11px; color:var(--muted); font-weight:700;}
+.dly-dk button.on{border-color:var(--brand); box-shadow:0 0 0 2px var(--brand); color:var(--brand);}
+.dly-dk button:disabled{opacity:.4; cursor:default;}

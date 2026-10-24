@@ -19,6 +19,15 @@ const dLabel = ds => {
   const p = dayOf(ds).split('-');
   return +p[1] + '월 ' + +p[2] + '일 (' + DOWK[dDow(ds)] + ')';
 };
+/* 주간지는 그 주 일요일까지 제출하면 '당일 제출'로 본다 (월~일이 한 주) */
+const dSunday = day => {
+  const d = new Date(dayOf(day) + 'T00:00:00Z');
+  d.setUTCDate(d.getUTCDate() + ((7 - d.getUTCDay()) % 7));
+  return d.toISOString().slice(0, 10);
+};
+const dKstDay = ts => new Date((ts || 0) + 9 * 3600e3).toISOString().slice(0, 10);
+const dLateNow = date => dToday() > dSunday(dayOf(date));
+const dIsLate = sub => !!sub && dKstDay(sub.submittedAt) > dSunday(dayOf(sub.date));
 const dSheet = ds => DAILY.sheets.find(s => s.date === ds);
 const dMySub = ds => DAILY.subs[ds + '|' + currentStudent];
 const dEsc = s => (typeof esc === 'function' ? esc(s) : String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])));
@@ -111,7 +120,7 @@ function dScore(date, uid) {
    ========================================================= */
 function openDaily(push) {
   if (!currentStudent) return;
-  DAILY.view = 'sheet';
+  DAILY.view = dIsWeekday(dToday()) ? 'sheet' : 'list';
   DAILY.date = dToday();
   switchSite('daily');
   if (push !== false && !currentUserIsAdmin) dSetUrl('/daily');
@@ -152,7 +161,7 @@ function renderDailyCard() {
     msg = done === today.length ? `오늘 주간지를 모두 제출했어요 (${kinds})` : `오늘 주간지가 올라왔어요 (${kinds})`;
     tag = done === today.length ? '<span class="dly-tag ok">제출 완료</span>' : `<span class="dly-tag todo">미제출 ${today.length - done}</span>`;
   } else {
-    msg = dIsWeekday(t) ? '오늘 주간지는 아직 등록되지 않았어요' : '주말에는 주간지가 없어요';
+    msg = dIsWeekday(t) ? '오늘 주간지는 아직 등록되지 않았어요' : '이번 주 주간지는 일요일까지 제출할 수 있어요';
     tag = '';
   }
   box.innerHTML = `<div class="dly-card" onclick="openDaily()" role="button" tabindex="0" onkeydown="if(event.key==='Enter')openDaily()">
@@ -237,19 +246,57 @@ function dResolve(key) {
 }
 function dailyListHtml() {
   const t = dToday();
-  const past = DAILY.sheets.filter(s => s.day < t);
-  const rows = past
+  const past = DAILY.sheets.filter(x => x.day <= t);
+  const weeks = [...new Set(past.map(x => dWeekKey(x.day)))].sort().reverse();
+  if (!weeks.length) return `<h2 class="dly-h">지난 주간지</h2><p class="dly-sub">지난 주간지가 아직 없어요.</p>`;
+  if (!weeks.includes(DAILY.lw)) DAILY.lw = weeks.includes(dWeekKey(t)) ? dWeekKey(t) : weeks[0];
+  const inWeek = past.filter(x => dWeekKey(x.day) === DAILY.lw);
+  const mon = new Date(DAILY.lw + 'T00:00:00Z');
+  const days = [0, 1, 2, 3, 4].map(i => {
+    const d = new Date(mon);
+    d.setUTCDate(d.getUTCDate() + i);
+    return d.toISOString().slice(0, 10);
+  });
+  const dayHas = day => inWeek.filter(x => x.day === day);
+  if (!days.includes(DAILY.ld) || !dayHas(DAILY.ld).length) DAILY.ld = days.find(d => dayHas(d).some(x => !dMySub(x.date))) || days.find(d => dayHas(d).length) || days[0];
+  const weekTabs = weeks
+    .map(k => {
+      const miss = past.filter(x => dWeekKey(x.day) === k && !dMySub(x.date)).length;
+      return `<button class="${k === DAILY.lw ? 'on' : ''}" onclick="dailyPickWeek('${k}')">${dWeekLabel(k)}${miss ? `<i>${miss}</i>` : ''}</button>`;
+    })
+    .join('');
+  const dayTabs = days
+    .map(d => {
+      const list = dayHas(d);
+      const all = list.length && list.every(x => dMySub(x.date));
+      return `<button class="${d === DAILY.ld ? 'on' : ''}" ${list.length ? '' : 'disabled'} onclick="dailyPickDay('${d}')">${DOWK[dDow(d)]}<small>${list.length ? (all ? '✓' : '●') : '–'}</small></button>`;
+    })
+    .join('');
+  const rows = dayHas(DAILY.ld)
     .map(s => {
       const sub = dMySub(s.date);
-      const tag = sub ? (sub.late ? '<span class="dly-tag late">지연 제출</span>' : '<span class="dly-tag ok">당일 제출</span>') : '<span class="dly-tag todo">미제출</span>';
+      const tag = sub ? (dIsLate(sub) ? '<span class="dly-tag late">지연 제출</span>' : '<span class="dly-tag ok">당일 제출</span>') : '<span class="dly-tag todo">미제출</span>';
       return `<button class="dly-row" onclick="dailyOpenSheet('${s.date}')">
         <div><b>${dLabel(s.day)} ${dKindTag(s.kind)}</b><span>${dEsc(s.title || '주간지')} · ${(s.items || []).length}문항</span></div>${tag}</button>`;
     })
     .join('');
-  const miss = past.filter(s => !dMySub(s.date)).length;
+  const lateWk = dLateNow(DAILY.lw + '');
+  const sun = dSunday(DAILY.lw);
+  const note = lateWk ? `이 주는 일요일(${+sun.slice(5, 7)}/${+sun.slice(8)})이 지나서 지금 제출하면 <b>'지연 제출'</b>로 기록돼요.` : `이 주 일요일(${+sun.slice(5, 7)}/${+sun.slice(8)})까지는 며칠이 지나도 <b>당일 제출</b>로 인정돼요.`;
   return `<h2 class="dly-h">지난 주간지</h2>
-    <p class="dly-sub">${past.length ? (miss ? `아직 제출하지 않은 주간지가 ${miss}개 있어요. 눌러서 제출하면 '지연 제출'로 기록돼요.` : '모두 제출했어요. 잘하고 있어요!') : '지난 주간지가 아직 없어요.'}</p>
-    <div class="dly-list">${rows}</div>`;
+    <div class="dly-wk">${weekTabs}</div>
+    <div class="dly-dk">${dayTabs}</div>
+    <p class="dly-sub">${note}</p>
+    <div class="dly-list">${rows || '<p class="dly-sub">이 날은 주간지가 없어요.</p>'}</div>`;
+}
+function dailyPickWeek(k) {
+  DAILY.lw = k;
+  DAILY.ld = null;
+  renderDailyView();
+}
+function dailyPickDay(d) {
+  DAILY.ld = d;
+  renderDailyView();
 }
 function dailySheetHtml(date) {
   const t = dToday();
@@ -334,11 +381,14 @@ function dailyFormHtml(sh, isToday) {
       return `<div class="dly-q" data-n="${it.n}"><div class="dly-n">${it.n}번${it.type === 'multi' ? '<small>복수</small>' : ''}</div>${inp}</div>`;
     })
     .join('');
+  const lateNow = dLateNow(sh.date);
   const note = isToday
     ? '답을 고르고 <b>제출</b>을 누르세요. 제출하면 정답과 해설이 바로 열려요. 제출 후에는 고칠 수 없어요.'
-    : `<b>지난 주간지</b>예요. 지금 제출하면 <b>'지연 제출'</b>로 기록돼요.`;
+    : lateNow
+    ? `<b>지난 주 주간지</b>예요. 지금 제출하면 <b>'지연 제출'</b>로 기록돼요.`
+    : `이번 주 주간지예요. <b>일요일까지</b> 제출하면 <b>당일 제출</b>로 인정돼요.`;
   return `<div id="dly-ink-host"></div>
-    <div class="dly-inkwrap" id="qwrap_dpage"><div class="dly-note${isToday ? '' : ' late'}">${note}</div>
+    <div class="dly-inkwrap" id="qwrap_dpage"><div class="dly-note${lateNow ? ' late' : ''}">${note}</div>
     <div class="dly-qs">${rows}</div></div>
     <div class="dly-bar"><span id="dly-prog"></span><button class="btn" onclick="dailySubmit('${sh.date}')">제출하기</button></div>`;
 }
@@ -380,8 +430,8 @@ async function dailySubmit(date) {
   const d = DAILY.draft[date] || {};
   const items = sh.items || [];
   const blank = items.filter(it => String(d[it.n] || '').trim() === '').length;
-  const late = dayOf(date) !== dToday();
-  const msg = (blank ? `답하지 않은 문항이 ${blank}개 있어요. ` : '') + (late ? "지난 주간지는 '지연 제출'로 기록돼요. " : '') + '제출하면 고칠 수 없어요. 제출할까요?';
+  const late = dLateNow(date);
+  const msg = (blank ? `답하지 않은 문항이 ${blank}개 있어요. ` : '') + (late ? "지난 주 주간지는 '지연 제출'로 기록돼요. " : '') + '제출하면 고칠 수 없어요. 제출할까요?';
   if (!confirm(msg)) return;
   const answers = {};
   items.forEach(it => {
@@ -437,7 +487,7 @@ function dailyResultHtml(sh, sub) {
   const date = sh.date;
   if (!DAILY.keys[date] && !['none', 'err'].includes(DAILY.keyState[date])) dailyLoadKey(date);
   const key = DAILY.keys[date];
-  const tagLate = sub.late ? '<span class="dly-tag late">지연 제출</span>' : '<span class="dly-tag ok">당일 제출</span>';
+  const tagLate = dIsLate(sub) ? '<span class="dly-tag late">지연 제출</span>' : '<span class="dly-tag ok">당일 제출</span>';
   if (!key) {
     const m = DAILY.keyState[date] === 'none' ? '정답·해설이 아직 등록되지 않았어요. 등록되면 여기에 나타나요.' : DAILY.keyState[date] === 'err' ? '정답을 불러오지 못했어요. 잠시 뒤 다시 열어 보세요.' : '정답과 해설을 불러오는 중이에요…';
     return `<div class="dly-done"><div class="dly-ico big">✅</div><h3>제출 완료 ${tagLate}</h3><p>${m}</p></div>`;
@@ -690,11 +740,11 @@ function renderDailyAdmin() {
         const subs = targets.map(st => ({ st, sub: DAILY.subs[s.date + '|' + st.uid] }));
         const done = subs.filter(x => x.sub);
         const miss = subs.filter(x => !x.sub);
-        const late = done.filter(x => x.sub.late).length;
+        const late = done.filter(x => dIsLate(x.sub)).length;
         const rows = done
           .map(x => {
             const sc = dScore(s.date, x.st.uid);
-            return `<tr><td>${dEsc(x.st.name)}</td><td>${sc == null ? '-' : sc + ' / ' + (s.items || []).length}</td><td>${x.sub.late ? '<span class="badge warn">지연</span>' : '<span class="badge good">당일</span>'}</td><td>${hm(x.sub.submittedAt || 0)}</td></tr>`;
+            return `<tr><td>${dEsc(x.st.name)}</td><td>${sc == null ? '-' : sc + ' / ' + (s.items || []).length}</td><td>${dIsLate(x.sub) ? '<span class="badge warn">지연</span>' : '<span class="badge good">당일</span>'}</td><td>${hm(x.sub.submittedAt || 0)}</td></tr>`;
           })
           .join('');
         return `<details class="dly-ad" data-d="${s.date}"${open.has(s.date) ? ' open' : ''}>
