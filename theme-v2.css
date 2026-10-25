@@ -1036,3 +1036,6 @@ body.on-login::after{width:340px; height:340px; right:-110px; top:-120px; backgr
   #tab-a-schedule #schedule-table td.empty-hint{width:100%; text-align:center;}
   #week-tabs{flex-wrap:wrap;}
 }
+
+/* 글꼴 통일: 버튼·입력칸도 본문과 같은 Pretendard로 */
+button,select,input,textarea{font-family:inherit}
