@@ -123,6 +123,17 @@ function renderBookView() {
   }
   box.innerHTML = BOOK.view === 'item' && bkItem(bkBook(BOOK.bid), BOOK.n) ? bookItemHtml(bkBook(BOOK.bid), bkItem(bkBook(BOOK.bid), BOOK.n)) : bookListHtml();
   if (BOOK.view === 'item') bookProg();
+  bookInkMount();
+}
+/* 필기(펜): 풀이·주간지 화면과 같은 도구. 제출 전 변형 문항 위에 쓰고, 이 기기에만 임시 저장되며 제출하면 지워진다 */
+function bookInkMount() {
+  const b = bkBook(BOOK.bid),
+    it = BOOK.view === 'item' ? bkItem(b, BOOK.n) : null;
+  if (!it || bkSub(b.id, it.n) || !$('qwrap_bpage') || typeof inkInit !== 'function') {
+    if (typeof INK !== 'undefined' && INK.bodyId === 'book-body') INK.on = false;
+    return;
+  }
+  inkInit('book_' + b.id + '_' + it.n, { body: 'book-body', host: 'bk-ink-host', wrap: '.dly-inkwrap', keep: true });
 }
 
 function bookListHtml() {
@@ -180,8 +191,8 @@ function bookItemHtml(b, it) {
       return `<div class="dly-q full" data-n="${v.n}"><div class="dly-n">변형 ${v.n}${v.type === 'multi' ? '<small>복수 정답</small>' : ''}</div>${dQBody(v)}${inp}</div>`;
     })
     .join('');
-  return `${head}<div class="dly-note">변형 2문항의 답을 고르고 <b>제출</b>을 누르세요. 제출하면 정답과 해설이 바로 열려요. 제출 후에는 고칠 수 없어요.</div>
-    <div class="dly-qs">${qs}</div>
+  return `<div id="bk-ink-host"></div><div class="dly-inkwrap" id="qwrap_bpage">${head}<div class="dly-note">변형 2문항의 답을 고르고 <b>제출</b>을 누르세요. 제출하면 정답과 해설이 바로 열려요. 제출 후에는 고칠 수 없어요.</div>
+    <div class="dly-qs">${qs}</div></div>
     <div class="dly-bar"><span id="bk-prog"></span><button class="btn" onclick="bookSubmit('${b.id}',${it.n})">제출하기</button></div>`;
 }
 function bookProg() {
@@ -231,6 +242,7 @@ async function bookSubmit(bid, n) {
     const { db, doc, setDoc } = window.fb;
     await setDoc(doc(db, 'bookSubs', bid + '|' + n + '|' + currentStudent), { studentUid: currentStudent, book: bid, n: String(n), answers, submittedAt: Date.now() });
     delete BOOK.draft[bid + '|' + n];
+    try { inkClearStored('book_' + bid + '_' + n); if (INK.bodyId === 'book-body') { INK.on = false; INK.key = null; } } catch (e) {}
     bookLoadKey(bid, n, true);
   } catch (e) {
     console.error('문제집 제출 실패:', e);
