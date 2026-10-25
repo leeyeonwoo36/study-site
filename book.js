@@ -129,7 +129,7 @@ function renderBookView() {
 function bookInkMount() {
   const b = bkBook(BOOK.bid),
     it = BOOK.view === 'item' ? bkItem(b, BOOK.n) : null;
-  if (!it || bkSub(b.id, it.n) || !$('qwrap_bpage') || typeof inkInit !== 'function') {
+  if (!it || bkSub(b.id, it.n) || !document.querySelector('#book-body .dly-inkwrap') || typeof inkInit !== 'function') {
     if (typeof INK !== 'undefined' && INK.bodyId === 'book-body') INK.on = false;
     return;
   }
@@ -188,10 +188,10 @@ function bookItemHtml(b, it) {
             return `<button type="button" class="dly-o${sel.includes(k) ? ' on' : ''}" data-v="${k}" onclick="${fn}'${k}',${v.type === 'multi'})" aria-pressed="${sel.includes(k)}"><i>${CIRCS[i]}</i><span>${bkEsc(lab == null ? '' : lab)}</span></button>`;
           }).join('') +
           `</div>`;
-      return `<div class="dly-q full" data-n="${v.n}"><div class="dly-n">변형 ${v.n}${v.type === 'multi' ? '<small>복수 정답</small>' : ''}</div>${dQBody(v)}${inp}</div>`;
+      return `<div class="dly-q full dly-inkwrap" id="qwrap_bq${v.n}" data-n="${v.n}"><div class="dly-n">변형 ${v.n}${v.type === 'multi' ? '<small>복수 정답</small>' : ''}</div>${dQBody(v)}${inp}</div>`;
     })
     .join('');
-  return `<div id="bk-ink-host"></div><div class="dly-inkwrap" id="qwrap_bpage">${head}<div class="dly-note">변형 2문항의 답을 고르고 <b>제출</b>을 누르세요. 제출하면 정답과 해설이 바로 열려요. 제출 후에는 고칠 수 없어요.</div>
+  return `<div id="bk-ink-host"></div><div>${head}<div class="dly-note">변형 2문항의 답을 고르고 <b>제출</b>을 누르세요. 제출하면 정답과 해설이 바로 열려요. 제출 후에는 고칠 수 없어요.</div>
     <div class="dly-qs">${qs}</div></div>
     <div class="dly-bar"><span id="bk-prog"></span><button class="btn" onclick="bookSubmit('${b.id}',${it.n})">제출하기</button></div>`;
 }

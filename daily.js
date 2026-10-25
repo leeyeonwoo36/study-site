@@ -231,7 +231,7 @@ function renderDailyView() {
 }
 /* 필기(펜): 풀이 화면과 같은 도구를 쓴다. 제출 전 문제지 전체 위에 덮어 쓰고, 이 기기에만 임시 저장된다 */
 function dailyInkMount(sh) {
-  if (!sh || !$('qwrap_dpage') || typeof inkInit !== 'function') {
+  if (!sh || !document.querySelector('#daily-body .dly-inkwrap') || typeof inkInit !== 'function') {
     if (typeof INK !== 'undefined' && INK.bodyId === 'daily-body') INK.on = false;
     return;
   }
@@ -377,7 +377,7 @@ function dailyFormHtml(sh, isToday) {
           `</div>`;
       }
       if (full)
-        return `<div class="dly-q full" data-n="${it.n}"><div class="dly-n">${it.n}번${it.type === 'multi' ? '<small>복수 정답</small>' : ''}</div>${dQBody(it)}${inp}</div>`;
+        return `<div class="dly-q full dly-inkwrap" id="qwrap_dq${it.n}" data-n="${it.n}"><div class="dly-n">${it.n}번${it.type === 'multi' ? '<small>복수 정답</small>' : ''}</div>${dQBody(it)}${inp}</div>`;
       return `<div class="dly-q" data-n="${it.n}"><div class="dly-n">${it.n}번${it.type === 'multi' ? '<small>복수</small>' : ''}</div>${inp}</div>`;
     })
     .join('');
@@ -388,7 +388,7 @@ function dailyFormHtml(sh, isToday) {
     ? `<b>지난 주 주간지</b>예요. 지금 제출하면 <b>'지연 제출'</b>로 기록돼요.`
     : `이번 주 주간지예요. <b>일요일까지</b> 제출하면 <b>당일 제출</b>로 인정돼요.`;
   return `<div id="dly-ink-host"></div>
-    <div class="dly-inkwrap" id="qwrap_dpage"><div class="dly-note${lateNow ? ' late' : ''}">${note}</div>
+    <div${items.some(it => sh.showQ && dHasBody(it)) ? '' : ' class="dly-inkwrap" id="qwrap_dpage"'}><div class="dly-note${lateNow ? ' late' : ''}">${note}</div>
     <div class="dly-qs">${rows}</div></div>
     <div class="dly-bar"><span id="dly-prog"></span><button class="btn" onclick="dailySubmit('${sh.date}')">제출하기</button></div>`;
 }

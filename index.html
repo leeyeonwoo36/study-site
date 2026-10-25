@@ -14106,7 +14106,7 @@ function inkRefreshBar() {
 /* 필기 중에는 글자 크기 확대(CSS zoom)를 풀어 둔다: 일부 사파리(아이패드)는 zoom 안에서 터치 좌표와 요소 위치를 서로 다른 배율로 알려 줘서
    펜 위치가 크게 어긋난다. 필기를 끄면 다시 적용한다. */
 function inkSyncZoom() {
-  if (INK.on) document.querySelectorAll('#solve-modal .sv-content').forEach(el => { el.style.zoom = ''; });
+  if (INK.on) document.querySelectorAll('#solve-modal .sv-content, #shell-daily, #shell-book').forEach(el => { el.style.zoom = ''; });
   else if (window.reapplyFontScale) reapplyFontScale();
 }
 function inkToggle() {
@@ -17182,7 +17182,7 @@ function handleBackStep() {
   const applyFs = v => {
     document.documentElement.style.setProperty('--ui-zoom', String(v));
     document.querySelectorAll('.app-shell, .sv-content').forEach(el => {
-      const inkOn = typeof INK !== 'undefined' && INK.on && el.closest && el.closest('#solve-modal');
+      const inkOn = typeof INK !== 'undefined' && INK.on && el.closest && (el.closest('#solve-modal') || el.id === 'shell-daily' || el.id === 'shell-book');
       el.style.zoom = v === 1 || inkOn ? '' : String(v);
     });
     document.querySelectorAll('#app-settings [data-fs]').forEach(b => b.classList.toggle('on', +b.dataset.fs === v));
