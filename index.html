@@ -6091,8 +6091,10 @@ function tableToFs(table) {
 function bogiBreak(s, br) {
   s = String(s || '');
   if (!/보기/.test(s)) return s;
-  s = s.replace(/((?:&lt;|<)\s*보기\s*(?:&gt;|>))[ \t]*(?:<br\s*\/?>|\n)?[ \t]*/g, (m, t) => t + br);
-  return s.replace(/(?<=[^\s>])[ \t]+([ㄱ-ㅁ][.)])/g, br + '$1');
+  /* '<보기>' 뒤가 조사('<보기>에서')가 아니면 그 아래 줄부터 시작 */
+  s = s.replace(/((?:&lt;|<)\s*보기\s*(?:&gt;|>))[ \t]*(?:<br\s*\/?>|\n)*[ \t]*(?![가-힣])/g, (m, t) => t + br);
+  /* ㄱ. ㄴ. ㄷ. ㄹ. (또는 ㄱ) ㄱ: ㄱ 뒤 공백) 항목은 각각 새 줄 */
+  return s.replace(/(?:[ \t]+|(?<=[.?!)다]))(?<![\n>])([ㄱ-ㅁ](?:[.):]|[ \t](?=[가-힣A-Za-z0-9'"“‘(])))/g, (m, t) => br + t);
 }
 function tableFromFs(t) {
   if (!t || !t.length) return null;
@@ -14713,7 +14715,7 @@ function renderStarred() {
         return `<div class="review-q">
       <div class="rhead"><b>${t ? esc(t.title) + ' · ' + no + '번' : '문제'}</b>
         <button class="qn-star${x.star ? ' on' : ''}" onclick="qnToggleStar('${id}')">★ 별표</button></div>
-      <div style="white-space:pre-wrap; font-weight:700;">${esc(q.body)}</div>
+      <div style="white-space:pre-wrap; font-weight:700;">${esc(bogiBreak(q.body, "\n"))}</div>
       ${renderPassageBoxHtml(getPassages(q))}${ch}
       ${q.answer !== undefined ? `<div class="ans-row"><b>정답:</b> ${esc(answerLabel(q))}</div>` : ''}
       ${q.explain ? `<div class="exam-explain"><b>해설</b><br>${esc(q.explain)}</div>` : ''}
@@ -14803,7 +14805,7 @@ async function openReview(kind, tid, stuUid, isAdmin) {
 
           return `<div class="review-q">
       <div class="rhead"><b>문제 ${i + 1}</b>${resultBadge}</div>
-      <div style="white-space:pre-wrap; font-weight:700;">${esc(q.body)}</div>
+      <div style="white-space:pre-wrap; font-weight:700;">${esc(bogiBreak(q.body, "\n"))}</div>
       ${renderPassageBoxHtml(getPassages(q))}
       ${choicesHtml}
       ${ansRow}
