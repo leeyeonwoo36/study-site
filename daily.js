@@ -719,6 +719,7 @@ function dailyTargets() {
 }
 function renderDailyAdmin() {
   renderDailyPick();
+  renderDailyStats();
   const box = $('daily-admin-list');
   if (!box) return;
   const open = new Set([...box.querySelectorAll('details[open]')].map(d => d.dataset.d));
@@ -865,3 +866,66 @@ document.addEventListener('paste', e => {
   e.preventDefault();
   dailyImagePaste(files[0]);
 });
+
+/* =========================================================
+   관리자: 주간지 오답률 집계 (문항별)
+   ========================================================= */
+function renderDailyStats() {
+  const wk = $('dst-week'),
+    list = $('dst-list');
+  if (!wk || !list) return;
+  const weeks = [...new Set(DAILY.sheets.map(x => dWeekKey(x.day)))].sort().reverse();
+  const prev = wk.value;
+  wk.innerHTML = '<option value="">전체 주차</option>' + weeks.map(k => `<option value="${k}">${dWeekLabel(k)} (${k.slice(5).replace('-', '/')}~)</option>`).join('');
+  wk.value = weeks.includes(prev) ? prev : '';
+  const kind = $('dst-kind').value;
+  const targets = dailyTargets();
+  const rows = [];
+  let nSheets = 0,
+    nSubs = 0;
+  DAILY.sheets
+    .filter(s => (!wk.value || dWeekKey(s.day) === wk.value) && (!kind || s.kind === kind))
+    .forEach(s => {
+      const key = DAILY.keys[s.date];
+      if (!key) return;
+      const subs = targets.map(t => DAILY.subs[s.date + '|' + t.uid]).filter(Boolean);
+      if (!subs.length) return;
+      nSheets++;
+      nSubs += subs.length;
+      (s.items || []).forEach(it => {
+        const k = key[it.n];
+        if (!k) return;
+        const wrong = subs.filter(x => !dCorrect(it, (x.answers || {})[it.n], k.a));
+        const cnt = {};
+        wrong.forEach(x => {
+          const m = String((x.answers || {})[it.n] || '').trim();
+          const kk = it.type === 'short' ? m : dNorm(m);
+          if (kk) cnt[kk] = (cnt[kk] || 0) + 1;
+        });
+        const top = Object.entries(cnt).sort((a, b) => b[1] - a[1])[0];
+        rows.push({
+          s,
+          it,
+          n: subs.length,
+          w: wrong.length,
+          rate: Math.round((wrong.length / subs.length) * 100),
+          top: top ? `${it.type === 'short' ? top[0] : top[0].split(',').map(x => CIRCS[x - 1] || x).join('')} (${top[1]}명)` : '',
+          ans: String(k.a == null ? '' : k.a).replace(/\|/g, ' 또는 ')
+        });
+      });
+    });
+  if ($('dst-sort').value === 'hard') rows.sort((a, b) => b.rate - a.rate || b.w - a.w);
+  else rows.sort((a, b) => (a.s.day < b.s.day ? -1 : a.s.day > b.s.day ? 1 : a.s.kind === b.s.kind ? a.it.n - b.it.n : a.s.kind === 'normal' ? -1 : 1));
+  const avg = rows.length ? Math.round(rows.reduce((a, r) => a + r.rate, 0) / rows.length) : null;
+  $('dst-sum').innerHTML = rows.length
+    ? `<div class="st-sum"><div class="box"><small>집계한 주간지</small><strong>${nSheets}개</strong></div><div class="box"><small>집계한 문항</small><strong>${rows.length}문항</strong></div><div class="box"><small>평균 오답률</small><strong>${avg}%</strong></div></div>`
+    : '';
+  list.innerHTML = rows.length
+    ? `<table><tr><th>주간지</th><th>번호</th><th>오답률</th><th>오답/제출</th><th>많이 고른 오답</th><th>정답</th></tr>${rows
+        .map(
+          r =>
+            `<tr><td>${dLabel(r.s.day)} ${dKindTag(r.s.kind)}</td><td>${r.it.n}번${dHasBody(r.it) && r.it.text ? '<br><small>' + dEsc(String(r.it.text).slice(0, 30)) + (String(r.it.text).length > 30 ? '…' : '') + '</small>' : ''}</td><td><b class="${r.rate >= 50 ? 'bk-hi' : ''}">${r.rate}%</b></td><td>${r.w}/${r.n}</td><td>${dEsc(r.top) || '-'}</td><td>${dEsc(r.ans)}</td></tr>`
+        )
+        .join('')}</table>`
+    : '<p class="empty-hint">집계할 제출이 없습니다. (정답·해설이 등록되고 학생이 제출한 주간지만 나옵니다)</p>';
+}

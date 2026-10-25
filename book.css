@@ -1,0 +1,22 @@
+/* 문제집 제출 화면 — 청록 테마 (본 사이트 초록 · 주간지 인디고와 구분) */
+body.on-book{
+  --brand:#0E7490; --brand-deep:#155E75; --brand-soft:#E0F2F7;
+  --paper:#F1F8FA; --paper-line:#E1EFF3; --border:#D5E7ED; --soft:#F3FAFC;
+  --accent:#D9822B; --accent-soft:#FDEFE0;
+  --good:#2F9168; --good-soft:#E2F4EB;
+  background:var(--paper);
+}
+:root[data-theme="dark"] body.on-book{
+  --brand:#5CC4DD; --brand-deep:#3AA3BD; --brand-soft:#16323A;
+  --paper:#0C1619; --paper-line:#15262B; --card:#121E22; --border:#233840; --soft:#17272C;
+  --accent:#E79A5C; --accent-soft:#3A2A1C;
+  background:var(--paper);
+}
+body.on-book .btn:not(.secondary):not(.ghost):not(.danger){background:var(--brand); color:#fff;}
+body.on-book ::selection{background:var(--brand); color:#fff;}
+#shell-book{display:none; min-height:100vh; justify-content:center;}
+.bk-card .dly-ico{background:var(--brand-soft,#E0F2F7);}
+.bk-row .bk-no{display:inline-block; min-width:24px; text-align:center; background:var(--brand); color:#fff; border-radius:8px; padding:0 6px; margin-right:4px; font-size:13px;}
+.bk-rate{display:inline-block; margin-top:6px; font-size:12.5px; font-weight:700; color:var(--brand); background:var(--brand-soft); border-radius:999px; padding:3px 10px;}
+.bk-point{margin-top:10px;}
+.bk-hi{color:#dc2626;}

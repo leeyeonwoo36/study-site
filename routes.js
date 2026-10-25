@@ -1,6 +1,6 @@
 /* =========================================================
    탭별 주소 — 화면을 옮길 때마다 주소창이 바뀌고, 새로고침·뒤로가기·링크 공유가 된다
-   학생: /  /hw  /exam  /wrong  /video  /me  /daily
+   학생: /  /hw  /exam  /wrong  /video  /me  /daily  /book
    관리자: /admin/schedule  /admin/attendance  /admin/students ...  (탭 이름 = 탭 id에서 'a-' 뺀 것)
    (없는 주소로 들어오면 404.html이 /?p=주소 로 보내 주고, 여기서 주소창을 원래대로 되돌린다)
    ========================================================= */
@@ -41,6 +41,7 @@ const adminPathOf = id => '/admin/' + id.replace(/^a-/, '');
 function routeCurrentPath(site) {
   if (site === 'admin') return adminPathOf(adminTabNow);
   if (site === 'daily') return '/daily';
+  if (site === 'book') return '/book';
   if (site === 'student') return STU_PATH[stuTabNow] || '/';
   return null;
 }
@@ -64,6 +65,10 @@ function routeApply(path, replace) {
         DAILY.date = dToday();
         switchSite('daily');
         fin = '/daily';
+      } else if (path === '/book') {
+        BOOK.view = 'list';
+        switchSite('book');
+        fin = '/book';
       } else {
         switchSite('student');
         setStudentTab(STU_TAB[path] || 't-main');
@@ -142,7 +147,7 @@ function routeApply(path, replace) {
     setTimeout(() => {
       let site = null;
       if (currentUserIsAdmin) site = previewingStudent ? null : 'admin';
-      else if (currentStudent) site = $('shell-daily') && $('shell-daily').style.display !== 'none' ? 'daily' : 'student';
+      else if (currentStudent) site = $('shell-daily') && $('shell-daily').style.display !== 'none' ? 'daily' : $('shell-book') && $('shell-book').style.display !== 'none' ? 'book' : 'student';
       const p = site && routeCurrentPath(site);
       if (p) routeSet(p);
     }, 0);
