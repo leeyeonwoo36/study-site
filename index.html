@@ -17103,7 +17103,7 @@ function handleBackStep() {
   }
   // 3-1) 주간지 화면: 지난 주간지 목록이면 오늘 주간지로, 아니면 메인으로
   if (currentStudent && $('shell-daily') && $('shell-daily').style.display !== 'none') {
-    if (DAILY.view === 'list') dailyOpenSheet(dToday());
+    if (DAILY.view === 'list' && dIsWeekday(dToday())) dailyOpenSheet(dToday());
     else closeDaily();
     return true;
   }
