@@ -9214,7 +9214,7 @@ function ensureQuietExitBtn() {
     b.id = 'quiet-return';
     b.className = 'student-nav';
     b.textContent = '↩ 관리자 화면으로';
-    b.onclick = exitQuietPreview;
+    b.onclick = () => (adminViewAll ? exitQuietPreview() : exitStudentPreview());
     nav.appendChild(b);
   }
 }
@@ -9260,8 +9260,9 @@ function startStudentPreview() {
   }
   previewingStudent = true;
   currentStudent = uid;
-  document.body.classList.add('previewing');
-  setPreviewBanner(`"${s.name}" 학생 화면 미리보기 중 (관리자 세션 유지됨)`);
+  document.body.classList.add('previewing', 'quiet-preview');
+  setPreviewBanner(null); // 위쪽 주황 막대 없이, 옆 메뉴의 '관리자 화면으로'만 둔다
+  ensureQuietExitBtn();
   loadPreviewWrongNote(uid);
   switchSite('student');
   if (window.dailyShowGate) dailyShowGate();
@@ -17127,7 +17128,7 @@ function handleBackStep() {
   }
   // 3) 미리보기 중이면 관리자 화면으로
   if (previewingStudent) {
-    if (document.body.classList.contains('quiet-preview')) exitQuietPreview();
+    if (adminViewAll) exitQuietPreview();
     else exitStudentPreview();
     return true;
   }
