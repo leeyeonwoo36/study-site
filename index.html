@@ -643,9 +643,9 @@ body.role-gating .app-shell, body.role-gating #preview-banner{ visibility:hidden
 
 /* 학생 보기 모드(조용한 미리보기) — 배너 대신 오른쪽 위 복귀 버튼 */
 /* 학생 보기 모드: 사이드바 로그아웃 자리를 '관리자 화면으로'가 대신한다 */
-#quiet-return{ display:none; }
-body.quiet-preview #quiet-return{
-  display:block; color:#fff; font-weight:700;
+#shell-student .sidebar nav #quiet-return{ display:none !important; }
+body.quiet-preview #shell-student .sidebar nav #quiet-return{
+  display:block !important; color:#fff; font-weight:700;
   border-top:1px solid rgba(255,255,255,.18); margin-top:16px; padding-top:14px;
 }
 body.quiet-preview .hide-in-quiet{ display:none !important; }
@@ -655,7 +655,7 @@ body.quiet-preview .main{ padding-top:30px; }
 body.quiet-preview .sidebar{ padding-top:22px; }
 
 @media (max-width:760px){
-  body.quiet-preview #quiet-return{
+  body.quiet-preview #shell-student .sidebar nav #quiet-return{
     margin-top:0; padding-top:8px; border-top:none;
     border-left:1px solid rgba(255,255,255,.18);
   }
