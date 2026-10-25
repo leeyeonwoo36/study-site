@@ -12764,7 +12764,13 @@ function scheduleSolveDraftSave() {
 function initSolveDraftHandlers() {
   const body = $('solve-body');
   if (!body) return;
-  ['input', 'change', 'click'].forEach(ev => body.addEventListener(ev, scheduleSolveDraftSave));
+  /* 필기판 위의 터치·펜은 답이 바뀐 것이 아니므로 임시 저장을 돌리지 않는다 */
+  ['input', 'change', 'click'].forEach(ev =>
+    body.addEventListener(ev, e => {
+      if (e.target && e.target.classList && e.target.classList.contains('ink-cv')) return;
+      scheduleSolveDraftSave();
+    })
+  );
 }
 /* ===== 나중에 볼 문제 표시 ===== */
 let solveFlags = new Set();
@@ -13311,6 +13317,7 @@ function inkRedraw(qid) {
 /* 쓰는 중인 획만 다시 그린다 (이미 쓴 획은 한 장으로 합쳐 둔 것을 얹는다) */
 function inkBuildBase(qid, skip) {
   INK.base = null;
+  INK.liveBox = null;
   const cv = INK.cvs[qid],
     list = (INK.data[qid] || []).filter(s => s !== skip);
   if (!cv || !list.length) return;
@@ -13327,10 +13334,41 @@ function inkPaintLive(qid, st) {
   const cv = INK.cvs[qid];
   if (!cv) return;
   const ctx = cv.getContext('2d');
-  ctx.clearRect(0, 0, cv.width, cv.height);
-  if (INK.base && INK.base.qid === qid) ctx.drawImage(INK.base.cv, 0, 0);
-  const r = cv.parentElement.getBoundingClientRect();
-  inkDrawStroke(ctx, st, cv.width, cv.width / Math.max(1, r.width));
+  const pw = cv.parentElement.clientWidth || 1,
+    dpr = cv.width / pw,
+    pts = st.p;
+  /* 바뀐 부분(이번 획의 범위 + 지난 프레임에 그렸던 범위)만 지우고 다시 그린다 — 큰 캔버스에서도 펜이 밀리지 않게 */
+  let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
+  for (let i = 0; i + 1 < pts.length; i += 2) {
+    const x = pts[i] * cv.width, y = pts[i + 1] * cv.width;
+    if (x < x0) x0 = x;
+    if (x > x1) x1 = x;
+    if (y < y0) y0 = y;
+    if (y > y1) y1 = y;
+  }
+  const pad = st.w * dpr * 2 + 8 * dpr;
+  let bx0 = x0 - pad, by0 = y0 - pad, bx1 = x1 + pad, by1 = y1 + pad;
+  const pb = INK.liveBox && INK.liveBox.cv === cv ? INK.liveBox : null;
+  if (pb) {
+    bx0 = Math.min(bx0, pb.x0);
+    by0 = Math.min(by0, pb.y0);
+    bx1 = Math.max(bx1, pb.x1);
+    by1 = Math.max(by1, pb.y1);
+  }
+  INK.liveBox = { cv, x0: x0 - pad, y0: y0 - pad, x1: x1 + pad, y1: y1 + pad };
+  bx0 = Math.max(0, Math.floor(bx0));
+  by0 = Math.max(0, Math.floor(by0));
+  bx1 = Math.min(cv.width, Math.ceil(bx1));
+  by1 = Math.min(cv.height, Math.ceil(by1));
+  if (bx1 <= bx0 || by1 <= by0) return;
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(bx0, by0, bx1 - bx0, by1 - by0);
+  ctx.clip();
+  ctx.clearRect(bx0, by0, bx1 - bx0, by1 - by0);
+  if (INK.base && INK.base.qid === qid) ctx.drawImage(INK.base.cv, bx0, by0, bx1 - bx0, by1 - by0, bx0, by0, bx1 - bx0, by1 - by0);
+  inkDrawStroke(ctx, st, cv.width, dpr);
+  ctx.restore();
 }
 /* 레이저 포인터 (굿노트 방식): 문항 캔버스가 아니라 화면 전체 위에 그려서 문제 사이를 가로질러도 끊기지 않는다.
    저장되지 않고, 끝(꼬리)부터 가늘어지며 사라진다. */
@@ -13674,7 +13712,13 @@ function inkBind(cv, qid) {
   const taps = new Map();
   let tapInfo = null,
     tapT0 = 0;
-  const rect = () => cv.getBoundingClientRect();
+  let rcCache = null;
+  /* 펜으로 쓰는 동안은 캔버스 위치가 바뀌지 않으므로 한 번만 재서 쓴다(점마다 레이아웃을 읽지 않게) */
+  const rect = () => {
+    if (cur && mode === 'pen') return rcCache || (rcCache = cv.getBoundingClientRect());
+    rcCache = null;
+    return cv.getBoundingClientRect();
+  };
   const pos = (e, r) => {
     r = r || rect();
     return [(e.clientX - r.left) / r.width, (e.clientY - r.top) / r.width];
@@ -13863,6 +13907,7 @@ function inkBind(cv, qid) {
       return;
     }
     const hl = INK.tool === 'hl';
+    rcCache = null;
     cur = { c: hl ? INK_HL[INK.hi] : INK.color, w: hl ? INK.hw : INK.w, h: hl, p: [], q: undefined };
     if (!hl && useP(e)) cur.q = [];
     if (!hl) delete cur.h;
