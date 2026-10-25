@@ -910,7 +910,7 @@ tr.skel-row td{padding:10px 12px; border-bottom:none;}
 .omr-q .omr-list .omr-bubble input[type=checkbox]{margin-top:1px;}
 /* 보기 박스 */
 .omr-q .passage-box{border-radius:14px; border-color:var(--border); background:var(--soft); padding:12px 14px; line-height:1.7; font-size:13.5px;}
-.omr-q .passage-box .ptitle{display:inline-block; padding:1px 9px; border-radius:99px; background:var(--brand-soft); color:var(--brand); margin-bottom:6px;}
+.omr-q .passage-box .ptitle{display:table; padding:1px 9px; border-radius:99px; background:var(--brand-soft); color:var(--brand); margin-bottom:6px;}
 /* 단답 입력 */
 .omr-q input[type=text]{padding:12px 14px; border-radius:14px; font-size:15px;}
 /* 진행률 줄 */
