@@ -13015,7 +13015,8 @@ function inkInit(tid, opt) {
     const cv = document.createElement('canvas');
     cv.className = 'ink-cv';
     try {
-      cv.getContext('2d', { desynchronized: true }); // 지원 기기에서는 화면에 바로 그려 지연을 줄인다
+      /* 풀이 화면은 화면에 바로 그려 지연을 줄인다. 주간지·문제집은 위·아래에 고정 막대가 겹쳐서, 이 방식이면 일부 안드로이드에서 필기판이 새까맣게 보이므로 쓰지 않는다 */
+      if (INK.bodyId === 'solve-body') cv.getContext('2d', { desynchronized: true });
     } catch (e) {}
     wrap.appendChild(cv);
     INK.cvs[qid] = cv;
