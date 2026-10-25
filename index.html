@@ -470,6 +470,10 @@
 /* 종이 OMR 도구 */
 .omr-tools{border:1px dashed var(--border); border-radius:14px; padding:12px 14px; margin-bottom:12px; background:var(--brand-soft); font-size:13.5px;}
 .omr-q.scanned-unsure{background:#fff7e6; box-shadow:inset 3px 0 0 var(--warn);}
+/* 과제·시험 구분 */
+.hx-seg{display:inline-flex; gap:2px; background:var(--paper-line); border-radius:999px; padding:3px; margin:8px 0 4px;}
+.hx-seg button{border:none; background:transparent; color:var(--ink-soft); font:inherit; font-weight:700; font-size:14px; padding:7px 20px; border-radius:999px; cursor:pointer;}
+.hx-seg button.on{background:var(--card); color:var(--brand); box-shadow:0 1px 3px rgba(0,0,0,.14);}
 /* 필기(펜) 레이어 */
 .omr-q{position:relative;}
 .ink-cv{position:absolute; left:0; top:0; width:100%; height:100%; z-index:3; pointer-events:none; touch-action:auto;}
@@ -1583,8 +1587,8 @@ body.quiet-preview .sidebar{ padding-top:22px; }
       <div class="brand"><h3 style="color:#fff; font-size:16px; margin:0;" id="stu-name">학생</h3><small id="stu-sub">명덕외고</small></div>
       <nav>
         <button class="student-nav active" data-tab="t-main" onclick="setStudentTab('t-main')"><svg class="ni" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11.5 12 4l9 7.5"/><path d="M5.5 10v9.5h13V10"/></svg><span>메인</span></button>
-        <button class="student-nav" data-tab="t-hw" onclick="setStudentTab('t-hw')"><svg class="ni" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="3.5" width="14" height="17" rx="2.5"/><path d="M9 8.5h6M9 12.5h6M9 16.5h3.5"/></svg><span>과제</span></button>
-        <button class="student-nav" data-tab="t-exam" onclick="setStudentTab('t-exam')"><svg class="ni" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5 4 7v5c0 4.2 3.2 7.3 8 8.5 4.8-1.2 8-4.3 8-8.5V7z"/><path d="m9 12 2.2 2.2L15.5 10"/></svg><span>시험</span></button>
+        <button class="student-nav" data-tab="t-hw" onclick="setStudentTab('t-hw')"><svg class="ni" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="3.5" width="14" height="17" rx="2.5"/><path d="M9 8.5h6M9 12.5h6M9 16.5h3.5"/></svg><span>과제·시험</span></button>
+        <button class="student-nav" data-tab="t-book" onclick="openBook()"><svg class="ni" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 4.5A1.5 1.5 0 0 1 6.5 3H19v15H6.5A1.5 1.5 0 0 0 5 19.5z"/><path d="M5 19.5A1.5 1.5 0 0 0 6.5 21H19v-3"/><path d="M9 7.5h6"/></svg><span>문제집</span></button>
         <button class="student-nav" data-tab="t-wrong" onclick="setStudentTab('t-wrong')"><svg class="ni" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 4.5h10.5a1.5 1.5 0 0 1 1.5 1.5v13.5H7.5A1.5 1.5 0 0 1 6 18z"/><path d="M6 17h12M9.5 9h5"/></svg><span>오답노트</span></button>
         <button class="student-nav" data-tab="t-video" onclick="setStudentTab('t-video')"><svg class="ni" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="5.5" width="17" height="13" rx="3"/><path d="m10.5 9.5 4 2.5-4 2.5z"/></svg><span>수업 영상</span></button>
         <button class="student-nav" data-tab="t-me" onclick="setStudentTab('t-me')"><svg class="ni" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8.5" r="3.5"/><path d="M5 20c.8-3.6 3.6-5.5 7-5.5s6.2 1.9 7 5.5"/></svg><span>내 정보</span></button>
@@ -1627,7 +1631,7 @@ body.quiet-preview .sidebar{ padding-top:22px; }
       </div>
 
       <div class="tabpanel" id="tab-t-hw">
-        <div class="page-head"><div><h1>과제</h1><p>온라인으로 풀어서 제출합니다. 제출 후에는 수정할 수 없고 결과·해설만 볼 수 있어요.</p></div></div>
+        <div class="page-head"><div><h1>과제·시험</h1><div class="hx-seg"><button type="button" class="on" onclick="setStudentTab('t-hw')">과제</button><button type="button" class="" onclick="setStudentTab('t-exam')">시험</button></div><p>온라인으로 풀어서 제출합니다. 제출 후에는 수정할 수 없고 결과·해설만 볼 수 있어요.</p></div></div>
         <div class="card">
           <div class="wk-chips" id="t-hw-weeks"></div>
           <div class="wk-chips st-chips" id="t-hw-status"></div>
@@ -1638,7 +1642,7 @@ body.quiet-preview .sidebar{ padding-top:22px; }
       </div>
 
       <div class="tabpanel" id="tab-t-exam">
-        <div class="page-head"><div><h1>시험</h1><p>온라인으로 풀어서 제출합니다. 제출 후에는 수정할 수 없고 결과·해설만 볼 수 있어요.</p></div></div>
+        <div class="page-head"><div><h1>과제·시험</h1><div class="hx-seg"><button type="button" class="" onclick="setStudentTab('t-hw')">과제</button><button type="button" class="on" onclick="setStudentTab('t-exam')">시험</button></div><p>온라인으로 풀어서 제출합니다. 제출 후에는 수정할 수 없고 결과·해설만 볼 수 있어요.</p></div></div>
         <div class="card">
           <div class="wk-chips" id="t-exam-weeks"></div>
           <div class="wk-chips st-chips" id="t-exam-status"></div>
@@ -2567,7 +2571,7 @@ function setStudentTab(id) {
   document.querySelectorAll('#shell-student .tabpanel').forEach(p => p.classList.remove('active'));
   $('tab-' + id).classList.add('active');
   document.querySelectorAll('.student-nav').forEach(b => b.classList.remove('active'));
-  const btn = document.querySelector('.student-nav[data-tab="' + id + '"]');
+  const btn = document.querySelector('.student-nav[data-tab="' + (id === 't-exam' ? 't-hw' : id) + '"]'); // 과제·시험은 한 메뉴
   if (btn) btn.classList.add('active');
   if (id === 't-me') fillMyInfo();
   if (id === 't-wrong') {
@@ -16755,6 +16759,7 @@ function renderFirebaseGuide() {
     <li><b>문제집 제출</b>(만들기 · 문제집 관리): 마더텅 원본 문항 + 변형 2문항을 JSON으로 등록하면(<b>Claude용 안내문 복사</b> 참고) 학생은 주소 <b>/book</b>(또는 메인의 문제집 카드)에서 원본 문항을 '마더텅 O번 - 기출 출처'로 보고 골라 그 변형 2문항을 풀어 제출합니다. 원본 문항마다 한 번 제출하며, 제출하면 정답·해설과 핵심 포인트가 열립니다. 문제집 관리의 목록에서 변형 문항별 <b>오답률</b>을 볼 수 있습니다. 새 컬렉션 규칙(books · bookKeys · bookSubs)은 아래 규칙 전문에 들어 있습니다. <b>주간지 관리</b>에는 문항별 <b>오답률 집계</b>(주차·종류별)가 있습니다.</li>
     <li><b>AI 키 보관</b>: 학생이 쓰는 AI 기능(변형 문제·OMR 사진 보충 판독)은 브라우저에 키를 주지 않고 서버(<code>/api/gemini</code>)가 대신 호출합니다. 키는 Vercel 환경변수 <code>GEMINI_API_KEY</code>에만 두고, Firestore <code>settings/aiConfig</code>의 <code>geminiKey</code> 값은 지워 주세요. 관리자 AI 문제 생성 탭에 직접 넣는 키는 관리자 기기에만 저장됩니다.</li>
     <li><b>오답 JSON</b>: 학생은 오답노트의 <b>📥 내 오답 파일</b>으로 자기가 틀린 과제·시험·주간지 문제를 파일로 받을 수 있고, 관리자는 문항 통계 탭의 <b>오답 JSON 내려받기</b>에서 학생 한 명의 오답 또는 정답률 기준 이하의 <b>공통 오답</b>(과제·시험·주간지)을 받습니다. 파일을 Claude에게 올리고 '약점 유형으로 문제지 만들어줘'라고 하면, 파일에 들어 있는 안내에 따라 약점 유형 요약과 변형 문제를 만들고 문제은행 규격 JSON으로도 내 줍니다. 주간지는 문제 본문을 올린 경우에만 유형 분석이 됩니다.</li>
+    <li><b>학생 메뉴</b>: <b>과제·시험</b>은 한 메뉴로 합쳐 안에서 '과제 / 시험'을 고르고(주소는 그대로 <code>/hw</code>·<code>/exam</code>), 그 다음에 <b>문제집</b> 메뉴가 있어 누르면 <code>/book</code> 화면으로 이동합니다.</li>
     <li><b>탭별 주소</b>: 화면마다 주소가 따로 있어 새로고침해도 그 탭이 유지되고, 링크를 보내면 바로 그 탭이 열립니다(로그인 후). 학생은 <code>/</code> 메인, <code>/hw</code> 과제, <code>/exam</code> 시험, <code>/wrong</code> 오답노트, <code>/video</code> 영상, <code>/me</code> 내 정보, <code>/daily</code> 주간지이고, 관리자는 <code>/admin/탭이름</code>(예: <code>/admin/grading</code> 채점 확인, <code>/admin/daily</code> 주간지 관리, <code>/admin/schedule</code> 수업·주차)입니다. 브라우저 뒤로가기는 기존처럼 화면 안에서 한 단계씩 돌아갑니다.</li>
     <li><b>과제·시험 인쇄의 문제지</b>(개별 인쇄·주차 묶음 인쇄 모두): 인쇄 창의 <b>문제지 출처</b>에서 <b>원본 PDF 우선</b>(기본)과 <b>항상 문제은행에서 만든 문제지</b> 중 고를 수 있습니다. 원본 PDF 우선이면 원본 PDF가 올라온 과제·시험은 <b>원본 PDF 그대로</b>(쪽마다 A4 한 장) 나오고, 없으면 등록된 문항으로 만든 문제지가 나옵니다. 원본을 불러오지 못하면 안내 후 만든 문제지로 대신합니다. 인쇄 창을 여는 순간 원본 PDF를 미리 읽기 시작하고 한 번 읽은 PDF는 기억해 두므로, 인쇄 버튼을 누를 때는 대부분 바로 열립니다. OMR·해설지와 양면 인쇄 맞춤도 같이 쓸 수 있습니다.</li>
     <li><b>인쇄</b>: 문제은행에서 선택 → 인쇄하기 → 문제 / 빠른 정답 / 해설 선택. 오답노트 인쇄는 학생 상세에서 <b>복습 필요만</b> 또는 <b>전체</b>를 뽑습니다. <b>주차 묶음 인쇄</b>(수업 · 주차 탭)는 표지·문제지·정답·<b>해설지(선택)</b>를 한 번에 뽑습니다. <b>양면 인쇄 맞춤</b>(기본 켜짐)을 쓰면 표지·문제지·OMR·해설지가 각각 앞면에서 시작하도록, 홀수 쪽에서 끝나는 항목 뒤에 빈 면이 자동으로 들어갑니다.</li>
