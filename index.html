@@ -13,8 +13,8 @@
 <meta name="apple-mobile-web-app-title" content="국제정치 스터디">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='22' fill='%232F5D50'/%3E%3Ctext x='50' y='50' font-family='sans-serif' font-size='52' font-weight='700' fill='%23ffffff' text-anchor='middle' dominant-baseline='central'%3E政%3C/text%3E%3C/svg%3E">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&display=swap" rel="stylesheet">
+<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
 <style>
     :root{
     --ink:#1F2937; --ink-soft:#4B5563; --paper:#F7F8FA; --paper-line:#E8EAEF; --card:#FFFFFF;
@@ -762,9 +762,11 @@ body.quiet-preview .sidebar{ padding-top:22px; }
   </div>
 </div>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script>
-  pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+  document.addEventListener('DOMContentLoaded', function () {
+    if (window.pdfjsLib) pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+  });
 </script>
   
 <!-- ============ 관리자 사이트 ============ -->

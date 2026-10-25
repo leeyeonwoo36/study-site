@@ -4,7 +4,6 @@
    <link rel="stylesheet" href="theme-v2.css">
    (원본 CSS 위에 덮어쓰는 방식이라, 지우면 예전 디자인으로 돌아갑니다)
    ========================================================= */
-@import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css');
 
 :root{
   --ink:#16201D; --ink-soft:#52605B; --muted:#66726D;
