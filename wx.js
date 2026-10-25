@@ -144,29 +144,6 @@ function wxPack(scope, who, items, extra) {
     items
   };
 }
-async function wxDownloadMine() {
-  if (!currentStudent || currentUserIsAdmin) {
-    alert('학생 화면에서만 받을 수 있어요.');
-    return;
-  }
-  const btn = $('wx-mine-btn');
-  if (btn) btn.disabled = true;
-  try {
-    const r = await wxStudentItems(currentStudent, true, false);
-    if (!r.items.length) {
-      alert('내보낼 오답이 없어요. 과제·시험·주간지를 제출하고 틀린 문제가 생기면 받을 수 있어요.');
-      return;
-    }
-    const nm = (students.find(s => s.uid === currentStudent) || {}).name || (window.currentStudentName || '학생');
-    wxSave(`오답_${nm}_${wxDate()}.json`, wxPack('student', { student: nm }, r.items, r.noKey ? { note: `정답을 아직 불러오지 못해 ${r.noKey}건은 빠졌어요.` } : {}));
-  } catch (e) {
-    console.error(e);
-    alert('오답 파일을 만들지 못했어요. 잠시 뒤 다시 눌러 주세요.');
-  } finally {
-    if (btn) btn.disabled = false;
-  }
-}
-
 /* ---------- 관리자 ---------- */
 function wxAdminFill() {
   const sel = $('wx-student');
