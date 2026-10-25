@@ -6087,6 +6087,13 @@ function tableToFs(table) {
   if (!table || !table.length) return null;
   return table.map(row => ({ cells: row.map(c => c || '') }));
 }
+/* <보기> 표시 아래 줄부터 ㄱ. ㄴ. ㄷ. ㄹ. 항목을 줄바꿈해서 배치 (br: 줄바꿈 표기) */
+function bogiBreak(s, br) {
+  s = String(s || '');
+  if (!/보기/.test(s)) return s;
+  s = s.replace(/((?:&lt;|<)\s*보기\s*(?:&gt;|>))[ \t]*(?:<br\s*\/?>|\n)?[ \t]*/g, (m, t) => t + br);
+  return s.replace(/(?<=[^\s>])[ \t]+([ㄱ-ㅁ][.)])/g, br + '$1');
+}
 function tableFromFs(t) {
   if (!t || !t.length) return null;
   return t.map(row => (Array.isArray(row) ? row : row.cells || []));
@@ -6218,7 +6225,7 @@ function renderPassageBoxHtml(passages) {
   return passages
     .map((p, i) => {
       const title = p.hideTitle ? '' : `<div class="ptitle">&lt;보기&gt;${passages.length > 1 && !passages.some(x => x.hideTitle) ? ' ' + (i + 1) : ''}</div>`;
-      return `<div class="passage-box">${title}${p.text || ''}${renderPassageTableHtml(p.table)}${p.imageUrl ? `<img loading="lazy" decoding="async" src="${p.imageUrl}" style="max-width:100%;border-radius:6px;margin-top:6px;">` : ''}</div>`;
+      return `<div class="passage-box">${title}${bogiBreak(p.text || '', '<br>')}${renderPassageTableHtml(p.table)}${p.imageUrl ? `<img loading="lazy" decoding="async" src="${p.imageUrl}" style="max-width:100%;border-radius:6px;margin-top:6px;">` : ''}</div>`;
     })
     .join('');
 }
@@ -6227,7 +6234,7 @@ function renderPassagePrintHtml(passages) {
   return passages
     .map((p, i) => {
       const title = p.hideTitle ? '' : `<b>&lt;보기&gt;${passages.length > 1 && !passages.some(x => x.hideTitle) ? ' ' + (i + 1) : ''}</b><br>`;
-      return `<div class="passage">${title}${p.text ? esc(p.text) : ''}${renderPassageTableHtml(p.table)}</div>`;
+      return `<div class="passage">${title}${p.text ? esc(bogiBreak(p.text, '\n')).replace(/\n/g, '<br>') : ''}${renderPassageTableHtml(p.table)}</div>`;
     })
     .join('');
 }

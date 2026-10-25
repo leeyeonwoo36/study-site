@@ -338,10 +338,10 @@ const dHasBody = it => !!(it.text || it.passage || it.image || (it.tables || [])
 function dQBody(it) {
   const img = it.image && /^https:\/\//.test(it.image) ? `<img class="dly-img" src="${dEsc(it.image)}" alt="" loading="lazy">` : '';
   return (
-    (it.passage ? `<div class="dly-pass">${dEsc(it.passage).replace(/\n/g, '<br>')}</div>` : '') +
+    (it.passage ? `<div class="dly-pass">${dEsc(bogiBreak(it.passage, '\n')).replace(/\n/g, '<br>')}</div>` : '') +
     img +
     dTablesHtml(it) +
-    (it.text ? `<div class="dly-text">${dEsc(it.text).replace(/\n/g, '<br>')}</div>` : '')
+    (it.text ? `<div class="dly-text">${dEsc(bogiBreak(it.text, '\n')).replace(/\n/g, '<br>')}</div>` : '')
   );
 }
 
